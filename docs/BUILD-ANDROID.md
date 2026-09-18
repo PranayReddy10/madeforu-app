@@ -60,6 +60,57 @@ Gradle and AGP move as a pair. When you bump one in
 version its release notes list as supported — AGP 8.7 requires Gradle 8.9
 or newer.
 
+## There are no XML layouts — use Preview
+
+This app is **Jetpack Compose**, so `res/layout/` does not exist and
+Android Studio's Layout Editor has nothing to open. Screens are Kotlin
+functions marked `@Composable`, in
+`app/src/main/java/com/madeforu/sales/ui/`.
+
+The Compose equivalent of the Layout Editor is the preview pane:
+
+1. Open **`ui/Previews.kt`** (or any file containing `@Preview`).
+2. Top-right of the editor, switch **Code → Split** (or **Design**).
+3. Press **Build & Refresh** in that pane the first time.
+
+`Previews.kt` renders the bill, the order rows, the product picker, the
+KPI cards and every chart against sample data, each in light and dark. It
+is design-time only — nothing in it runs in the app.
+
+Previews need the project to compile, so if the pane says "Render problem"
+or stays empty, build once (`./gradlew assembleDebug`) and hit refresh.
+
+To see a real screen with real data there is no substitute for running the
+app — a preview cannot call the server.
+
+## If the Kotlin daemon dies on startup
+
+```
+The daemon has terminated unexpectedly on startup attempt #1
+with error code: 0
+```
+
+Error code 0 means it exited cleanly — it ran out of heap rather than
+crashing. The Gradle daemon and the Kotlin daemon are separate JVMs, and
+`gradle.properties` now gives each its own:
+
+```properties
+org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1024m -Dfile.encoding=UTF-8
+kotlin.daemon.jvmargs=-Xmx2048m -XX:MaxMetaspaceSize=512m
+```
+
+On a machine with 8 GB or less, halve both. If it still will not start —
+some Windows setups block the local socket the daemon listens on —
+uncomment this line in `gradle.properties`:
+
+```properties
+kotlin.compiler.execution.strategy=in-process
+```
+
+That compiles inside the Gradle daemon: slower on repeat builds, but it
+removes the second process entirely. After changing any of these, run
+`./gradlew --stop` so the old daemons are not reused.
+
 ## Pointing it at your server
 
 The default is baked into `app/build.gradle.kts`:

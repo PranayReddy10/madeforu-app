@@ -66,6 +66,14 @@ earned, the busiest hours, and the top customers.
 shortest set of transfers that makes everyone square. Crediting offline
 sales and event revenue, expenses, and the business profit position.
 
+## Seeing the screens without running the app
+
+There are no XML layouts — this is Compose, so the UI is Kotlin. Open
+`android/app/src/main/java/com/madeforu/sales/ui/Previews.kt` and switch
+the editor to **Split**: the bill, the order rows, the product picker, the
+KPI cards and the charts all render there against sample data, in light
+and dark.
+
 ## How it fits together
 
 ```

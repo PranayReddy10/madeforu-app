@@ -503,7 +503,7 @@ fun NewOrderScreen(
 }
 
 @Composable
-private fun ProductPickerRow(product: Product, quantity: Int, onChange: (Int) -> Unit) {
+internal fun ProductPickerRow(product: Product, quantity: Int, onChange: (Int) -> Unit) {
     val selected = quantity > 0
     Card(
         shape = RoundedCornerShape(16.dp),

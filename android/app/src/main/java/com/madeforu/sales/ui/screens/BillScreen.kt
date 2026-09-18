@@ -205,7 +205,7 @@ fun BillScreen(
  * hand the phone to a customer.
  */
 @Composable
-private fun BillPreview(bill: Bill) {
+internal fun BillPreview(bill: Bill) {
     val order = bill.order
     Card(
         shape = RoundedCornerShape(20.dp),

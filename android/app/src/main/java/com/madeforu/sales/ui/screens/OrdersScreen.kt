@@ -275,7 +275,7 @@ private fun StripStat(label: String, value: String, tint: androidx.compose.ui.gr
 }
 
 @Composable
-private fun OrderRow(order: Order, onClick: () -> Unit) {
+internal fun OrderRow(order: Order, onClick: () -> Unit) {
     Card(
         onClick = onClick,
         shape = RoundedCornerShape(18.dp),
