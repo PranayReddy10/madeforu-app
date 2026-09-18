@@ -259,6 +259,14 @@ const APP_SETTING_DEFAULTS = [
     'apk_version_name' => '',
     'apk_version_code' => '0',
     'apk_notes'        => '',
+    // Expense categories that buy an ASSET rather than pay a running cost.
+    // A heat press is not a cost of this month's trading; counting it as
+    // one makes a good month read as a heavy loss. Comma separated.
+    'capital_categories' => 'Machinery',
+    // Categories that BUY STOCK. Their cost reaches the profit line as
+    // cost-of-goods-sold when the item is sold, so counting the purchase
+    // as a running cost too would charge the same rupee twice.
+    'stock_categories'   => 'Raw material,Packaging',
 ];
 
 function app_settings(mysqli $conn): array {

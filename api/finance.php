@@ -169,6 +169,195 @@ api_dispatch([
         ]);
     },
 
+
+    /**
+     * GET profit — the real profit and loss, by channel.
+     *
+     * `business_profit` elsewhere is revenue minus EVERY expense, which is
+     * the basis investment.php distributes on. It answers "how much is
+     * there to share", and it is kept untouched for that reason. It does
+     * NOT answer "are we making money", and reading it that way is what
+     * makes the app look wrong, because it has two blind spots:
+     *
+     *   1. It counts only the `orders` table, so every Meesho sale is
+     *      invisible. That is real money the business earned.
+     *   2. It expenses capital in full in the month it was bought. A heat
+     *      press is an asset that will print for years; charging all of it
+     *      against one month's trading turns a good month into a loss.
+     *
+     * This route separates the three questions:
+     *   trading    — revenue less what the goods cost (both channels)
+     *   operating  — trading less the running costs
+     *   after capital — operating less one-off asset purchases
+     *
+     * The Meesho half mirrors meesho_stats.php exactly (same earning and
+     * lossy statuses, same settlement-minus-cost-minus-ads shape) so the
+     * two pages cannot disagree.
+     */
+    'profit' => function () use ($conn) {
+        $from = api_date('from');
+        $to   = api_date('to');
+        $ranged = $from !== '' && $to !== '';
+
+        // ── Direct channel: stalls, walk-ups, the website ──────────
+        $where = $ranged ? ' WHERE DATE(o.created_at) BETWEEN ? AND ?' : '';
+        $sql = 'SELECT COUNT(*) n, COALESCE(SUM(o.total),0) revenue,
+                       COALESCE(SUM(o.paid_amount),0) collected
+                  FROM orders o' . $where;
+        $s = $conn->prepare($sql);
+        if ($ranged) $s->bind_param('ss', $from, $to);
+        $s->execute();
+        $d = $s->get_result()->fetch_assoc();
+        $s->close();
+
+        // Cost of what was actually sold, per-event override first, same
+        // as the statistics screen.
+        $sql = 'SELECT COALESCE(SUM(oi.quantity * COALESCE(eic.unit_cost, pc.unit_cost, 0)),0) cogs
+                  FROM order_items oi
+                  JOIN orders o ON o.id = oi.order_id
+                  LEFT JOIN event_item_costs eic ON eic.event_id = o.event_id AND eic.item = oi.item
+                  LEFT JOIN product_costs pc ON pc.item = oi.item'
+             . ($ranged ? ' WHERE DATE(o.created_at) BETWEEN ? AND ?' : '');
+        $s = $conn->prepare($sql);
+        if ($ranged) $s->bind_param('ss', $from, $to);
+        $s->execute();
+        $directCogs = round((float)$s->get_result()->fetch_assoc()['cogs'], 2);
+        $s->close();
+
+        $directRevenue = round((float)$d['revenue'], 2);
+        $direct = [
+            'orders'      => (int)$d['n'],
+            'revenue'     => $directRevenue,
+            'collected'   => round((float)$d['collected'], 2),
+            'outstanding' => round($directRevenue - (float)$d['collected'], 2),
+            'cogs'        => $directCogs,
+            'gross'       => round($directRevenue - $directCogs, 2),
+        ];
+
+        // ── Meesho channel ─────────────────────────────────────────
+        $meesho = ['orders' => 0, 'settlement' => 0.0, 'cost' => 0.0, 'ads' => 0.0,
+                   'gross' => 0.0, 'net' => 0.0, 'costs_missing' => false, 'available' => false];
+        try {
+            // 'delivered'/'shipped' earned; 'returned'/'rto' still cost us
+            // the goods and usually claw the settlement back as a negative.
+            $sql = "SELECT COUNT(*) n,
+                           COALESCE(SUM(COALESCE(m.settlement_price,0)),0) settle,
+                           COALESCE(SUM(GREATEST(m.quantity,1) * COALESCE(mp.unit_cost,0)),0) cost,
+                           SUM(CASE WHEN COALESCE(mp.unit_cost,0) <= 0 THEN 1 ELSE 0 END) uncosted
+                      FROM meesho_orders m
+                      LEFT JOIN meesho_products mp ON mp.name = m.product_name
+                     WHERE m.status IN ('delivered','shipped','returned','rto')"
+                 . ($ranged ? ' AND DATE(m.order_date) BETWEEN ? AND ?' : '');
+            $s = $conn->prepare($sql);
+            if ($ranged) $s->bind_param('ss', $from, $to);
+            $s->execute();
+            $m = $s->get_result()->fetch_assoc();
+            $s->close();
+
+            // Ads are billed on the date the ad RAN, not the date deducted.
+            $sql = 'SELECT COALESCE(SUM(total_cost),0) ads FROM meesho_ads'
+                 . ($ranged ? ' WHERE DATE(COALESCE(duration_date, deduction_date)) BETWEEN ? AND ?' : '');
+            $s = $conn->prepare($sql);
+            if ($ranged) $s->bind_param('ss', $from, $to);
+            $s->execute();
+            $ads = round((float)$s->get_result()->fetch_assoc()['ads'], 2);
+            $s->close();
+
+            $settle = round((float)$m['settle'], 2);
+            $cost   = round((float)$m['cost'], 2);
+            $meesho = [
+                'orders'        => (int)$m['n'],
+                'settlement'    => $settle,
+                'cost'          => $cost,
+                'ads'           => $ads,
+                'gross'         => round($settle - $cost, 2),
+                'net'           => round($settle - $cost - $ads, 2),
+                // meesho_stats.php raises the same warning: with no unit
+                // costs set, "profit" is only settlement minus ads.
+                'costs_missing' => (int)$m['uncosted'] > 0,
+                'available'     => true,
+            ];
+        } catch (mysqli_sql_exception $e) {
+            // No Meesho module on this install.
+        }
+
+        // ── Expenses, split into running costs and assets ──────────
+        $settings = app_settings($conn);
+        $listOf = function (string $raw): array {
+            return array_values(array_filter(array_map('trim', explode(',', $raw))));
+        };
+        $capitalNames = $listOf((string)($settings['capital_categories'] ?? 'Machinery'));
+        $stockNames   = $listOf((string)($settings['stock_categories'] ?? 'Raw material,Packaging'));
+        $matches = function (array $names, string $category): bool {
+            foreach ($names as $name) {
+                // "machinery" and "Machinery" are the same category to
+                // everyone except a string comparison.
+                if (strcasecmp($name, $category) === 0) return true;
+            }
+            return false;
+        };
+
+        $sql = 'SELECT category, COUNT(*) n, COALESCE(SUM(amount - discount),0) net
+                  FROM expenses'
+             . ($ranged ? ' WHERE exp_date BETWEEN ? AND ?' : '')
+             . ' GROUP BY category ORDER BY net DESC';
+        $s = $conn->prepare($sql);
+        if ($ranged) $s->bind_param('ss', $from, $to);
+        $s->execute();
+        $res = $s->get_result();
+
+        $operating = []; $capital = []; $stock = [];
+        $operatingTotal = 0.0; $capitalTotal = 0.0; $stockTotal = 0.0;
+        while ($r = $res->fetch_assoc()) {
+            $category = (string)$r['category'];
+            $row = ['category' => $category, 'count' => (int)$r['n'],
+                    'net' => round((float)$r['net'], 2)];
+
+            if ($matches($capitalNames, $category)) {
+                $capital[] = $row; $capitalTotal += $row['net'];
+            } elseif ($matches($stockNames, $category)) {
+                // Buying stock is not a cost of trading until the stock is
+                // sold, at which point it arrives as cost-of-goods-sold.
+                // Counting the purchase here as well would charge the same
+                // rupee twice and understate profit by the value of
+                // everything still sitting on the shelf.
+                $stock[] = $row; $stockTotal += $row['net'];
+            } else {
+                $operating[] = $row; $operatingTotal += $row['net'];
+            }
+        }
+        $s->close();
+
+        $revenueTotal = round($direct['revenue'] + $meesho['settlement'], 2);
+        $grossTotal   = round($direct['gross'] + $meesho['gross'] - $meesho['ads'], 2);
+        $operatingProfit = round($grossTotal - $operatingTotal, 2);
+
+        $allExpenses = round($operatingTotal + $stockTotal + $capitalTotal, 2);
+        $cashIn = round($direct['collected'] + $meesho['settlement'], 2);
+
+        api_ok([
+            'range'     => $ranged ? ['from' => $from, 'to' => $to] : null,
+            'direct'    => $direct,
+            'meesho'    => $meesho,
+            'revenue_total'    => $revenueTotal,
+            'gross_total'      => $grossTotal,
+            'operating'        => ['total' => round($operatingTotal, 2), 'by_category' => $operating],
+            'stock'            => ['total' => round($stockTotal, 2), 'by_category' => $stock],
+            'capital'          => ['total' => round($capitalTotal, 2), 'by_category' => $capital],
+            'operating_profit' => $operatingProfit,
+            // What actually moved through the pocket, all-in. Answers a
+            // different question from profit, and partners ask both.
+            'cash'             => [
+                'in'    => $cashIn,
+                'out'   => $allExpenses,
+                'net'   => round($cashIn - $allExpenses, 2),
+            ],
+            // Kept exactly as investment.php computes it, so the two can
+            // never disagree about what there is to distribute.
+            'distribution'     => business_profit_api($conn),
+        ]);
+    },
+
     // ── GET movements — the ledger, newest first ───────────────────
     'movements' => function () use ($conn) {
         $where = []; $types = ''; $params = [];

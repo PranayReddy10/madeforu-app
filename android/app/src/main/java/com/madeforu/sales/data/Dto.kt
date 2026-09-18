@@ -449,6 +449,56 @@ data class FinanceOverview(
 )
 
 @Serializable
+data class DirectChannel(
+    val orders: Int = 0,
+    val revenue: Double = 0.0,
+    val collected: Double = 0.0,
+    val outstanding: Double = 0.0,
+    val cogs: Double = 0.0,
+    val gross: Double = 0.0,
+)
+
+@Serializable
+data class MeeshoChannel(
+    val orders: Int = 0,
+    val settlement: Double = 0.0,
+    val cost: Double = 0.0,
+    val ads: Double = 0.0,
+    val gross: Double = 0.0,
+    val net: Double = 0.0,
+    @SerialName("costs_missing") val costsMissing: Boolean = false,
+    val available: Boolean = false,
+)
+
+@Serializable
+data class ExpenseBucket(
+    val total: Double = 0.0,
+    @SerialName("by_category") val byCategory: List<CategoryStat> = emptyList(),
+)
+
+@Serializable
+data class CashView(
+    @SerialName("in") val cashIn: Double = 0.0,
+    @SerialName("out") val cashOut: Double = 0.0,
+    val net: Double = 0.0,
+)
+
+@Serializable
+data class ProfitAndLoss(
+    val range: DateRange? = null,
+    val direct: DirectChannel = DirectChannel(),
+    val meesho: MeeshoChannel = MeeshoChannel(),
+    @SerialName("revenue_total") val revenueTotal: Double = 0.0,
+    @SerialName("gross_total") val grossTotal: Double = 0.0,
+    val operating: ExpenseBucket = ExpenseBucket(),
+    val stock: ExpenseBucket = ExpenseBucket(),
+    val capital: ExpenseBucket = ExpenseBucket(),
+    @SerialName("operating_profit") val operatingProfit: Double = 0.0,
+    val cash: CashView = CashView(),
+    val distribution: BusinessProfit = BusinessProfit(),
+)
+
+@Serializable
 data class Movement(
     val id: Int = 0,
     val date: String = "",

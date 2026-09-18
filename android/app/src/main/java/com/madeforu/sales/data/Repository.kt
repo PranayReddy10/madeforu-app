@@ -270,6 +270,10 @@ class Repository(private val api: ApiClient, private val prefs: Prefs) {
     suspend fun financeOverview(): ApiResult<FinanceOverview> =
         api.get("finance.php", "overview").map { api.decode<FinanceOverview>(it) }
 
+    suspend fun profitAndLoss(from: String = "", to: String = ""): ApiResult<ProfitAndLoss> =
+        api.get("finance.php", "profit", mapOf("from" to from, "to" to to))
+            .map { api.decode<ProfitAndLoss>(it) }
+
     suspend fun movements(partnerId: Int = 0, from: String = "", to: String = ""): ApiResult<MovementsResponse> =
         api.get(
             "finance.php", "movements",

@@ -48,6 +48,7 @@ import com.madeforu.sales.core.isAuthFailure
 import com.madeforu.sales.data.FinanceOverview
 import com.madeforu.sales.data.Movement
 import com.madeforu.sales.data.PartnerFinance
+import com.madeforu.sales.data.ProfitAndLoss
 import com.madeforu.sales.data.Repository
 import com.madeforu.sales.ui.components.ChipRow
 import com.madeforu.sales.ui.components.DetailRow
@@ -83,6 +84,7 @@ fun MoneyScreen(
     val scope = rememberCoroutineScope()
 
     var overview by remember { mutableStateOf<FinanceOverview?>(null) }
+    var profit by remember { mutableStateOf<ProfitAndLoss?>(null) }
     var movements by remember { mutableStateOf<List<Movement>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
     var busy by remember { mutableStateOf(false) }
@@ -99,6 +101,9 @@ fun MoneyScreen(
                 is ApiResult.Success -> { overview = result.value; error = null }
                 is ApiResult.Failure ->
                     if (result.isAuthFailure()) onSessionExpired() else error = result.message
+            }
+            repository.profitAndLoss().let {
+                if (it is ApiResult.Success) profit = it.value
             }
             repository.movements().let {
                 if (it is ApiResult.Success) movements = it.value.movements.take(12)
@@ -142,7 +147,13 @@ fun MoneyScreen(
                 }
             }
 
+            profit?.let { pnl ->
+                item { SectionHeader("Profit & loss") }
+                item { ProfitSection(pnl) }
+            }
+
             if (data != null) {
+                item { SectionHeader("Partner money") }
                 item {
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         KpiCard(
@@ -327,43 +338,7 @@ fun MoneyScreen(
                     }
                 }
 
-                // ── Business profit ────────────────────────────────
-                item { SectionHeader("Business profit") }
-                item {
-                    Card(
-                        shape = RoundedCornerShape(18.dp),
-                        colors = softCardColors(),
-                    ) {
-                        Column(Modifier.padding(16.dp)) {
-                            DetailRow("Revenue, all time", Money.full(data.business.revenue))
-                            DetailRow("Expenses, all time", Money.full(data.business.expenses))
-                            ThinDivider(Modifier.padding(vertical = 8.dp))
-                            DetailRow(
-                                "Profit",
-                                Money.full(data.business.profit),
-                                valueColor = if (data.business.profit >= 0) positiveColor() else negativeColor(),
-                                emphasise = true,
-                            )
-                            DetailRow("Already distributed", Money.full(data.business.distributed))
-                            DetailRow(
-                                "Left to distribute",
-                                Money.full(data.business.remaining),
-                                valueColor = if (data.business.remaining > 0) positiveColor() else null,
-                            )
-                            if (data.business.remaining <= 0) {
-                                Text(
-                                    "Nothing to distribute while expenses exceed revenue — the money " +
-                                        "spent on machinery and stock has not been earned back yet.",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.padding(top = 6.dp),
-                                )
-                            }
-                        }
-                    }
-                }
-
-                // ── Recent ledger ──────────────────────────────────
+                                // ── Recent ledger ──────────────────────────────────
                 item { SectionHeader("Recent movements") }
                 items(movements.size) { index ->
                     val movement = movements[index]
