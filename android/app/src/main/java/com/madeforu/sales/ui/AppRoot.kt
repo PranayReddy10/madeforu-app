@@ -74,7 +74,10 @@ fun AppRoot(signedIn: Boolean) {
     val scope = rememberCoroutineScope()
 
     val backStackEntry by navController.currentBackStackEntryAsState()
-    val currentRoute = backStackEntry?.destination?.route
+    // Strip the argument pattern: a route registered as "orders?pay={pay}"
+    // reads back with the pattern attached, and comparing that to "orders"
+    // would leave the tab unhighlighted and re-navigate on every tap.
+    val currentRoute = backStackEntry?.destination?.route?.substringBefore('?')
 
     // The bar is for the five top-level places. On a detail screen it would
     // just be a second way to lose your place.
@@ -174,18 +177,6 @@ fun AppRoot(signedIn: Boolean) {
                         onSessionExpired = signOut,
                     )
                 }
-                // The bottom bar navigates to the bare route, which has to
-                // resolve to the same screen as the filtered one above.
-                composable(Routes.ORDERS) {
-                    OrdersScreen(
-                        repository = repository,
-                        initialPayFilter = "all",
-                        onOpenOrder = { id -> navController.navigate(Routes.orderDetail(id)) },
-                        onNewOrder = { navController.navigate(Routes.NEW_ORDER) },
-                        onSessionExpired = signOut,
-                    )
-                }
-
                 composable(Routes.NEW_ORDER) {
                     NewOrderScreen(
                         repository = repository,
