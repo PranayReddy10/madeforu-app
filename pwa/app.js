@@ -22,6 +22,12 @@ const store = {
   set token(v) { v ? localStorage.setItem('mfu.token', v) : localStorage.removeItem('mfu.token'); },
   get name() { return localStorage.getItem('mfu.name') || ''; },
   set name(v) { localStorage.setItem('mfu.name', v || ''); },
+  // 'auto' follows the phone's own light/dark setting; the other two
+  // override it. Stored per device, not per account — the partner using a
+  // shared login on a bright stall wants light, not whatever someone else
+  // picked at home.
+  get theme() { return localStorage.getItem('mfu.theme') || 'auto'; },
+  set theme(v) { localStorage.setItem('mfu.theme', v || 'auto'); },
   get api() { return localStorage.getItem('mfu.api') || DEFAULT_API; },
   set api(v) {
     const clean = (v || '').trim();
@@ -161,6 +167,11 @@ const ICONS = {
   events: '<path d="M12 4 3 20h18L12 4z"/><path d="M12 12v8"/>',
   catalog: '<path d="M20.6 13.4 12 22l-9-9V4h9l8.6 9.4z"/><circle cx="7.5" cy="7.5" r="1.4"/>',
   bills: '<path d="M6 3h12v18l-3-2-3 2-3-2-3 2V3z"/><path d="M9 8h6M9 12h6"/>',
+  caret: '<path d="m6 9 6 6 6-6"/>',
+  close: '<path d="M6 6l12 12M18 6 6 18"/>',
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9 6.3 6.3M17.7 17.7l1.4 1.4M19.1 4.9 17.7 6.3M6.3 17.7l-1.4 1.4"/>',
+  moon: '<path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z"/>',
+  auto: '<circle cx="12" cy="12" r="8.5"/><path d="M12 3.5v17a8.5 8.5 0 0 0 0-17z" fill="currentColor" stroke="none"/>',
   settings: '<circle cx="12" cy="12" r="3.2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9 17 7M7 17l-2.1 2.1"/>',
 };
 
@@ -170,6 +181,38 @@ function svg(name, size) {
     stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"
     aria-hidden="true">${ICONS[name] || ''}</svg>`;
 }
+
+/* ── Theme ────────────────────────────────────────────────────────
+ * The stylesheet carries both palettes. This only decides which one
+ * applies, by setting data-theme on <html>: 'auto' removes the attribute
+ * and lets the prefers-color-scheme media query win.
+ */
+const THEMES = [
+  { id: 'auto', label: 'Automatic', ico: 'auto', swatch: 'auto', hint: "follows your phone" },
+  { id: 'light', label: 'Light', ico: 'sun', swatch: 'light', hint: 'always light' },
+  { id: 'dark', label: 'Dark', ico: 'moon', swatch: 'dark', hint: 'always dark' },
+];
+
+function applyTheme(value) {
+  const theme = THEMES.some((t) => t.id === value) ? value : 'auto';
+  const root = document.documentElement;
+  if (theme === 'auto') root.removeAttribute('data-theme');
+  else root.setAttribute('data-theme', theme);
+
+  // iOS paints the status bar and the area behind the keyboard from this,
+  // so it has to move with the palette or a dark app gets a white notch.
+  const dark = theme === 'dark'
+    || (theme === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute('content', dark ? '#12151F' : '#F54A77');
+}
+
+// Applied before the first paint so the app never flashes the wrong
+// palette, and re-applied when the phone itself switches at sunset.
+applyTheme(store.theme);
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+  if (store.theme === 'auto') applyTheme('auto');
+});
 
 /* ── Shell ────────────────────────────────────────────────────── */
 
@@ -190,10 +233,57 @@ function setHtml(html, { tabs = true } = {}) {
   app.scrollTop = 0;
   window.scrollTo(0, 0);
   tabbar.hidden = !tabs || !store.token;
+  // Both live outside #app so a re-render cannot leave them behind on a
+  // screen they do not belong to.
+  document.querySelectorAll('.fab, .sheetwrap').forEach((n) => n.remove());
+}
+
+/**
+ * A section that opens and closes — <details> doing the work, so it keeps
+ * working with JavaScript mid-render and needs no state of its own.
+ * `badge` is the bit of summary that has to be readable while it is shut:
+ * the basket total, the number of line items.
+ */
+function fold(title, subtitle, body, { open = false, badge = '' } = {}) {
+  return `<details class="fold"${open ? ' open' : ''}>
+    <summary>
+      <div class="grow"><div class="t">${esc(title)}</div>
+        ${subtitle ? `<div class="s">${esc(subtitle)}</div>` : ''}</div>
+      ${badge ? `<span class="badge">${esc(badge)}</span>` : ''}
+      <span class="caret">${svg('caret', 18)}</span>
+    </summary>
+    <div class="foldbody">${body}</div>
+  </details>`;
 }
 
 function spinner() { return '<div class="spinner"></div>'; }
 function errorBox(message) { return `<div class="error">${esc(message)}</div>`; }
+
+/**
+ * A form that slides up over the current screen. Returns the panel so the
+ * caller can wire its fields; closing is the backdrop, the X, or Escape.
+ * Nothing is routed — the list behind stays exactly where it was.
+ */
+function openSheet(title, html) {
+  document.querySelectorAll('.sheetwrap').forEach((n) => n.remove());
+  const wrap = document.createElement('div');
+  wrap.className = 'sheetwrap';
+  wrap.innerHTML = `<div class="panel" role="dialog" aria-modal="true" aria-label="${esc(title)}">
+    <div class="grabber"></div>
+    <div class="head"><h1 class="grow">${esc(title)}</h1>
+      <button class="back" data-close>${svg('close', 18)}</button></div>
+    ${html}</div>`;
+  document.body.appendChild(wrap);
+
+  const close = () => { wrap.remove(); document.removeEventListener('keydown', onKey); };
+  const onKey = (e) => { if (e.key === 'Escape') close(); };
+  document.addEventListener('keydown', onKey);
+  // Only the backdrop closes it — a tap inside the panel must not, or
+  // every tap on a label would dismiss a half-filled form.
+  wrap.addEventListener('click', (e) => { if (e.target === wrap) close(); });
+  wrap.querySelector('[data-close]').onclick = close;
+  return { wrap, panel: wrap.querySelector('.panel'), close };
+}
 
 /* Routing is a hash and a table. Back is the browser's own back. */
 const routes = {};
@@ -671,32 +761,81 @@ route('new', async () => {
   const products = boot.products || [];
   const events = boot.events || [];
 
+  // Every section folds, products included. A sale is four decisions and
+  // only one of them is on screen at a time, so nobody scrolls past the
+  // catalogue to reach the phone number. Products start open because
+  // that is the one section every sale needs.
   document.getElementById('body').innerHTML = `
     ${events.length ? `<div class="chips" id="eventChips"></div>` : ''}
-    <section><h2 class="section">Products</h2><div class="card" id="products"></div></section>
-    <section><h2 class="section">Customer <span class="hint">optional — leave empty for a walk-in</span></h2>
-      <div class="card">
-        <label class="field"><span>Name</span><input id="cname" value="${esc(draft.name)}"></label>
-        <label class="field"><span>Phone</span>
-          <input id="cphone" type="tel" inputmode="numeric" maxlength="10" value="${esc(draft.phone)}"></label>
-        <label class="field"><span>Notes</span><input id="cnotes" value="${esc(draft.notes)}"></label>
-      </div></section>
-    <section><h2 class="section">Money taken now</h2><div class="card">
-      <label class="field"><span>Amount</span><input id="paid" inputmode="decimal" value="${esc(draft.paid)}"></label>
-      <div class="chips" style="margin-top:10px" id="modeChips"></div>
-    </div></section>
+    <div id="productFold" style="margin-top:10px"></div>
+    <div style="margin-top:10px">${fold('Customer', 'Optional — leave empty for a walk-in', `
+      <label class="field"><span>Name</span><input id="cname" value="${esc(draft.name)}"></label>
+      <label class="field"><span>Phone</span>
+        <input id="cphone" type="tel" inputmode="numeric" maxlength="10" value="${esc(draft.phone)}"></label>
+      <label class="field"><span>Notes</span><input id="cnotes" value="${esc(draft.notes)}"></label>`,
+      { open: !!(draft.name || draft.phone || draft.notes) })}</div>
+    <div style="margin-top:10px" id="paidFold"></div>
     <div id="summary"></div>
     <button class="btn" id="save" style="margin-top:14px">Save sale</button>`;
 
   if (events.length) {
     chipRow('eventChips', [['', 'Direct / walk-up']].concat(events.map((e) => [String(e.id), e.name])),
-      draft.eventId, (v) => { draft.eventId = v; routes.new(); draft.keep = true; });
+      draft.eventId, (v) => {
+        stashCustomer();
+        draft.eventId = v;
+        // keep must be true BEFORE the re-render: routes.new() reads it
+        // synchronously on its first line, so setting it afterwards was
+        // always too late and threw the basket away.
+        draft.keep = true;
+        routes.new();
+      });
   }
-  chipRow('modeChips', [['cash', 'Cash'], ['upi', 'UPI'], ['card', 'Card'], ['other', 'Other']],
-    draft.mode, (v) => { draft.mode = v; chipRow('modeChips', [['cash','Cash'],['upi','UPI'],['card','Card'],['other','Other']], v, () => {}); });
 
-  const list = document.getElementById('products');
+  const productFold = document.getElementById('productFold');
+  const paidFold = document.getElementById('paidFold');
+
+  /** Lines, and what they come to — one place, used by three renderers. */
+  function basket() {
+    const rows = Object.entries(draft.lines);
+    const units = rows.reduce((n, [, q]) => n + q, 0);
+    const subtotal = rows.reduce((sum, [name, qty]) => {
+      const p = products.find((x) => x.name === name);
+      return sum + (p ? p.price * qty : 0);
+    }, 0);
+    return { rows, units, subtotal };
+  }
+
+  function paintPaid() {
+    // Re-rendering replaces the input, which would drop the caret in the
+    // middle of a number. If someone is typing in it, leave it alone —
+    // the subtitle is stale for a moment, the keyboard is not.
+    if (document.activeElement && document.activeElement.id === 'paid') return;
+    const b = basket();
+    paidFold.innerHTML = fold('Money taken now',
+      b.subtotal > 0 ? 'Bill comes to ' + money(b.subtotal) : 'Cash, UPI, card or other', `
+      <label class="field"><span>Amount</span>
+        <input id="paid" inputmode="decimal" value="${esc(draft.paid)}"></label>
+      <div class="chips" style="margin-top:10px" id="modeChips"></div>`,
+      { open: !!draft.paid, badge: draft.paid ? money(Number(draft.paid) || 0) : '' });
+
+    // Re-rendering the fold throws the old inputs away, so both the value
+    // and the handlers are re-bound here rather than once at startup.
+    const paidInput = document.getElementById('paid');
+    paidInput.addEventListener('input', () => { draft.paid = paidInput.value; });
+    paidInput.addEventListener('change', paintPaid);
+    const modes = [['cash', 'Cash'], ['upi', 'UPI'], ['card', 'Card'], ['other', 'Other']];
+    chipRow('modeChips', modes, draft.mode, (v) => { draft.mode = v; paintPaid(); });
+  }
+
   function paintProducts() {
+    const b = basket();
+    productFold.innerHTML = fold('Products',
+      b.units ? b.units + (b.units === 1 ? ' item' : ' items') + ' · ' + money(b.subtotal)
+              : 'Tap + to add to the bill',
+      '<div id="products"></div>',
+      { open: true, badge: b.units ? String(b.units) : '' });
+
+    const list = document.getElementById('products');
     list.innerHTML = products.map((p) => {
       const qty = draft.lines[p.name] || 0;
       return `<div class="row">
@@ -721,14 +860,11 @@ route('new', async () => {
   }
 
   function paintSummary() {
-    const rows = Object.entries(draft.lines);
     // Shown so the counter can read the total back before taking money.
     // The server recomputes it from the catalogue regardless — this is a
     // display, not the price.
-    const subtotal = rows.reduce((sum, [name, qty]) => {
-      const p = products.find((x) => x.name === name);
-      return sum + (p ? p.price * qty : 0);
-    }, 0);
+    const { rows, subtotal } = basket();
+    paintPaid();
     document.getElementById('summary').innerHTML = rows.length ? `
       <section><h2 class="section">This bill</h2><div class="card">
         ${rows.map(([n, q]) => {
@@ -745,8 +881,21 @@ route('new', async () => {
   const phone = document.getElementById('cphone');
   phone.addEventListener('input', () => { phone.value = phone.value.replace(/\D/g, '').slice(0, 10); });
 
+  // The customer fold survives a re-render only because its values are
+  // copied onto the draft first; the inputs themselves are thrown away.
+  function stashCustomer() {
+    const read = (id) => (document.getElementById(id) || {}).value || '';
+    draft.name = read('cname').trim();
+    draft.phone = read('cphone').trim();
+    draft.notes = read('cnotes').trim();
+  }
+  ['cname', 'cphone', 'cnotes'].forEach((id) => {
+    document.getElementById(id).addEventListener('change', stashCustomer);
+  });
+
   document.getElementById('save').onclick = async () => {
     const button = document.getElementById('save');
+    stashCustomer();
     const items = Object.entries(draft.lines).map(([item, quantity]) => ({ item, quantity }));
     if (!items.length) { toast('Add at least one product.'); return; }
     button.disabled = true; button.textContent = 'Saving…';
@@ -754,11 +903,11 @@ route('new', async () => {
       const r = await api('orders.php', 'create', {
         body: {
           items,
-          name: document.getElementById('cname').value.trim(),
-          phone: phone.value.trim(),
-          notes: document.getElementById('cnotes').value.trim(),
+          name: draft.name,
+          phone: draft.phone,
+          notes: draft.notes,
           event_id: draft.eventId || null,
-          paid_amount: Number(document.getElementById('paid').value || 0),
+          paid_amount: Number(draft.paid || 0),
           payment_mode: draft.mode,
         },
       });
@@ -973,7 +1122,8 @@ route('money', async () => {
       ${d.business.remaining <= 0.5 ? `<p class="muted" style="margin-top:8px">
         Nothing to distribute yet. This counts every expense, including stock and equipment, so it
         stays negative until those purchases have been earned back.</p>` : ''}
-    </div></section>
+    </div>
+    ${revenueWorking(d.revenue_breakdown, d.business)}</section>
 
     ${d.categories.length ? `<section><h2 class="section">Expenses by category</h2><div class="card">
       <p class="muted">Pocket-funded purchases only — total ${money(d.category_total)}.</p>
@@ -990,6 +1140,55 @@ route('money', async () => {
       }).join('')}
     </div></section>` : ''}`;
 });
+
+/**
+ * Why "Revenue (all sales)" is the number it is.
+ *
+ * The same word means four different things across this app, and a
+ * partner comparing the Money screen against Stats or the order list has
+ * no way to tell which one they are reading. Rather than explain it in
+ * support each time, the screen shows its own arithmetic: what the
+ * headline adds up from, and every nearby figure it is NOT.
+ */
+function revenueWorking(r, business) {
+  if (!r) return '';
+  const body = `
+    <p class="muted">Every order ever booked, at its billed total — not what has been
+      collected, and not only this year. ${r.orders} orders${r.first_order
+        ? ' from ' + esc(prettyDate(r.first_order)) + ' to ' + esc(prettyDate(r.last_order)) : ''}.</p>
+
+    <div class="row" style="margin-top:6px"><div class="grow t" style="font-weight:500">Items, before adjustments</div>
+      <div class="amt">${money(r.subtotal)}</div></div>
+    ${detailRow('Less discounts given', '−' + money(r.discount))}
+    ${detailRow('Plus delivery and extras', '+' + money(r.extra))}
+    <div class="row"><div class="grow t">Revenue (all sales)</div>
+      <div class="amt">${money(r.total)}</div></div>
+
+    <h3 class="section" style="margin-top:16px;font-size:14px">Numbers this is often confused with</h3>
+    <div class="row"><div class="grow"><div class="t" style="font-weight:500">Collected so far</div>
+      <div class="s">money actually received${r.outstanding > 0.5
+        ? ' · ' + money(r.outstanding) + ' still owed' : ' · nothing outstanding'}</div></div>
+      <div class="amt">${money(r.collected)}</div></div>
+    <div class="row"><div class="grow"><div class="t" style="font-weight:500">Credited to partner accounts</div>
+      <div class="s">${r.credited_orders} of ${r.orders} orders · ${money(r.uncredited)} across
+        ${r.uncredited_orders} orders is in nobody\'s account yet</div></div>
+      <div class="amt">${money(r.credited)}</div></div>
+    <div class="row"><div class="grow"><div class="t" style="font-weight:500">This financial year (${esc(r.year_label)})</div>
+      <div class="s">${r.this_year.orders} orders since April — what a year-to-date report shows</div></div>
+      <div class="amt">${money(r.this_year.amount)}</div></div>
+    <div class="row"><div class="grow"><div class="t" style="font-weight:500">This month</div>
+      <div class="s">${r.this_month.orders} orders — close to what the Stats screen shows on its default range</div></div>
+      <div class="amt">${money(r.this_month.amount)}</div></div>
+
+    <p class="muted" style="margin-top:12px">The Stats screen totals only the orders inside the range
+      picked at the top of it, so its revenue is smaller than this one unless the range covers
+      everything. Business profit above subtracts <b>all</b> expenses ever recorded
+      (${money(business.expenses)}) from <b>all</b> revenue, so a young business reads negative
+      until the stock and equipment it already paid for have been sold on.</p>`;
+
+  return `<div style="margin-top:10px">${fold('Where this number comes from',
+    money(r.total) + ' across ' + r.orders + ' orders', body)}</div>`;
+}
 
 /* ── Expenses ─────────────────────────────────────────────────── */
 
@@ -1020,8 +1219,161 @@ route('expenses', async () => {
           }</div>` : ''}
         </div>
         <div class="amt">${moneyShort(e.net)}</div></button>`).join('')}</div>`
-      : '<p class="muted center" style="margin-top:30px">No expenses in this period.</p>'}`;
+      : `<p class="muted center" style="margin-top:30px">No expenses in this period.</p>
+         <button class="btn" id="addFirst" style="margin-top:14px">Record an expense</button>`}`;
+
+  // A floating button rather than one in the list: the list is the thing
+  // partners scroll, and an action that scrolls away is an action nobody
+  // finds. Same reason the Android app puts it on the bar.
+  document.querySelectorAll('.fab').forEach((n) => n.remove());
+  const fab = document.createElement('button');
+  fab.className = 'fab';
+  fab.innerHTML = svg('plus', 18) + '<span>Add expense</span>';
+  fab.onclick = () => expenseSheet();
+  document.body.appendChild(fab);
+
+  const first = document.getElementById('addFirst');
+  if (first) first.onclick = () => expenseSheet();
 });
+
+/**
+ * Record an expense, including the split when two partners paid for it.
+ *
+ * The split is the part that matters: expense_payments is what the Money
+ * screen reads as a partner's contribution, so an expense saved against
+ * the wrong payer quietly skews every partner's fair share. The server
+ * rejects a split that does not add up; this form shows the running
+ * remainder so it is obvious before saving.
+ */
+async function expenseSheet() {
+  const sheet = openSheet('New expense', `<div id="expForm">${spinner()}</div>`);
+  let boot;
+  try {
+    boot = await api('catalog.php', 'bootstrap');
+  } catch (e) { sheet.close(); toast(e.message); return; }
+
+  const partners = (boot.partners || []).filter((p) => p.is_active);
+  if (!partners.length) { sheet.close(); toast('No active partners to record this against.'); return; }
+  const categories = (boot.categories || []).map((c) => c.name);
+  if (!categories.length) categories.push('Materials', 'Packing', 'Travel', 'Stall', 'Tools', 'Other');
+
+  let split = false;
+  const body = sheet.panel.querySelector('#expForm');
+  body.innerHTML = `
+    <div class="card">
+      <label class="field"><span>What was it for</span>
+        <input id="xitem" placeholder="Vinyl roll, courier, stall fee…"></label>
+      <label class="field"><span>Amount (₹)</span>
+        <input id="xamount" inputmode="decimal" placeholder="0.00"></label>
+      <label class="field"><span>Discount (₹) — optional</span>
+        <input id="xdisc" inputmode="decimal" placeholder="0.00"></label>
+      <label class="field"><span>Date</span>
+        <input id="xdate" type="date" value="${today()}"></label>
+      <label class="field"><span>Category</span>
+        <select id="xcat">${categories.map((c) =>
+          `<option value="${esc(c)}">${esc(c)}</option>`).join('')}</select></label>
+      <label class="field"><span>Paid to — optional</span>
+        <input id="xto" placeholder="Shop or supplier"></label>
+      <label class="field"><span>Notes — optional</span><input id="xdetails"></label>
+    </div>
+
+    <section><h2 class="section">Who paid, from pocket</h2><div class="card">
+      <div class="chips" id="xpayer"></div>
+      <div class="btnrow"><button class="btn ghost small" id="xsplit">Split between partners</button></div>
+      <div id="xsplitbox"></div>
+    </div></section>
+
+    <p class="muted" style="margin-top:12px">Receipts are attached on the website — this form does not
+      upload files yet.</p>
+    <button class="btn" id="xsave" style="margin-top:12px">Save expense</button>`;
+
+  const val = (id) => (document.getElementById(id).value || '').trim();
+  const num = (id) => Number(val(id).replace(/[^\d.]/g, '')) || 0;
+  const net = () => Math.round((num('xamount') - num('xdisc')) * 100) / 100;
+
+  let paidBy = String(partners[0].id);
+  function paintPayer() {
+    chipRow('xpayer', partners.map((p) => [String(p.id), p.name]), paidBy, (v) => {
+      paidBy = v; paintPayer();
+    });
+  }
+  paintPayer();
+
+  const splitBox = document.getElementById('xsplitbox');
+  function paintSplit() {
+    document.getElementById('xsplit').textContent = split ? 'One partner paid it all' : 'Split between partners';
+    document.getElementById('xpayer').style.display = split ? 'none' : '';
+    if (!split) { splitBox.innerHTML = ''; return; }
+    splitBox.innerHTML = partners.map((p) => `
+      <label class="field"><span>${esc(p.name)} put in (₹)</span>
+        <input data-split="${p.id}" inputmode="decimal" placeholder="0.00"></label>`).join('')
+      + '<p class="muted" id="xsplitsum" style="margin-top:10px"></p>';
+    splitBox.querySelectorAll('[data-split]').forEach((i) => i.addEventListener('input', splitSum));
+    splitSum();
+  }
+  /** The running remainder, so a split that will be rejected is visible first. */
+  function splitSum() {
+    const rows = [...splitBox.querySelectorAll('[data-split]')];
+    const sum = rows.reduce((t, i) => t + (Number(String(i.value).replace(/[^\d.]/g, '')) || 0), 0);
+    const left = Math.round((net() - sum) * 100) / 100;
+    const el = document.getElementById('xsplitsum');
+    if (!el) return;
+    el.textContent = Math.abs(left) < 0.01
+      ? 'Adds up to ' + money(net()) + '.'
+      : left > 0 ? money(left) + ' of ' + money(net()) + ' still unassigned.'
+                 : money(-left) + ' more than the expense.';
+    el.className = Math.abs(left) < 0.01 ? 'muted pos' : 'muted neg';
+  }
+  document.getElementById('xsplit').onclick = () => { split = !split; paintSplit(); };
+  document.getElementById('xamount').addEventListener('input', splitSum);
+  document.getElementById('xdisc').addEventListener('input', splitSum);
+
+  document.getElementById('xsave').onclick = async () => {
+    const button = document.getElementById('xsave');
+    if (!val('xitem')) { toast('What was the money spent on?'); return; }
+    if (num('xamount') <= 0) { toast('Enter an amount greater than zero.'); return; }
+    if (num('xdisc') > num('xamount')) { toast('The discount is more than the amount.'); return; }
+
+    const payload = {
+      exp_date: val('xdate') || today(),
+      item: val('xitem'),
+      amount: num('xamount'),
+      discount: num('xdisc'),
+      category: val('xcat'),
+      paid_to: val('xto'),
+      details: val('xdetails'),
+      paid_by: Number(split ? partners[0].id : paidBy),
+    };
+    if (split) {
+      const rows = [...splitBox.querySelectorAll('[data-split]')]
+        .map((i) => ({ partner_id: Number(i.dataset.split),
+                       amount: Number(String(i.value).replace(/[^\d.]/g, '')) || 0 }))
+        .filter((r) => r.amount > 0);
+      if (!rows.length) { toast('Enter what each partner put in.'); return; }
+      // The server checks this too and refuses a split that is out; the
+      // point of checking here is that the partner is still looking at
+      // the numbers and can fix them.
+      const sum = Math.round(rows.reduce((t, r) => t + r.amount, 0) * 100) / 100;
+      if (Math.abs(sum - net()) > 0.01) {
+        toast('The split adds up to ' + money(sum) + ' but the expense is ' + money(net()) + '.');
+        return;
+      }
+      payload.payments = rows;
+      payload.paid_by = rows[0].partner_id;
+    }
+
+    button.disabled = true; button.textContent = 'Saving…';
+    try {
+      const r = await api('expenses.php', 'create', { body: payload });
+      sheet.close();
+      toast(r.message || 'Expense recorded.');
+      routes.expenses();
+    } catch (e) {
+      toast(e.message);
+      button.disabled = false; button.textContent = 'Save expense';
+    }
+  };
+}
 
 route('expense', async (id) => {
   setHtml(`<div class="screen"><div class="head">
@@ -1116,6 +1468,11 @@ route('settings', async () => {
     <div class="card"><div class="stat"><div class="l">Signed in as</div>
       <div class="v" style="font-size:19px">${esc(store.name || 'this device')}</div></div></div>
 
+    <section><h2 class="section">Appearance</h2><div class="card">
+      <div class="themes" id="themes"></div>
+      <p class="muted" style="margin-top:10px" id="themeHint"></p>
+    </div></section>
+
     <section><h2 class="section">Server</h2><div class="card">
       <label class="field"><span>API address</span><input id="api" value="${esc(store.api)}"></label>
       <button class="btn ghost small" id="saveApi" style="margin-top:12px">Save and test</button>
@@ -1133,6 +1490,24 @@ route('settings', async () => {
     <section><h2 class="section">Account</h2>
       <button class="btn danger" id="signout">Sign out</button></section>
   </div>`);
+
+  const themeBox = document.getElementById('themes');
+  const themeHint = document.getElementById('themeHint');
+  function paintThemes() {
+    themeBox.innerHTML = THEMES.map((t) => `
+      <button data-theme="${t.id}" aria-pressed="${t.id === store.theme}">
+        <span class="swatch ${t.swatch}"></span>
+        <span>${svg(t.ico, 15)} ${t.label}</span>
+      </button>`).join('');
+    themeHint.textContent = (THEMES.find((t) => t.id === store.theme) || THEMES[0]).hint
+      + ' · saved on this device';
+    themeBox.querySelectorAll('[data-theme]').forEach((b) => b.onclick = () => {
+      store.theme = b.dataset.theme;
+      applyTheme(store.theme);
+      paintThemes();
+    });
+  }
+  paintThemes();
 
   document.getElementById('saveApi').onclick = async () => {
     store.api = document.getElementById('api').value;

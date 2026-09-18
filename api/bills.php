@@ -21,18 +21,9 @@
 declare(strict_types=1);
 require __DIR__ . '/_bootstrap.php';
 
-/**
- * Indian financial year label for a date: 2026-09-18 -> "26-27".
- * Bills restart their numbering each April, which is what the accountant
- * expects to see on the series.
- */
-function fy_label(string $date): string {
-    $ts = strtotime($date) ?: time();
-    $y  = (int)date('Y', $ts);
-    $m  = (int)date('n', $ts);
-    $start = $m >= 4 ? $y : $y - 1;
-    return substr((string)$start, 2) . '-' . substr((string)($start + 1), 2);
-}
+// fy_label() lives in _bootstrap.php: the Money screen labels the
+// financial year too, and two copies of the April boundary is one
+// copy too many.
 
 /**
  * Next bill number in the current financial year, derived from the MAX of

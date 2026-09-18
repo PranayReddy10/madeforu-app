@@ -333,6 +333,10 @@ fun MoneyScreen(
                     )
                 }
 
+                // Directly under the profit card, because the question it
+                // answers is always asked about the number just above it.
+                item { RevenueWorking(data) }
+
                 item { SectionHeader("Expenses by category") }
                 item { ExpensesByCategory(data) }
 

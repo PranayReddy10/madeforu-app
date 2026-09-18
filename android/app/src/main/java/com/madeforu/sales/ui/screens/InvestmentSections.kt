@@ -43,6 +43,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.madeforu.sales.core.Dates
 import com.madeforu.sales.core.Money
 import com.madeforu.sales.data.FinanceOverview
 import com.madeforu.sales.ui.components.ThinDivider
@@ -336,6 +337,131 @@ fun ProfitAndDistribution(
                 )
             }
         }
+    }
+}
+
+/**
+ * Why "Revenue (all sales)" is the number it is.
+ *
+ * Four figures in this app get called revenue, and comparing two screens
+ * gives no clue which is which: the all-time billed total shown above,
+ * what has actually been collected, the part credited into partner
+ * accounts, and whatever range the Stats screen is set to. Rather than
+ * answer that question one partner at a time, the screen does its own
+ * arithmetic out loud — the lines that add up to the headline, then every
+ * nearby figure it is deliberately not.
+ */
+@Composable
+fun RevenueWorking(data: FinanceOverview) {
+    val r = data.revenueBreakdown
+    if (r.orders == 0) return
+    var expanded by remember { mutableStateOf(false) }
+
+    Card(shape = RoundedCornerShape(20.dp), colors = softCardColors()) {
+        Column(Modifier.fillMaxWidth().padding(16.dp)) {
+            Row(
+                Modifier.fillMaxWidth().clickable { expanded = !expanded },
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("Where this number comes from", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        Money.full(r.total) + " across " + r.orders + " orders",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Icon(
+                    if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                    contentDescription = if (expanded) "Hide the working" else "Show the working",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            AnimatedVisibility(expanded) {
+                Column(Modifier.fillMaxWidth()) {
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        "Every order ever booked, at its billed total — not what has been " +
+                            "collected, and not only this year." +
+                            (if (r.firstOrder != null) " " + r.orders + " orders from " +
+                                Dates.prettyShort(r.firstOrder) + " to " + Dates.prettyShort(r.lastOrder ?: r.firstOrder) + "." else ""),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(10.dp))
+
+                    StatLine("Items, before adjustments", Money.full(r.subtotal))
+                    StatLine("Less discounts given", "−" + Money.full(r.discount))
+                    StatLine("Plus delivery and extras", "+" + Money.full(r.extra))
+                    ThinDivider(Modifier.padding(vertical = 8.dp))
+                    StatLine("Revenue (all sales)", Money.full(r.total), bold = true)
+
+                    Spacer(Modifier.height(16.dp))
+                    Text(
+                        "Numbers this is often confused with",
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                    Spacer(Modifier.height(6.dp))
+
+                    WorkingLine(
+                        "Collected so far",
+                        if (r.outstanding > 0.5) Money.full(r.outstanding) + " still owed"
+                        else "nothing outstanding",
+                        Money.full(r.collected),
+                    )
+                    WorkingLine(
+                        "Credited to partner accounts",
+                        r.creditedOrders.toString() + " of " + r.orders + " orders · " +
+                            Money.full(r.uncredited) + " across " + r.uncreditedOrders +
+                            " orders is in nobody's account yet",
+                        Money.full(r.credited),
+                    )
+                    WorkingLine(
+                        "This financial year (" + r.yearLabel + ")",
+                        r.thisYear.orders.toString() + " orders since April",
+                        Money.full(r.thisYear.amount),
+                    )
+                    WorkingLine(
+                        "This month",
+                        r.thisMonth.orders.toString() + " orders — close to what Stats shows by default",
+                        Money.full(r.thisMonth.amount),
+                    )
+
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        "The Stats screen totals only the orders inside the range picked at the " +
+                            "top of it, so its revenue is smaller than this one unless that range " +
+                            "covers everything. Business profit above subtracts all expenses ever " +
+                            "recorded (" + Money.full(data.business.expenses) + ") from all " +
+                            "revenue, so a young business reads negative until the stock and " +
+                            "equipment it has already paid for have been sold on.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** A label, the sentence that qualifies it, and the amount. */
+@Composable
+private fun WorkingLine(label: String, caption: String, value: String) {
+    Row(
+        Modifier.fillMaxWidth().padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(label, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+            Text(
+                caption,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Spacer(Modifier.width(10.dp))
+        Text(value, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
     }
 }
 

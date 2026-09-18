@@ -8,7 +8,7 @@
  *
  * Bump CACHE when the shell changes, or phones keep serving the old files.
  */
-const CACHE = 'madeforu-shell-v1';
+const CACHE = 'madeforu-shell-v2';
 const SHELL = [
   './',
   './index.html',

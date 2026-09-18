@@ -334,6 +334,19 @@ const ORDER_ITEMS_SUBQUERY = "(SELECT GROUP_CONCAT(CONCAT(oi.item, ' x', oi.quan
                                FROM order_items oi WHERE oi.order_id = o.id)";
 
 /** Rupees in Indian words, for the bill. 1,23,456 -> lakh/crore, not million. */
+/**
+ * Indian financial year label for a date: 2026-09-18 -> "26-27".
+ * Bills restart their numbering each April and the Money screen labels
+ * the year the same way, so the boundary is defined once, here.
+ */
+function fy_label(string $date): string {
+    $ts = strtotime($date) ?: time();
+    $y  = (int)date('Y', $ts);
+    $m  = (int)date('n', $ts);
+    $start = $m >= 4 ? $y : $y - 1;
+    return substr((string)$start, 2) . '-' . substr((string)($start + 1), 2);
+}
+
 function amount_in_words(float $amount): string {
     $amount = round($amount, 2);
     $rupees = (int)floor($amount);

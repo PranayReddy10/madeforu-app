@@ -27,8 +27,14 @@
   --tabbar-height: 64px;
 }
 
+/*
+ * Dark mode, twice on purpose. The first block follows the phone; the
+ * :not() guard is what lets someone override it from Settings. The second
+ * is that override. Keep the two token lists identical — they are the same
+ * palette reached two different ways.
+ */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #12151F;
     --surface: #1B1F2C;
     --ink: #E6E1E6;
@@ -39,6 +45,17 @@
     --warn: #FFC96B;
     --shadow: 0 1px 3px rgba(0, 0, 0, .4);
   }
+}
+:root[data-theme="dark"] {
+    --bg: #12151F;
+    --surface: #1B1F2C;
+    --ink: #E6E1E6;
+    --muted: #A8A3B0;
+    --line: #2C3142;
+    --positive: #6EE7A8;
+    --negative: #FFB4AB;
+    --warn: #FFC96B;
+    --shadow: 0 1px 3px rgba(0, 0, 0, .4);
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
@@ -189,7 +206,10 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--rose); outl
   background: #FFDAD6; color: #410002; padding: 12px 14px; border-radius: 14px;
   font-size: 14px; margin: 10px 0;
 }
-@media (prefers-color-scheme: dark) { .error { background: #93000A; color: #FFDAD6; } }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .error { background: #93000A; color: #FFDAD6; }
+}
+:root[data-theme="dark"] .error { background: #93000A; color: #FFDAD6; }
 .muted { color: var(--muted); font-size: 13px; }
 .center { text-align: center; }
 .spinner {
@@ -237,4 +257,89 @@ td.b { font-weight: 700; }
   background: var(--rose-soft); color: #3E0018; border-radius: 16px;
   padding: 14px; font-size: 13px; margin-top: 12px;
 }
-@media (prefers-color-scheme: dark) { .install { background: var(--rose-deep); color: #fff; } }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .install { background: var(--rose-deep); color: #fff; }
+}
+:root[data-theme="dark"] .install { background: var(--rose-deep); color: #fff; }
+
+
+/* ── Folds ────────────────────────────────────────────────────────
+ * A section that opens and closes. Used where a screen would
+ * otherwise be a single long scroll: the new-sale form, and the
+ * working behind a number on the Money screen.
+ */
+details.fold { background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow); }
+details.fold + details.fold { margin-top: 10px; }
+details.fold > summary {
+  display: flex; align-items: center; gap: 12px;
+  padding: 15px 16px; cursor: pointer; list-style: none; border-radius: var(--radius);
+}
+details.fold > summary::-webkit-details-marker { display: none; }
+details.fold > summary .grow { flex: 1; min-width: 0; }
+details.fold > summary .t { font-weight: 600; font-size: 15px; }
+details.fold > summary .s { font-size: 12px; color: var(--muted); }
+/* The chevron is the only thing that moves, so "open" reads at a glance. */
+details.fold > summary .caret {
+  flex: none; color: var(--muted); transition: transform .18s ease;
+}
+details.fold[open] > summary .caret { transform: rotate(180deg); }
+details.fold[open] > summary { border-bottom: 1px solid var(--line); border-radius: var(--radius) var(--radius) 0 0; }
+details.fold .foldbody { padding: 4px 16px 16px; }
+details.fold .foldbody .row:first-child { padding-top: 10px; }
+
+/* A count sitting on the summary — "3 items", "₹1,240". */
+.badge {
+  flex: none; padding: 3px 10px; border-radius: 99px; font-size: 12px; font-weight: 700;
+  background: var(--rose-soft); color: var(--rose-deep);
+}
+:root[data-theme="dark"] .badge { background: var(--rose-deep); color: #fff; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .badge { background: var(--rose-deep); color: #fff; }
+}
+
+/* ── Sheet ────────────────────────────────────────────────────────
+ * A form that slides up over the screen it belongs to, so adding an
+ * expense never loses the list behind it.
+ */
+.sheetwrap {
+  position: fixed; inset: 0; z-index: 50;
+  background: rgba(15, 12, 18, .5);
+  display: flex; align-items: flex-end;
+}
+.sheetwrap .panel {
+  background: var(--bg); width: 100%; max-height: 92vh; overflow-y: auto;
+  border-radius: 26px 26px 0 0;
+  padding: 8px 16px calc(var(--safe-bottom) + 20px);
+  animation: rise .22s ease;
+}
+@keyframes rise { from { transform: translateY(26px); opacity: .4; } }
+.sheetwrap .grabber {
+  width: 40px; height: 4px; border-radius: 99px; background: var(--line);
+  margin: 6px auto 12px;
+}
+.sheetwrap .head { position: sticky; top: 0; background: var(--bg); padding: 4px 0 10px; z-index: 1; }
+
+/* ── Floating add button ──────────────────────────────────────── */
+.fab {
+  position: fixed; right: 16px; z-index: 25;
+  bottom: calc(var(--tabbar-height) + var(--safe-bottom) + 16px);
+  width: auto; padding: 14px 20px; border-radius: 99px;
+  background: var(--rose); color: #fff; font-weight: 600; font-size: 15px;
+  display: flex; align-items: center; gap: 8px;
+  box-shadow: 0 8px 24px rgba(245, 74, 119, .42);
+}
+
+/* ── Theme picker ─────────────────────────────────────────────── */
+.themes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.themes button {
+  border-radius: 16px; padding: 12px 8px; background: var(--bg);
+  border: 2px solid var(--line); font-size: 13px; font-weight: 600; color: var(--ink);
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+}
+.themes button[aria-pressed="true"] { border-color: var(--rose); color: var(--rose); }
+.themes .swatch {
+  width: 100%; height: 34px; border-radius: 10px; border: 1px solid var(--line);
+}
+.themes .swatch.light { background: linear-gradient(135deg, #F6F4F7 50%, #FFFFFF 50%); }
+.themes .swatch.dark { background: linear-gradient(135deg, #12151F 50%, #1B1F2C 50%); }
+.themes .swatch.auto { background: linear-gradient(135deg, #F6F4F7 50%, #12151F 50%); }

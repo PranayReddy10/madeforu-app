@@ -28,6 +28,88 @@ require __DIR__ . '/_bootstrap.php';
 
 $me = api_require_auth($conn);
 
+/**
+ * Where the headline "Revenue (all sales)" figure comes from.
+ *
+ * This exists because the same word — revenue — is four different numbers
+ * in this app, and a partner comparing two screens has no way to tell
+ * which one they are looking at:
+ *
+ *   total       Σ orders.total over EVERY order ever. This is what
+ *               investment.php's profit card uses, and what this API
+ *               returns as business.revenue.
+ *   collected   Σ orders.paid_amount — money actually received. Lower
+ *               than `total` whenever an order still has a balance.
+ *   credited    the part of `total` that has been taken into a partner's
+ *               account (orders.credited_mov_id is set). The rest is
+ *               sitting outside anyone's account.
+ *   period      what the Stats screen shows, which is only the orders
+ *               inside the selected date range.
+ *
+ * Returning all four next to each other is the whole point: whichever
+ * number someone is querying, they can see it here beside the headline
+ * and read off the difference instead of guessing at it.
+ */
+function revenue_breakdown_api(mysqli $conn): array {
+    $r = $conn->query(
+        'SELECT COUNT(*) n,
+                COALESCE(SUM(total),0)        total,
+                COALESCE(SUM(subtotal),0)     subtotal,
+                COALESCE(SUM(discount),0)     discount,
+                COALESCE(SUM(extra_charge),0) extra,
+                COALESCE(SUM(paid_amount),0)  collected,
+                MIN(DATE(created_at))         first_order,
+                MAX(DATE(created_at))         last_order
+           FROM orders'
+    )->fetch_assoc() ?: [];
+
+    $cr = $conn->query(
+        'SELECT COUNT(*) n, COALESCE(SUM(total),0) amt
+           FROM orders WHERE credited_mov_id IS NOT NULL'
+    )->fetch_assoc() ?: ['n' => 0, 'amt' => 0];
+
+    // The Indian financial year runs April to March, the same boundary
+    // bill numbers use — so "this year" means the same thing on the bill
+    // book and here.
+    $fyStart = (date('n') >= 4 ? date('Y') : (string)((int)date('Y') - 1)) . '-04-01';
+
+    $window = function (string $from) use ($conn): array {
+        $s = $conn->prepare(
+            'SELECT COUNT(*) n, COALESCE(SUM(total),0) amt FROM orders WHERE DATE(created_at) >= ?'
+        );
+        $s->bind_param('s', $from);
+        $s->execute();
+        $row = $s->get_result()->fetch_assoc() ?: ['n' => 0, 'amt' => 0];
+        $s->close();
+        return ['orders' => (int)$row['n'], 'amount' => round((float)$row['amt'], 2)];
+    };
+
+    $total     = round((float)($r['total'] ?? 0), 2);
+    $collected = round((float)($r['collected'] ?? 0), 2);
+    $credited  = round((float)$cr['amt'], 2);
+
+    return [
+        'orders'      => (int)($r['n'] ?? 0),
+        'total'       => $total,
+        // total = subtotal − discount + extra_charge. Shown so the headline
+        // can be checked against the order list without a calculator.
+        'subtotal'    => round((float)($r['subtotal'] ?? 0), 2),
+        'discount'    => round((float)($r['discount'] ?? 0), 2),
+        'extra'       => round((float)($r['extra'] ?? 0), 2),
+        'collected'   => $collected,
+        'outstanding' => round($total - $collected, 2),
+        'credited'    => $credited,
+        'credited_orders'   => (int)$cr['n'],
+        'uncredited'        => round($total - $credited, 2),
+        'uncredited_orders' => (int)($r['n'] ?? 0) - (int)$cr['n'],
+        'this_month'  => $window(date('Y-m-01')),
+        'this_year'   => $window($fyStart),
+        'year_label'  => fy_label($fyStart),
+        'first_order' => $r['first_order'] ?? null,
+        'last_order'  => $r['last_order'] ?? null,
+    ];
+}
+
 /** Revenue − expenses, and how much of it is already in partners' accounts. */
 function business_profit_api(mysqli $conn): array {
     $rev = (float)($conn->query('SELECT COALESCE(SUM(total),0) v FROM orders')->fetch_assoc()['v'] ?? 0);
@@ -183,6 +265,7 @@ api_dispatch([
             'categories'      => $categories,
             'category_total'  => round($catTotal, 2),
             'business'        => business_profit_api($conn),
+            'revenue_breakdown' => revenue_breakdown_api($conn),
             'settle_invest'   => settle_plan($rows, 'gap'),
             'settle_balance'  => settle_plan($rows, 'balance_gap', true),
             'uncredited_offline' => [

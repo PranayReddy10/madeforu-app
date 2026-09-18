@@ -433,6 +433,40 @@ data class BusinessProfit(
 )
 
 @Serializable
+data class RevenueWindow(val orders: Int = 0, val amount: Double = 0.0)
+
+/**
+ * The working behind "Revenue (all sales)".
+ *
+ * Four different figures in this app are called revenue and a partner has
+ * no way to tell them apart: the all-time billed total (this `total`, and
+ * what the profit card uses), what has actually been collected, the part
+ * credited into partner accounts, and whatever the Stats screen's date
+ * range happens to cover. The Money screen shows all four together so the
+ * difference can be read off instead of guessed at.
+ */
+@Serializable
+data class RevenueBreakdown(
+    val orders: Int = 0,
+    val total: Double = 0.0,
+    // total = subtotal − discount + extra
+    val subtotal: Double = 0.0,
+    val discount: Double = 0.0,
+    val extra: Double = 0.0,
+    val collected: Double = 0.0,
+    val outstanding: Double = 0.0,
+    val credited: Double = 0.0,
+    @SerialName("credited_orders") val creditedOrders: Int = 0,
+    val uncredited: Double = 0.0,
+    @SerialName("uncredited_orders") val uncreditedOrders: Int = 0,
+    @SerialName("this_month") val thisMonth: RevenueWindow = RevenueWindow(),
+    @SerialName("this_year") val thisYear: RevenueWindow = RevenueWindow(),
+    @SerialName("year_label") val yearLabel: String = "",
+    @SerialName("first_order") val firstOrder: String? = null,
+    @SerialName("last_order") val lastOrder: String? = null,
+)
+
+@Serializable
 data class SettleStep(
     @SerialName("from_id") val fromId: Int = 0,
     val from: String = "",
@@ -449,6 +483,7 @@ data class FinanceOverview(
     val partners: List<PartnerFinance> = emptyList(),
     val totals: FinanceTotals = FinanceTotals(),
     val business: BusinessProfit = BusinessProfit(),
+    @SerialName("revenue_breakdown") val revenueBreakdown: RevenueBreakdown = RevenueBreakdown(),
     @SerialName("settle_invest") val settleInvest: List<SettleStep> = emptyList(),
     @SerialName("settle_balance") val settleBalance: List<SettleStep> = emptyList(),
     @SerialName("uncredited_offline") val uncreditedOffline: Uncredited = Uncredited(),
