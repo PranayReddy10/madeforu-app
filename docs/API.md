@@ -47,12 +47,18 @@ Tokens last 90 days and are stored only as a SHA-256 hash.
 | `bootstrap` | GET | products + events + partners + categories + modes + settings, in one call |
 | `products` | GET | `include_hidden=true` for the full list |
 | `add_product` | POST | `name`, `price`, `unit_cost` |
-| `update_product` | POST | `id` plus any of `price`, `unit_cost`, `is_active` |
+| `update_product` | POST | `id` plus any of `price`, `unit_cost`, `is_active`, `image_url`, `product_url` |
 | `reorder_products` | POST | `ids: [..]` in the new order |
 | `events` | GET | `active_only=true` to filter |
 | `add_event` | POST | `name`, `is_paid`, `entry_cost`, `start_date`, `end_date`, `notes` |
 | `set_event_active` | POST | `id`, `is_active` |
 | `save_settings` | POST | any of the `app_settings` keys |
+
+Products carry `image_url` and `product_url` — the same two columns the
+website's Products page writes, which feed the public `menu.php` catalogue
+and `share.php`. The app shows the photo in the order picker and offers the
+same WhatsApp share. Both are selected with `COALESCE`, so an install that
+has not added those columns reports empty strings rather than failing.
 
 **Renaming and deleting products is not exposed.** The database joins these
 items by name across seven tables, so a rename must propagate through all

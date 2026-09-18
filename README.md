@@ -90,6 +90,14 @@ AWB means dispatched.
 
 ## What was verified, and what was not
 
+The API was diffed against the current server code you supplied: `config.php`
+and `save.php` are byte-identical to what it was built on, so every helper it
+re-uses is the live one. The only drift since was `products.image_url` and
+`products.product_url` (added for the public `menu.php` catalogue and
+`share.php`); the API and app now carry both, the order picker shows the
+photo, and the app's WhatsApp product share sends character-for-character
+what `share.php` sends.
+
 The API was run end to end against a restore of the production dump — 98
 real orders, four partners, MariaDB with `ONLY_FULL_GROUP_BY` and
 `STRICT_TRANS_TABLES` on, exactly as the live server runs. Orders, walk-in

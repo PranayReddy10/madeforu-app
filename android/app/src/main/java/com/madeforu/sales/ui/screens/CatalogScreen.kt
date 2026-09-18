@@ -18,6 +18,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -28,6 +29,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -41,7 +43,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.widget.Toast
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -52,6 +59,7 @@ import com.madeforu.sales.data.Product
 import com.madeforu.sales.data.Repository
 import com.madeforu.sales.ui.components.ErrorBanner
 import com.madeforu.sales.ui.components.LoadingBox
+import com.madeforu.sales.ui.components.ProductThumb
 import com.madeforu.sales.ui.components.Pill
 import com.madeforu.sales.ui.theme.positiveColor
 import kotlinx.coroutines.launch
@@ -72,6 +80,7 @@ fun CatalogScreen(
     onSessionExpired: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
 
     var products by remember { mutableStateOf<List<Product>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
@@ -139,6 +148,8 @@ fun CatalogScreen(
                         Modifier.fillMaxWidth().padding(14.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
+                        ProductThumb(product.name, product.imageUrl)
+                        Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
@@ -170,6 +181,17 @@ fun CatalogScreen(
                                 style = MaterialTheme.typography.bodySmall,
                                 color = positiveColor(),
                             )
+                            // Same message share.php sends, so a customer
+                            // gets identical text whichever tool was used.
+                            if (product.productUrl.isNotBlank()) {
+                                IconButton(onClick = { shareProduct(context, product) }) {
+                                    Icon(
+                                        Icons.Filled.Chat,
+                                        contentDescription = "Send this product on WhatsApp",
+                                        tint = MaterialTheme.colorScheme.primary,
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -182,11 +204,13 @@ fun CatalogScreen(
             product = product,
             busy = busy,
             onDismiss = { editing = null },
-            onSave = { price, cost, active ->
+            onSave = { price, cost, active, imageUrl, productUrl ->
                 editing = null
                 busy = true
                 scope.launch {
-                    val result = repository.updateProduct(product.id, price, cost, active)
+                    val result = repository.updateProduct(
+                        product.id, price, cost, active, imageUrl, productUrl,
+                    )
                     when (result) {
                         is ApiResult.Success -> products = result.value
                         is ApiResult.Failure -> error = result.message
@@ -221,12 +245,14 @@ private fun EditProductSheet(
     product: Product,
     busy: Boolean,
     onDismiss: () -> Unit,
-    onSave: (Double, Double, Boolean) -> Unit,
+    onSave: (Double, Double, Boolean, String, String) -> Unit,
 ) {
-    val sheetState = rememberModalBottomSheetState()
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var priceText by remember { mutableStateOf(numberText(product.price)) }
     var costText by remember { mutableStateOf(numberText(product.unitCost)) }
     var active by remember { mutableStateOf(product.isActive) }
+    var imageUrl by remember { mutableStateOf(product.imageUrl) }
+    var productUrl by remember { mutableStateOf(product.productUrl) }
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
         Column(
@@ -283,8 +309,32 @@ private fun EditProductSheet(
                 }
             }
 
+            OutlinedTextField(
+                value = imageUrl,
+                onValueChange = { imageUrl = it.trim() },
+                label = { Text("Photo URL") },
+                placeholder = { Text("https://madeforu.co.in/wp-content/…") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            OutlinedTextField(
+                value = productUrl,
+                onValueChange = { productUrl = it.trim() },
+                label = { Text("Shop page URL") },
+                placeholder = { Text("https://madeforu.co.in/product/…") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Text(
+                "These are the same two links the website's Products page sets. " +
+                    "They feed the public catalogue at menu.php and the WhatsApp " +
+                    "share button here.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
             Button(
-                onClick = { onSave(price, cost, active) },
+                onClick = { onSave(price, cost, active, imageUrl, productUrl) },
                 enabled = !busy && price >= 0,
                 modifier = Modifier.fillMaxWidth().height(50.dp),
             ) { Text("Save") }
@@ -364,3 +414,35 @@ private fun AddProductSheet(
 private fun numberText(value: Double): String =
     if (value == value.toLong().toDouble()) value.toLong().toString()
     else String.format(java.util.Locale.US, "%.2f", value)
+
+/**
+ * Sends a product to a customer on WhatsApp.
+ *
+ * The text is character-for-character what share.php sends — name, newline,
+ * "👉", link, and deliberately no price, which that page calls out in a
+ * comment. A partner sharing from the app and one sharing from the website
+ * must produce the same message, or the same product arrives two ways.
+ *
+ * Falls back to the system share sheet when WhatsApp is not installed.
+ */
+private fun shareProduct(context: Context, product: Product) {
+    val message = product.name + "\n\uD83D\uDC49 " + product.productUrl
+    val whatsapp = Intent(Intent.ACTION_VIEW).apply {
+        data = Uri.parse("https://wa.me/?text=" + Uri.encode(message))
+    }
+    runCatching { context.startActivity(whatsapp) }.onFailure {
+        runCatching {
+            context.startActivity(
+                Intent.createChooser(
+                    Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(Intent.EXTRA_TEXT, message)
+                    },
+                    "Send product",
+                ),
+            )
+        }.onFailure {
+            Toast.makeText(context, "Nothing on this phone can share that.", Toast.LENGTH_SHORT).show()
+        }
+    }
+}

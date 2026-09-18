@@ -81,14 +81,21 @@ class Repository(private val api: ApiClient, private val prefs: Prefs) {
         price: Double? = null,
         unitCost: Double? = null,
         isActive: Boolean? = null,
+        imageUrl: String? = null,
+        productUrl: String? = null,
     ): ApiResult<List<Product>> =
         api.post(
             "catalog.php", "update_product",
             ApiClient.body {
                 put("id", JsonPrimitive(id))
+                // Only fields that are passed are touched: the server
+                // leaves out anything absent, so editing a price cannot
+                // blank a photo URL by omission.
                 price?.let { put("price", JsonPrimitive(it)) }
                 unitCost?.let { put("unit_cost", JsonPrimitive(it)) }
                 isActive?.let { put("is_active", JsonPrimitive(it)) }
+                imageUrl?.let { put("image_url", JsonPrimitive(it)) }
+                productUrl?.let { put("product_url", JsonPrimitive(it)) }
             },
         ).map { api.decode<ProductsResponse>(it).products }
 

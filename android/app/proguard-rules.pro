@@ -18,3 +18,6 @@
 -dontwarn org.conscrypt.**
 -dontwarn org.bouncycastle.**
 -dontwarn org.openjsse.**
+
+# Coil resolves its decoders reflectively through OkHttp's platform hooks.
+-dontwarn coil.**

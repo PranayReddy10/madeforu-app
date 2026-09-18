@@ -37,7 +37,7 @@ INSERT IGNORE INTO app_settings (skey, sval) VALUES
   ('business_name',  'MadeForU'),
   ('business_tag',   'Handmade personalised gifts'),
   ('business_addr',  'Hyderabad, Telangana'),
-  ('business_phone', ''),
+  ('business_phone', '+91 93810 24794'),
   ('business_email', ''),
   ('business_site',  'madeforu.co.in'),
   ('gstin',          ''),

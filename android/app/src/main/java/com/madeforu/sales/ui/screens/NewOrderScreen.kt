@@ -64,6 +64,7 @@ import com.madeforu.sales.data.Repository
 import com.madeforu.sales.ui.components.ChipRow
 import com.madeforu.sales.ui.components.DetailRow
 import com.madeforu.sales.ui.components.ErrorBanner
+import com.madeforu.sales.ui.components.ProductThumb
 import com.madeforu.sales.ui.components.LoadingBox
 import com.madeforu.sales.ui.components.ThinDivider
 import com.madeforu.sales.ui.theme.positiveColor
@@ -516,6 +517,8 @@ private fun ProductPickerRow(product: Product, quantity: Int, onChange: (Int) ->
             Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            ProductThumb(product.name, product.imageUrl)
+            Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(
                     product.name,

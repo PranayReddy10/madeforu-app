@@ -37,6 +37,10 @@ data class Product(
     @SerialName("is_active") val isActive: Boolean = true,
     @SerialName("sort_order") val sortOrder: Int = 0,
     @SerialName("qty_on_hand") val qtyOnHand: Double = 0.0,
+    // Set on the website's Products page; these are what the public
+    // menu.php catalogue and share.php use.
+    @SerialName("image_url") val imageUrl: String = "",
+    @SerialName("product_url") val productUrl: String = "",
 )
 
 @Serializable

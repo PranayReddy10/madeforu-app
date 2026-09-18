@@ -23,7 +23,13 @@ function catalog_products(mysqli $conn, bool $includeHidden = false): array {
     // raises "Illegal mix of collations" and the whole catalogue call
     // fails. Forcing one side makes the comparison well-defined. Both are
     // utf8mb4, so no character is lost in the conversion.
+    // image_url and product_url were added to the website for the public
+    // menu.php catalogue and share.php. COALESCE rather than a bare select:
+    // an install that has not run that migration yet simply reports empty
+    // strings instead of failing the whole catalogue call.
     $sql = 'SELECT p.id, p.name, p.price, p.is_active, p.sort_order,
+                   COALESCE(p.image_url, \'\') image_url,
+                   COALESCE(p.product_url, \'\') product_url,
                    COALESCE(c.unit_cost, 0) unit_cost,
                    COALESCE(s.qty_on_hand, 0) qty_on_hand
               FROM products p
@@ -48,6 +54,8 @@ function catalog_products(mysqli $conn, bool $includeHidden = false): array {
                 'is_active'   => (int)$r['is_active'] === 1,
                 'sort_order'  => (int)$r['sort_order'],
                 'qty_on_hand' => (float)$r['qty_on_hand'],
+                'image_url'   => (string)($r['image_url'] ?? ''),
+                'product_url' => (string)($r['product_url'] ?? ''),
             ];
         }
     } catch (mysqli_sql_exception $e) {
@@ -58,7 +66,8 @@ function catalog_products(mysqli $conn, bool $includeHidden = false): array {
         foreach ($ITEMS as $name => $price) {
             $out[] = ['id' => --$i, 'name' => $name, 'price' => (float)$price, 'unit_cost' => 0.0,
                       'margin' => (float)$price, 'margin_pct' => 100.0, 'is_active' => true,
-                      'sort_order' => 0, 'qty_on_hand' => 0.0];
+                      'sort_order' => 0, 'qty_on_hand' => 0.0,
+                      'image_url' => '', 'product_url' => ''];
         }
     }
     return $out;
@@ -210,6 +219,19 @@ api_dispatch([
             $active = api_bool('is_active') ? 1 : 0;
             $s = $conn->prepare('UPDATE products SET is_active = ? WHERE id = ?');
             $s->bind_param('ii', $active, $id);
+            $s->execute();
+            $s->close();
+        }
+        // The catalogue photo and the shop link, same columns products.php
+        // writes. Both are NOT NULL DEFAULT '', so clearing one stores ''.
+        foreach (['image_url', 'product_url'] as $col) {
+            if (api_in($col, null) === null) continue;
+            $value = api_str($col);
+            if (mb_strlen($value) > 500) throw new ApiInputError('That URL is too long (500 characters max).');
+            // Column names cannot be bound, so the name comes from this
+            // fixed list and never from the request.
+            $s = $conn->prepare("UPDATE products SET $col = ? WHERE id = ?");
+            $s->bind_param('si', $value, $id);
             $s->execute();
             $s->close();
         }
