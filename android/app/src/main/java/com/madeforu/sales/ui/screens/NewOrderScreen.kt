@@ -96,6 +96,7 @@ fun NewOrderScreen(
     var loading by remember { mutableStateOf(true) }
     var saving by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    var showProducts by remember { mutableStateOf(true) }
     var showCustomer by remember { mutableStateOf(false) }
     var showAdjustments by remember { mutableStateOf(false) }
 
@@ -138,6 +139,7 @@ fun NewOrderScreen(
                         awb = order.awb.orEmpty(),
                         dispatchDate = order.dispatchDate.orEmpty(),
                     )
+                    if (order.items.isNotEmpty()) showProducts = false
                     if (!order.isWalkIn) showCustomer = true
                     if (order.discount > 0 || order.extraCharge > 0) showAdjustments = true
                     discountText = if (order.discount > 0) trimNumber(order.discount) else ""
@@ -282,22 +284,50 @@ fun NewOrderScreen(
                 }
             }
 
+            // Products collapse like every other section. With a couple of
+            // dozen in the catalogue, leaving them always open means
+            // scrolling past all of them to reach the payment and customer
+            // fields underneath. The header keeps the count and the running
+            // total visible, so collapsing never hides what was picked.
             item {
-                Text(
-                    "Products",
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(top = 4.dp),
+                SectionToggle(
+                    title = "Products",
+                    subtitle = if (draft.lines.isEmpty()) {
+                        "${products.size} to choose from"
+                    } else {
+                        val units = draft.lines.sumOf { it.quantity }
+                        "$units item${if (units == 1) "" else "s"} · " + Money.full(draft.subtotal)
+                    },
+                    expanded = showProducts,
+                    onToggle = { showProducts = !showProducts },
                 )
             }
 
-            items(products.size) { index ->
-                val product = products[index]
-                val quantity = draft.lines.firstOrNull { it.item == product.name }?.quantity ?: 0
-                ProductPickerRow(
-                    product = product,
-                    quantity = quantity,
-                    onChange = { setQuantity(product, it) },
-                )
+            if (showProducts) {
+                // Still emitted as lazy items rather than stuffed into a
+                // Column inside the section: only the rows on screen compose.
+                items(products.size) { index ->
+                    val product = products[index]
+                    val quantity = draft.lines.firstOrNull { it.item == product.name }?.quantity ?: 0
+                    ProductPickerRow(
+                        product = product,
+                        quantity = quantity,
+                        onChange = { setQuantity(product, it) },
+                    )
+                }
+            } else if (draft.lines.isNotEmpty()) {
+                // Collapsed, the chosen lines stay reachable: quantities can
+                // still be corrected without reopening the whole catalogue.
+                items(draft.lines.size) { index ->
+                    val line = draft.lines[index]
+                    val product = products.firstOrNull { it.name == line.item }
+                        ?: Product(name = line.item, price = line.price)
+                    ProductPickerRow(
+                        product = product,
+                        quantity = line.quantity,
+                        onChange = { setQuantity(product, it) },
+                    )
+                }
             }
 
             item { Spacer(Modifier.height(4.dp)) }
@@ -554,6 +584,47 @@ internal fun ProductPickerRow(product: Product, quantity: Int, onChange: (Int) -
             ) {
                 Icon(Icons.Filled.Add, contentDescription = "One more", Modifier.size(18.dp))
             }
+        }
+    }
+}
+
+/**
+ * A collapsible section header for content that lives outside it — used
+ * for the product list, whose rows have to stay lazy rather than being
+ * nested inside a card.
+ */
+@Composable
+private fun SectionToggle(
+    title: String,
+    subtitle: String,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+) {
+    Card(
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+        ),
+        onClick = onToggle,
+    ) {
+        Row(
+            Modifier.fillMaxWidth().padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.titleMedium)
+                Text(
+                    subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Icon(
+                if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                contentDescription = if (expanded) "Hide products" else "Show products",
+            )
         }
     }
 }

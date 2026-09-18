@@ -106,18 +106,33 @@ fun AppRoot(signedIn: Boolean) {
                 NavigationBar(tonalElevation = 3.dp) {
                     bottomDestinations.forEach { destination ->
                         val selected = currentRoute == destination.route
+                        // New sale is an action, not a place. Every other tab
+                        // is a view you return to, so it keeps its scroll
+                        // position; a sale always starts from nothing.
+                        val isNewSale = destination.route == Routes.NEW_ORDER
                         NavigationBarItem(
                             selected = selected,
                             onClick = {
-                                if (!selected) {
+                                // Tapping a tab you are already on does
+                                // nothing — except New sale, where it is how
+                                // you clear the form and start the next one.
+                                if (!selected || isNewSale) {
                                     navController.navigate(destination.route) {
                                         // Keep one copy of each top-level
                                         // screen and its scroll position;
                                         // tapping between tabs should not
                                         // build a stack to back out of.
                                         popUpTo(Routes.HOME) { saveState = true }
-                                        launchSingleTop = true
-                                        restoreState = true
+                                        // restoreState would bring back the
+                                        // half-typed basket from the last
+                                        // sale, and once that entry has been
+                                        // consumed — saving an order pops it
+                                        // — restoring it does nothing at all,
+                                        // which is why the button stopped
+                                        // responding. A fresh entry every
+                                        // time is both correct and reliable.
+                                        launchSingleTop = !isNewSale
+                                        restoreState = !isNewSale
                                     }
                                 }
                             },
