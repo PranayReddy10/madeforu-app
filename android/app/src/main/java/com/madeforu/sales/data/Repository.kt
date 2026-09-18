@@ -334,7 +334,18 @@ class Repository(private val api: ApiClient, private val prefs: Prefs) {
             mapOf("from" to from, "to" to to, "category" to category, "q" to query),
         ).map { api.decode<ExpenseListResponse>(it) }
 
-    suspend fun addExpense(
+    suspend fun expense(id: Int): ApiResult<Expense> =
+        api.get("expenses.php", "get", mapOf("id" to id.toString()))
+            .map { api.decode<ExpenseDetailResponse>(it).expense }
+
+    /**
+     * @param split who actually put the money in. Empty means the whole net
+     * amount against [paidBy], which is the common case. When several
+     * partners chipped in, each row is recorded separately — that table is
+     * what counts towards a partner's investment.
+     */
+    suspend fun saveExpense(
+        id: Int?,
         date: String,
         item: String,
         amount: Double,
@@ -343,10 +354,12 @@ class Repository(private val api: ApiClient, private val prefs: Prefs) {
         category: String,
         paidTo: String,
         details: String,
+        split: List<Pair<Int, Double>> = emptyList(),
     ): ApiResult<String> =
         api.post(
-            "expenses.php", "create",
+            "expenses.php", if (id == null) "create" else "update",
             ApiClient.body {
+                if (id != null) put("id", JsonPrimitive(id))
                 put("exp_date", JsonPrimitive(date))
                 put("item", JsonPrimitive(item))
                 put("amount", JsonPrimitive(amount))
@@ -355,8 +368,26 @@ class Repository(private val api: ApiClient, private val prefs: Prefs) {
                 put("category", JsonPrimitive(category))
                 put("paid_to", JsonPrimitive(paidTo))
                 put("details", JsonPrimitive(details))
+                if (split.isNotEmpty()) {
+                    put(
+                        "payments",
+                        kotlinx.serialization.json.JsonArray(
+                            split.map { (partnerId, amt) ->
+                                kotlinx.serialization.json.JsonObject(
+                                    mapOf(
+                                        "partner_id" to JsonPrimitive(partnerId),
+                                        "amount" to JsonPrimitive(amt),
+                                    ),
+                                )
+                            },
+                        ),
+                    )
+                }
             },
         ).map { api.decode<SimpleMessage>(it).message }
+
+    suspend fun release(): ApiResult<Release> =
+        api.get("auth.php", "app_version").map { api.decode<ReleaseResponse>(it).release }
 
     suspend fun deleteExpense(id: Int): ApiResult<String> =
         api.post("expenses.php", "delete", ApiClient.body { put("id", JsonPrimitive(id)) })

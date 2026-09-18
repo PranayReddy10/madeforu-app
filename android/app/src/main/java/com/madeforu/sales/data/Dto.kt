@@ -83,6 +83,11 @@ data class Settings(
     @SerialName("upi_id") val upiId: String = "",
     @SerialName("upi_name") val upiName: String = "",
     @SerialName("bill_prefix") val billPrefix: String = "MFU",
+    @SerialName("logo_url") val logoUrl: String = "",
+    @SerialName("apk_url") val apkUrl: String = "",
+    @SerialName("apk_version_name") val apkVersionName: String = "",
+    @SerialName("apk_version_code") val apkVersionCode: String = "0",
+    @SerialName("apk_notes") val apkNotes: String = "",
     @SerialName("bill_footer") val billFooter: String = "",
     @SerialName("bill_terms") val billTerms: String = "",
 )
@@ -238,6 +243,7 @@ data class Bill(
     @SerialName("issued_by") val issuedBy: String? = null,
     @SerialName("public_token") val publicToken: String = "",
     @SerialName("public_url") val publicUrl: String = "",
+    @SerialName("logo_url") val logoUrl: String = "",
     val business: BillBusiness = BillBusiness(),
     val footer: String = "",
     val terms: String = "",
@@ -407,6 +413,8 @@ data class FinanceTotals(
     @SerialName("fair_share") val fairShare: Double = 0.0,
     @SerialName("fair_balance") val fairBalance: Double = 0.0,
     @SerialName("share_pct") val sharePct: Double = 0.0,
+    @SerialName("fair_paid") val fairPaid: Double = 0.0,
+    @SerialName("fair_credited") val fairCredited: Double = 0.0,
 )
 
 @Serializable
@@ -478,7 +486,30 @@ data class Expense(
     val details: String = "",
     val settled: Double = 0.0,
     @SerialName("has_receipt") val hasReceipt: Boolean = false,
+    val payers: List<ExpensePayer> = emptyList(),
+    val items: List<ExpenseLine> = emptyList(),
 )
+
+@Serializable
+data class ExpensePayer(
+    val id: Int = 0,
+    @SerialName("partner_id") val partnerId: Int = 0,
+    val partner: String = "",
+    val amount: Double = 0.0,
+    @SerialName("pay_date") val payDate: String? = null,
+    val note: String? = null,
+)
+
+@Serializable
+data class ExpenseLine(
+    val descr: String = "",
+    val qty: Double = 0.0,
+    @SerialName("unit_cost") val unitCost: Double = 0.0,
+    @SerialName("line_total") val lineTotal: Double = 0.0,
+)
+
+@Serializable
+data class ExpenseDetailResponse(val expense: Expense = Expense())
 
 @Serializable
 data class ExpenseSummary(
@@ -508,6 +539,17 @@ data class ProductsResponse(val products: List<Product> = emptyList(), val messa
 
 @Serializable
 data class EventsResponse(val events: List<Event> = emptyList(), val message: String = "")
+
+@Serializable
+data class Release(
+    @SerialName("version_code") val versionCode: Int = 0,
+    @SerialName("version_name") val versionName: String = "",
+    @SerialName("apk_url") val apkUrl: String = "",
+    val notes: String = "",
+)
+
+@Serializable
+data class ReleaseResponse(val release: Release = Release())
 
 @Serializable
 data class SettingsResponse(val settings: Settings = Settings(), val message: String = "")

@@ -91,9 +91,12 @@ class ApiClient(private val prefs: Prefs) {
         val base = prefs.currentBaseUrl()
         val token = prefs.currentToken().orEmpty()
         val size = if (thermal) "&size=thermal" else ""
-        // The token rides in the query here rather than a header: a WebView
-        // load cannot carry one, and the API accepts either.
-        return "${base}bills.php?action=html&order_id=$orderId$size&token=${encode(token)}"
+        // Auth rides in the query because a WebView load cannot carry a
+        // header — but as `auth`, never `token`. On bills.php `token` means
+        // a bill's own public link token, so sending a session token there
+        // looked up a bill that does not exist and the printer rendered
+        // {"ok":false,...} instead of the document.
+        return "${base}bills.php?action=html&order_id=$orderId$size&auth=${encode(token)}"
     }
 
     private suspend fun Request.Builder.applyAuth(): Request.Builder {

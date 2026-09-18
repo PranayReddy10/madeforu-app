@@ -81,6 +81,11 @@ fun SettingsScreen(
     var billPrefix by remember { mutableStateOf("") }
     var billFooter by remember { mutableStateOf("") }
     var billTerms by remember { mutableStateOf("") }
+    var logoUrl by remember { mutableStateOf("") }
+    var apkUrl by remember { mutableStateOf("") }
+    var apkVersionName by remember { mutableStateOf("") }
+    var apkVersionCode by remember { mutableStateOf("") }
+    var apkNotes by remember { mutableStateOf("") }
 
     LaunchedEffect(Unit) {
         adminName = prefs.adminName.first()
@@ -97,6 +102,11 @@ fun SettingsScreen(
                 billPrefix = settings.billPrefix
                 billFooter = settings.billFooter
                 billTerms = settings.billTerms
+                logoUrl = settings.logoUrl
+                apkUrl = settings.apkUrl
+                apkVersionName = settings.apkVersionName
+                apkVersionCode = settings.apkVersionCode
+                apkNotes = settings.apkNotes
             }
         }
     }
@@ -168,6 +178,7 @@ fun SettingsScreen(
             item { SectionHeader("What appears on bills") }
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    SettingField("Logo image URL (printed on every bill)", logoUrl) { logoUrl = it }
                     SettingField("Business name", businessName) { businessName = it }
                     SettingField("Address", businessAddr) { businessAddr = it }
                     SettingField("Phone", businessPhone) { businessPhone = it }
@@ -179,7 +190,9 @@ fun SettingsScreen(
 
                     Text(
                         "The UPI id puts a scannable QR on any bill with a balance, pre-filled " +
-                            "with the amount due. Leave it empty to hide the QR.",
+                            "with the amount due. Leave it empty to hide the QR.\n\n" +
+                            "The logo is any public image URL — the WordPress media library is " +
+                            "the easy place to host it. It prints above the business name.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -190,6 +203,7 @@ fun SettingsScreen(
                             scope.launch {
                                 val result = repository.saveSettings(
                                     mapOf(
+                                        "logo_url" to logoUrl,
                                         "business_name" to businessName,
                                         "business_addr" to businessAddr,
                                         "business_phone" to businessPhone,
@@ -214,6 +228,52 @@ fun SettingsScreen(
                         enabled = !busy,
                         modifier = Modifier.fillMaxWidth().height(50.dp),
                     ) { Text("Save bill details") }
+                }
+            }
+
+            item { SectionHeader("App updates for partners") }
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        "Every partner's app checks these on launch. Raise the version code, " +
+                            "paste the new APK link, and they are offered the update the next " +
+                            "time they open it. This build is version " +
+                            BuildConfig.VERSION_NAME + " (code " + BuildConfig.VERSION_CODE + ").",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    SettingField("Latest version name (e.g. 1.1.0)", apkVersionName) { apkVersionName = it }
+                    SettingField("Latest version code (a whole number)", apkVersionCode) {
+                        apkVersionCode = it.filter { c -> c.isDigit() }
+                    }
+                    SettingField("APK download link", apkUrl) { apkUrl = it }
+                    SettingField("What changed (shown in the prompt)", apkNotes) { apkNotes = it }
+
+                    Button(
+                        onClick = {
+                            busy = true
+                            scope.launch {
+                                val result = repository.saveSettings(
+                                    mapOf(
+                                        "apk_version_name" to apkVersionName,
+                                        "apk_version_code" to apkVersionCode.ifBlank { "0" },
+                                        "apk_url" to apkUrl,
+                                        "apk_notes" to apkNotes,
+                                    ),
+                                )
+                                when (result) {
+                                    is ApiResult.Success -> {
+                                        message = "Release details saved. Partners will be offered it."
+                                        error = null
+                                    }
+                                    is ApiResult.Failure -> error = result.message
+                                }
+                                busy = false
+                            }
+                        },
+                        enabled = !busy,
+                        modifier = Modifier.fillMaxWidth().height(50.dp),
+                    ) { Text("Publish this version") }
                 }
             }
 

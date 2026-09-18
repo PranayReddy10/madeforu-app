@@ -116,10 +116,6 @@ object BillPdf {
             .filter { it.isNotBlank() }
             .joinToString("  ·  ")
         canvas.drawText(contact, MARGIN, y, bodyMuted)
-        if (bill.revision > 1) {
-            drawRightAligned(canvas, "Revision ${bill.revision}", right, y, bodyMuted)
-        }
-
         if (business.gstin.isNotBlank()) {
             y += 12f
             canvas.drawText("GSTIN: ${business.gstin}", MARGIN, y, bodyMuted)

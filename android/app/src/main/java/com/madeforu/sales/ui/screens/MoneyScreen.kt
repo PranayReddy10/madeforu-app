@@ -233,6 +233,12 @@ fun MoneyScreen(
                     }
                 }
 
+                // The full model, in the same words the website uses, so a
+                // partner can check a figure they are being asked to pay
+                // rather than taking it on trust.
+                item { SectionHeader("How the split works") }
+                item { EqualShareSection(data) }
+
                 item { SectionHeader("Each partner") }
 
                 items(data.partners.size) { index ->

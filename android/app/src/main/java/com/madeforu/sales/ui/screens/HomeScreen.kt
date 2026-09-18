@@ -54,6 +54,7 @@ import com.madeforu.sales.ui.components.LoadingBox
 import com.madeforu.sales.ui.components.Pill
 import com.madeforu.sales.ui.components.RevenueLineChart
 import com.madeforu.sales.ui.components.SectionHeader
+import com.madeforu.sales.ui.components.UpdateBanner
 import com.madeforu.sales.ui.theme.negativeColor
 import com.madeforu.sales.ui.theme.positiveColor
 import com.madeforu.sales.ui.theme.warnColor
@@ -176,6 +177,8 @@ fun HomeScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item { ErrorBanner(error, onRetry = { load() }) }
+            // Quiet unless a newer build has actually been published.
+            item { UpdateBanner(repository) }
 
             if (data != null) {
                 item { TodayCard(data, onNewOrder = onNewOrder) }

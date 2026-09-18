@@ -28,7 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.navigation.NavHostController
+import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -40,6 +40,7 @@ import com.madeforu.sales.ui.screens.BillScreen
 import com.madeforu.sales.ui.screens.BillsScreen
 import com.madeforu.sales.ui.screens.CatalogScreen
 import com.madeforu.sales.ui.screens.EventsScreen
+import com.madeforu.sales.ui.screens.ExpenseDetailScreen
 import com.madeforu.sales.ui.screens.ExpensesScreen
 import com.madeforu.sales.ui.screens.HomeScreen
 import com.madeforu.sales.ui.screens.LoginScreen
@@ -106,34 +107,33 @@ fun AppRoot(signedIn: Boolean) {
                 NavigationBar(tonalElevation = 3.dp) {
                     bottomDestinations.forEach { destination ->
                         val selected = currentRoute == destination.route
-                        // New sale is an action, not a place. Every other tab
-                        // is a view you return to, so it keeps its scroll
-                        // position; a sale always starts from nothing.
+                        // New sale is an action, not a place: it always
+                        // starts empty, and tapping it while already there
+                        // is how you clear the form for the next customer.
                         val isNewSale = destination.route == Routes.NEW_ORDER
                         NavigationBarItem(
                             selected = selected,
                             onClick = {
-                                // Tapping a tab you are already on does
-                                // nothing — except New sale, where it is how
-                                // you clear the form and start the next one.
-                                if (!selected || isNewSale) {
-                                    navController.navigate(destination.route) {
-                                        // Keep one copy of each top-level
-                                        // screen and its scroll position;
-                                        // tapping between tabs should not
-                                        // build a stack to back out of.
-                                        popUpTo(Routes.HOME) { saveState = true }
-                                        // restoreState would bring back the
-                                        // half-typed basket from the last
-                                        // sale, and once that entry has been
-                                        // consumed — saving an order pops it
-                                        // — restoring it does nothing at all,
-                                        // which is why the button stopped
-                                        // responding. A fresh entry every
-                                        // time is both correct and reliable.
-                                        launchSingleTop = !isNewSale
-                                        restoreState = !isNewSale
+                                navController.navigate(destination.route) {
+                                    // Pop back to the graph's real start
+                                    // destination, looked up rather than
+                                    // assumed: the start is HOME when
+                                    // already signed in and LOGIN when not,
+                                    // and popUpTo against the wrong one
+                                    // silently does nothing.
+                                    popUpTo(navController.graph.findStartDestination().id) {
+                                        inclusive = false
                                     }
+                                    // No saveState/restoreState. Restoring a
+                                    // tab's saved entry is what made tabs
+                                    // stop responding: once an entry has
+                                    // been consumed — saving an order pops
+                                    // one — asking to restore it is a no-op
+                                    // and the tap appears to do nothing.
+                                    // Every screen reloads on entry anyway,
+                                    // so the only thing given up is a
+                                    // remembered scroll position.
+                                    launchSingleTop = !isNewSale
                                 }
                             },
                             icon = { Icon(destination.icon, contentDescription = destination.label) },
@@ -282,7 +282,27 @@ fun AppRoot(signedIn: Boolean) {
                 composable(Routes.EXPENSES) {
                     ExpensesScreen(
                         repository = repository,
+                        onOpenExpense = { id -> navController.navigate(Routes.expenseDetail(id)) },
                         onBack = { navController.popBackStack() },
+                        onSessionExpired = signOut,
+                    )
+                }
+
+                composable(
+                    route = Routes.EXPENSE_DETAIL,
+                    arguments = listOf(navArgument("id") { type = NavType.IntType }),
+                ) { entry ->
+                    ExpenseDetailScreen(
+                        repository = repository,
+                        expenseId = entry.arguments?.getInt("id") ?: 0,
+                        onBack = { navController.popBackStack() },
+                        onChanged = { message ->
+                            notify(message)
+                            // A delete leaves nothing to show; an edit
+                            // reloads in place. Either way the list behind
+                            // is stale, so step back to it.
+                            navController.popBackStack()
+                        },
                         onSessionExpired = signOut,
                     )
                 }

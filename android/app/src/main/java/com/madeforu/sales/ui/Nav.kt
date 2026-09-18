@@ -26,6 +26,9 @@ object Routes {
 
     const val BILLS = "bills"
     const val EXPENSES = "expenses"
+
+    const val EXPENSE_DETAIL = "expense/{id}"
+    fun expenseDetail(id: Int) = "expense/$id"
     const val CATALOG = "catalog"
     const val EVENTS = "events"
     const val SETTINGS = "settings"

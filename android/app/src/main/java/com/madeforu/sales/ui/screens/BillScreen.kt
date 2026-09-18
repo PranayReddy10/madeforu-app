@@ -51,10 +51,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
 import com.madeforu.sales.bill.BillPdf
 import com.madeforu.sales.bill.Qr
 import com.madeforu.sales.core.ApiResult
@@ -218,6 +220,14 @@ internal fun BillPreview(bill: Bill) {
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Column {
+                    if (bill.logoUrl.isNotBlank()) {
+                        AsyncImage(
+                            model = bill.logoUrl,
+                            contentDescription = null,
+                            contentScale = ContentScale.Fit,
+                            modifier = Modifier.height(40.dp).padding(bottom = 6.dp),
+                        )
+                    }
                     Text(
                         bill.business.name,
                         style = MaterialTheme.typography.titleLarge,
@@ -236,13 +246,6 @@ internal fun BillPreview(bill: Bill) {
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Text(bill.billNo, style = MaterialTheme.typography.titleMedium)
-                    if (bill.revision > 1) {
-                        Text(
-                            "Revision ${bill.revision}",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
                 }
             }
 

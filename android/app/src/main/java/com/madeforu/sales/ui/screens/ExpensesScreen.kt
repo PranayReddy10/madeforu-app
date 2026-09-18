@@ -71,6 +71,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun ExpensesScreen(
     repository: Repository,
+    onOpenExpense: (Int) -> Unit,
     onBack: () -> Unit,
     onSessionExpired: () -> Unit,
 ) {
@@ -82,6 +83,7 @@ fun ExpensesScreen(
     var byCategory by remember { mutableStateOf<List<Pair<String, Double>>>(emptyList()) }
     var partners by remember { mutableStateOf<List<Partner>>(emptyList()) }
     var categories by remember { mutableStateOf<List<Category>>(emptyList()) }
+    var message by remember { mutableStateOf<String?>(null) }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
     var showAdd by remember { mutableStateOf(false) }
@@ -150,6 +152,16 @@ fun ExpensesScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 item { ErrorBanner(error, onRetry = { refresh() }) }
+                message?.let { text ->
+                    item {
+                        Card(
+                            shape = RoundedCornerShape(14.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                            ),
+                        ) { Text(text, Modifier.padding(14.dp), style = MaterialTheme.typography.bodyMedium) }
+                    }
+                }
 
                 item {
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -187,10 +199,18 @@ fun ExpensesScreen(
                 }
 
                 item { SectionHeader("Every expense") }
+                item {
+                    Text(
+                        "Tap an expense to see who paid, edit it or delete it.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
 
                 items(expenses.size) { index ->
                     val expense = expenses[index]
                     Card(
+                        onClick = { onOpenExpense(expense.id) },
                         shape = RoundedCornerShape(16.dp),
                         colors = CardDefaults.cardColors(
                             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
@@ -227,144 +247,32 @@ fun ExpensesScreen(
     }
 
     if (showAdd) {
-        AddExpenseSheet(
+        ExpenseSheet(
+            existing = null,
             partners = partners,
-            categories = categories,
+            categories = categories.map { it.name },
             onDismiss = { showAdd = false },
-            onSubmit = { date, item, amount, discount, paidBy, category, paidTo, details ->
+            onSubmit = { form ->
                 showAdd = false
                 scope.launch {
-                    val result = repository.addExpense(
-                        date, item, amount, discount, paidBy, category, paidTo, details,
+                    val result = repository.saveExpense(
+                        id = null,
+                        date = form.date,
+                        item = form.item,
+                        amount = form.amount,
+                        discount = form.discount,
+                        paidBy = form.paidBy,
+                        category = form.category,
+                        paidTo = form.paidTo,
+                        details = form.details,
+                        split = form.split,
                     )
                     when (result) {
-                        is ApiResult.Success -> refresh()
+                        is ApiResult.Success -> { message = result.value; refresh() }
                         is ApiResult.Failure -> error = result.message
                     }
                 }
             },
         )
-    }
-}
-
-@Composable
-private fun AddExpenseSheet(
-    partners: List<Partner>,
-    categories: List<Category>,
-    onDismiss: () -> Unit,
-    onSubmit: (String, String, Double, Double, Int, String, String, String) -> Unit,
-) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    var date by remember { mutableStateOf(Dates.today()) }
-    var item by remember { mutableStateOf("") }
-    var amountText by remember { mutableStateOf("") }
-    var discountText by remember { mutableStateOf("") }
-    var paidTo by remember { mutableStateOf("") }
-    var details by remember { mutableStateOf("") }
-    var paidBy by remember { mutableStateOf(partners.firstOrNull()?.id ?: 0) }
-    var category by remember {
-        mutableStateOf(categories.firstOrNull()?.name ?: "Other")
-    }
-
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            Text("Add an expense", style = MaterialTheme.typography.titleLarge)
-
-            OutlinedTextField(
-                value = item,
-                onValueChange = { item = it },
-                label = { Text("What was bought") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Row {
-                OutlinedTextField(
-                    value = amountText,
-                    onValueChange = { amountText = it.filter { c -> c.isDigit() || c == '.' } },
-                    label = { Text("Amount") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    modifier = Modifier.weight(1f),
-                )
-                Spacer(Modifier.width(8.dp))
-                OutlinedTextField(
-                    value = discountText,
-                    onValueChange = { discountText = it.filter { c -> c.isDigit() || c == '.' } },
-                    label = { Text("Discount") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    modifier = Modifier.weight(1f),
-                )
-            }
-            OutlinedTextField(
-                value = date,
-                onValueChange = { date = it },
-                label = { Text("Date (YYYY-MM-DD)") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            OutlinedTextField(
-                value = paidTo,
-                onValueChange = { paidTo = it },
-                label = { Text("Paid to (shop, dealer)") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
-
-            Text("Who paid", style = MaterialTheme.typography.labelSmall)
-            ChipRow(
-                options = partners.map { it.id to it.name },
-                selected = paidBy,
-                onSelect = { paidBy = it },
-                contentPadding = PaddingValues(0.dp),
-            )
-
-            if (categories.isNotEmpty()) {
-                Text("Category", style = MaterialTheme.typography.labelSmall)
-                ChipRow(
-                    options = categories.map { it.name to it.name },
-                    selected = category,
-                    onSelect = { category = it },
-                    contentPadding = PaddingValues(0.dp),
-                )
-            }
-
-            OutlinedTextField(
-                value = details,
-                onValueChange = { details = it },
-                label = { Text("Notes") },
-                modifier = Modifier.fillMaxWidth(),
-            )
-
-            Button(
-                onClick = {
-                    onSubmit(
-                        date,
-                        item,
-                        amountText.toDoubleOrNull() ?: 0.0,
-                        discountText.toDoubleOrNull() ?: 0.0,
-                        paidBy,
-                        category,
-                        paidTo,
-                        details,
-                    )
-                },
-                enabled = item.isNotBlank() && (amountText.toDoubleOrNull() ?: 0.0) > 0 && paidBy > 0,
-                modifier = Modifier.fillMaxWidth().height(50.dp),
-            ) { Text("Save expense") }
-
-            Text(
-                "The full amount is recorded against whoever paid, which is what counts " +
-                    "towards their investment in the business.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.height(24.dp))
-        }
     }
 }
