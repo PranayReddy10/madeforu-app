@@ -51,9 +51,12 @@ private val LightColors = lightColorScheme(
     onTertiary = Color.White,
     tertiaryContainer = Color(0xFFFFD9E2),
     onTertiaryContainer = Color(0xFF3E001D),
-    background = Color(0xFFFFFBFF),
+    // The background is a shade cooler than the cards on purpose: a white
+    // card on a white page has to be drawn with a border to read as a
+    // card, and borders everywhere make a screen look like a form.
+    background = Color(0xFFF3F3F7),
     onBackground = Color(0xFF1C1B1F),
-    surface = Color(0xFFFFFBFF),
+    surface = Color(0xFFFFFFFF),
     onSurface = Color(0xFF1C1B1F),
     surfaceVariant = Color(0xFFE7E0EB),
     onSurfaceVariant = Color(0xFF49454E),
@@ -77,9 +80,9 @@ private val DarkColors = darkColorScheme(
     onTertiary = Color(0xFF5E1133),
     tertiaryContainer = Color(0xFF7B2949),
     onTertiaryContainer = Color(0xFFFFD9E2),
-    background = Color(0xFF141218),
+    background = Color(0xFF0F0E13),
     onBackground = Color(0xFFE6E1E6),
-    surface = Color(0xFF141218),
+    surface = Color(0xFF1A1820),
     onSurface = Color(0xFFE6E1E6),
     surfaceVariant = Color(0xFF49454E),
     onSurfaceVariant = Color(0xFFCAC4CF),
@@ -106,9 +109,11 @@ private fun isDarkNow(): Boolean = MaterialTheme.colorScheme.background.luminanc
 private fun Color.luminance(): Float = (0.299f * red + 0.587f * green + 0.114f * blue)
 
 private val AppTypography = Typography(
+    // The hero number on a card is the thing people look at first, so it
+    // is sized to be read at arm's length across a stall table.
     displaySmall = TextStyle(
         fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Bold,
-        fontSize = 34.sp, lineHeight = 40.sp, letterSpacing = (-0.5).sp,
+        fontSize = 38.sp, lineHeight = 44.sp, letterSpacing = (-1).sp,
     ),
     headlineMedium = TextStyle(
         fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Bold,

@@ -210,16 +210,23 @@ fun HorizontalBars(
                 Box(
                     Modifier
                         .fillMaxWidth()
-                        .height(8.dp)
+                        .height(10.dp)
                         .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)),
                 ) {
+                    // A gradient along the bar rather than a flat fill:
+                    // it keeps the short bars legible against the track
+                    // while the long ones stay solid enough to compare.
                     Box(
                         Modifier
                             .fillMaxWidth(animated)
-                            .height(8.dp)
+                            .height(10.dp)
                             .clip(CircleShape)
-                            .background(color),
+                            .background(
+                                Brush.horizontalGradient(
+                                    listOf(color.copy(alpha = 0.75f), color),
+                                ),
+                            ),
                     )
                 }
             }

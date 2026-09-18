@@ -49,6 +49,16 @@ import com.madeforu.sales.ui.theme.warnColor
  * to the previous period. The comparison is omitted rather than shown as
  * 0% when there is no baseline — "+100% vs nothing" is not information.
  */
+/**
+ * The card treatment every screen uses: a real surface lifted off the
+ * tinted background, generously rounded. Defined once so a change lands
+ * everywhere rather than in fourteen copies of cardColors().
+ */
+@Composable
+fun softCardColors() = CardDefaults.cardColors(
+    containerColor = MaterialTheme.colorScheme.surface,
+)
+
 @Composable
 fun KpiCard(
     label: String,
@@ -61,10 +71,9 @@ fun KpiCard(
 ) {
     Card(
         modifier = modifier.then(if (onClick != null) Modifier.clickable { onClick() } else Modifier),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-        ),
-        shape = RoundedCornerShape(20.dp),
+        colors = softCardColors(),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        shape = RoundedCornerShape(22.dp),
     ) {
         Column(Modifier.padding(16.dp)) {
             Text(
@@ -76,7 +85,7 @@ fun KpiCard(
             Spacer(Modifier.height(6.dp))
             Text(
                 value,
-                style = MaterialTheme.typography.headlineSmall,
+                style = MaterialTheme.typography.headlineMedium,
                 color = accent ?: MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,

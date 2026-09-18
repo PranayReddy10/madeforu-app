@@ -33,6 +33,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.madeforu.sales.core.Money
+import com.madeforu.sales.ui.components.softCardColors
 import com.madeforu.sales.data.FinanceOverview
 import com.madeforu.sales.data.PartnerFinance
 import com.madeforu.sales.ui.components.ThinDivider
@@ -59,9 +60,7 @@ fun EqualShareSection(data: FinanceOverview) {
 
     Card(
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-        ),
+        colors = softCardColors(),
     ) {
         Column(Modifier.fillMaxWidth().padding(16.dp)) {
             Text("Equal share & settle-up", style = MaterialTheme.typography.titleMedium)

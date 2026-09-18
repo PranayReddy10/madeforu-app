@@ -64,6 +64,7 @@ import com.madeforu.sales.data.Order
 import com.madeforu.sales.data.Repository
 import com.madeforu.sales.ui.components.DetailRow
 import com.madeforu.sales.ui.components.ErrorBanner
+import com.madeforu.sales.ui.components.softCardColors
 import com.madeforu.sales.ui.components.LoadingBox
 import com.madeforu.sales.ui.components.PayStatusPill
 import com.madeforu.sales.ui.components.Pill
@@ -208,9 +209,7 @@ fun OrderDetailScreen(
             item {
                 Card(
                     shape = RoundedCornerShape(18.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-                    ),
+                    colors = softCardColors(),
                 ) {
                     Column(Modifier.padding(16.dp)) {
                         DetailRow("Customer", if (current.isWalkIn) "Walk-in (no details)" else current.name)
@@ -228,9 +227,7 @@ fun OrderDetailScreen(
             item {
                 Card(
                     shape = RoundedCornerShape(18.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-                    ),
+                    colors = softCardColors(),
                 ) {
                     Column(Modifier.padding(16.dp)) {
                         current.items.forEach { line ->
@@ -284,9 +281,8 @@ fun OrderDetailScreen(
                     val payment = current.payments[index]
                     Card(
                         shape = RoundedCornerShape(14.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-                        ),
+                        colors = softCardColors(),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
                     ) {
                         Row(
                             Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
@@ -330,9 +326,8 @@ fun OrderDetailScreen(
                 item {
                     Card(
                         shape = RoundedCornerShape(18.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-                        ),
+                        colors = softCardColors(),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
                     ) {
                         Column(Modifier.padding(16.dp)) {
                             if (current.awb != null) {

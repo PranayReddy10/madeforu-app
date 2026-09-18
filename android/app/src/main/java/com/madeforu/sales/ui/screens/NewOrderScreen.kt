@@ -64,6 +64,7 @@ import com.madeforu.sales.data.Repository
 import com.madeforu.sales.ui.components.ChipRow
 import com.madeforu.sales.ui.components.DetailRow
 import com.madeforu.sales.ui.components.ErrorBanner
+import com.madeforu.sales.ui.components.softCardColors
 import com.madeforu.sales.ui.components.ProductThumb
 import com.madeforu.sales.ui.components.LoadingBox
 import com.madeforu.sales.ui.components.ThinDivider
@@ -444,9 +445,7 @@ fun NewOrderScreen(
                 item {
                     Card(
                         shape = RoundedCornerShape(18.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-                        ),
+                        colors = softCardColors(),
                     ) {
                         Column(Modifier.padding(16.dp)) {
                             Text("Money taken now", style = MaterialTheme.typography.titleMedium)
@@ -492,9 +491,7 @@ fun NewOrderScreen(
                 item {
                     Card(
                         shape = RoundedCornerShape(18.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-                        ),
+                        colors = softCardColors(),
                     ) {
                         Column(Modifier.padding(16.dp)) {
                             Text("This bill", style = MaterialTheme.typography.titleMedium)
@@ -602,9 +599,7 @@ private fun SectionToggle(
 ) {
     Card(
         shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-        ),
+        colors = softCardColors(),
         onClick = onToggle,
     ) {
         Row(
@@ -639,9 +634,7 @@ private fun ExpandableSection(
 ) {
     Card(
         shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-        ),
+        colors = softCardColors(),
         onClick = onToggle,
     ) {
         Column(Modifier.fillMaxWidth().padding(16.dp)) {

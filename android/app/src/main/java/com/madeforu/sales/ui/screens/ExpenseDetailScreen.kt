@@ -50,6 +50,7 @@ import com.madeforu.sales.data.Partner
 import com.madeforu.sales.data.Repository
 import com.madeforu.sales.ui.components.DetailRow
 import com.madeforu.sales.ui.components.ErrorBanner
+import com.madeforu.sales.ui.components.softCardColors
 import com.madeforu.sales.ui.components.LoadingBox
 import com.madeforu.sales.ui.components.Pill
 import com.madeforu.sales.ui.components.SectionHeader
@@ -171,9 +172,7 @@ fun ExpenseDetailScreen(
             item {
                 Card(
                     shape = RoundedCornerShape(18.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-                    ),
+                    colors = softCardColors(),
                 ) {
                     Column(Modifier.padding(16.dp)) {
                         DetailRow("Date", Dates.pretty(current.date))
@@ -203,9 +202,7 @@ fun ExpenseDetailScreen(
             item {
                 Card(
                     shape = RoundedCornerShape(18.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-                    ),
+                    colors = softCardColors(),
                 ) {
                     Column(Modifier.padding(16.dp)) {
                         if (current.payers.isEmpty()) {

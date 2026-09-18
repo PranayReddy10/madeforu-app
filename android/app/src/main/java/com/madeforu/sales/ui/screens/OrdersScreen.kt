@@ -18,7 +18,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Inventory2
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.LocalShipping
 import androidx.compose.material.icons.filled.PersonOff
 import androidx.compose.material.icons.filled.Search
@@ -57,6 +60,8 @@ import com.madeforu.sales.data.Repository
 import com.madeforu.sales.ui.components.ChipRow
 import com.madeforu.sales.ui.components.EmptyState
 import com.madeforu.sales.ui.components.ErrorBanner
+import com.madeforu.sales.ui.components.IconTile
+import com.madeforu.sales.ui.components.softCardColors
 import com.madeforu.sales.ui.components.PayStatusPill
 import com.madeforu.sales.ui.components.Pill
 import com.madeforu.sales.ui.theme.negativeColor
@@ -279,12 +284,26 @@ internal fun OrderRow(order: Order, onClick: () -> Unit) {
     Card(
         onClick = onClick,
         shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.32f),
-        ),
+        colors = softCardColors(),
     ) {
         Column(Modifier.fillMaxWidth().padding(14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
+                // The tile carries the state, so a glance down the list
+                // reads as work-to-do rather than a wall of text.
+                IconTile(
+                    label = if (order.isWalkIn) "Walk in" else order.name,
+                    icon = when {
+                        order.isDelivered -> Icons.Filled.CheckCircle
+                        order.isReady -> Icons.Filled.Inventory2
+                        else -> Icons.Filled.Schedule
+                    },
+                    tint = when {
+                        order.isDelivered -> positiveColor()
+                        order.isReady -> MaterialTheme.colorScheme.primary
+                        else -> warnColor()
+                    },
+                )
+                Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         if (order.isWalkIn) {

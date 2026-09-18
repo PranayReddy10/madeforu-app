@@ -51,6 +51,8 @@ import com.madeforu.sales.data.Repository
 import com.madeforu.sales.ui.components.ChipRow
 import com.madeforu.sales.ui.components.DetailRow
 import com.madeforu.sales.ui.components.ErrorBanner
+import com.madeforu.sales.ui.components.IconTile
+import com.madeforu.sales.ui.components.softCardColors
 import com.madeforu.sales.ui.components.KpiCard
 import com.madeforu.sales.ui.components.LoadingBox
 import com.madeforu.sales.ui.components.Pill
@@ -261,9 +263,7 @@ fun MoneyScreen(
                         val step = data.settleInvest[index]
                         Card(
                             shape = RoundedCornerShape(16.dp),
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-                            ),
+                            colors = softCardColors(),
                         ) {
                             Row(
                                 Modifier.fillMaxWidth().padding(14.dp),
@@ -326,9 +326,7 @@ fun MoneyScreen(
                 item {
                     Card(
                         shape = RoundedCornerShape(18.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-                        ),
+                        colors = softCardColors(),
                     ) {
                         Column(Modifier.padding(16.dp)) {
                             DetailRow("Revenue, all time", Money.full(data.business.revenue))
@@ -415,12 +413,12 @@ private fun PartnerCard(partner: PartnerFinance) {
     val owed = partner.gap > 0.5
     Card(
         shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.32f),
-        ),
+        colors = softCardColors(),
     ) {
         Column(Modifier.fillMaxWidth().padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
+                IconTile(label = partner.name, size = 38.dp)
+                Spacer(Modifier.width(12.dp))
                 Text(
                     partner.name,
                     style = MaterialTheme.typography.titleMedium,

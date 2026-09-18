@@ -67,6 +67,7 @@ import com.madeforu.sales.data.Bill
 import com.madeforu.sales.data.Repository
 import com.madeforu.sales.ui.components.DetailRow
 import com.madeforu.sales.ui.components.ErrorBanner
+import com.madeforu.sales.ui.components.softCardColors
 import com.madeforu.sales.ui.components.LoadingBox
 import com.madeforu.sales.ui.components.Pill
 import com.madeforu.sales.ui.components.ThinDivider
@@ -417,9 +418,7 @@ fun BillsScreen(
                 Card(
                     onClick = { onOpenBill(item.orderId) },
                     shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-                    ),
+                    colors = softCardColors(),
                 ) {
                     Row(
                         Modifier.fillMaxWidth().padding(14.dp),

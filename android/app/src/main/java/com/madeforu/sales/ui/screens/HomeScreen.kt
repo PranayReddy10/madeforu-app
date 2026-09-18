@@ -49,6 +49,7 @@ import com.madeforu.sales.data.Repository
 import com.madeforu.sales.data.SeriesResponse
 import com.madeforu.sales.ui.components.ChipRow
 import com.madeforu.sales.ui.components.ErrorBanner
+import com.madeforu.sales.ui.components.softCardColors
 import com.madeforu.sales.ui.components.KpiCard
 import com.madeforu.sales.ui.components.LoadingBox
 import com.madeforu.sales.ui.components.Pill
@@ -255,9 +256,7 @@ fun HomeScreen(
                 item {
                     Card(
                         shape = RoundedCornerShape(20.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-                        ),
+                        colors = softCardColors(),
                     ) {
                         Column(Modifier.padding(16.dp)) {
                             RevenueLineChart(

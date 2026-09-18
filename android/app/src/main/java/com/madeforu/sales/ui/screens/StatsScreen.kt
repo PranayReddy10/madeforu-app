@@ -39,6 +39,7 @@ import com.madeforu.sales.ui.components.ChipRow
 import com.madeforu.sales.ui.components.DetailRow
 import com.madeforu.sales.ui.components.DonutChart
 import com.madeforu.sales.ui.components.ErrorBanner
+import com.madeforu.sales.ui.components.softCardColors
 import com.madeforu.sales.ui.components.HorizontalBars
 import com.madeforu.sales.ui.components.HourStrip
 import com.madeforu.sales.ui.components.KpiCard
@@ -263,9 +264,7 @@ fun StatsScreen(repository: Repository, onSessionExpired: () -> Unit) {
 private fun ChartCard(content: @Composable () -> Unit) {
     Card(
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-        ),
+        colors = softCardColors(),
     ) {
         Column(Modifier.fillMaxWidth().padding(16.dp)) { content() }
     }
