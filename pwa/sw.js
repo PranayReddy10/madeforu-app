@@ -19,7 +19,7 @@
  * Bump CACHE whenever the shell changes; keep it in step with BUILD in
  * app.js, which is what Settings prints.
  */
-const CACHE = 'madeforu-shell-2026-09-18.2';
+const CACHE = 'madeforu-shell-2026-09-18.3';
 const SHELL = [
   './',
   './index.html',

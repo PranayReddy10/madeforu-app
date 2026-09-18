@@ -48,11 +48,33 @@ Tokens last 90 days and are stored only as a SHA-256 hash.
 | `products` | GET | `include_hidden=true` for the full list |
 | `add_product` | POST | `name`, `price`, `unit_cost` |
 | `update_product` | POST | `id` plus any of `price`, `unit_cost`, `is_active`, `image_url`, `product_url` |
+| `price_history` | GET | `item` — what it has sold for, newest first, plus `past_orders` |
 | `reorder_products` | POST | `ids: [..]` in the new order |
 | `events` | GET | `active_only=true` to filter |
 | `add_event` | POST | `name`, `is_paid`, `entry_cost`, `start_date`, `end_date`, `notes` |
 | `set_event_active` | POST | `id`, `is_active` |
 | `save_settings` | POST | any of the `app_settings` keys |
+
+### A price change never reaches a sale that already happened
+
+`update_product` changes what the product sells for **from now on**. Every
+order already taken keeps the price it was sold at, because
+`order_items.unit_price` is written at the moment of sale and is never
+recalculated from the catalogue — including when an old order is edited,
+where only lines genuinely new to the order get today's price.
+
+The response says so: `price_changed`, `was_price`, `now_price`,
+`past_orders` (how many orders hold this product and are therefore
+untouched), and a `message` written for a partner to read.
+
+`order_items.unit_cost` does the same for the cost side, so raising what
+an item costs us does not restate the profit on every sale ever made.
+Both arrive with `api/migrations/2026-09-price-history.sql`; the API
+checks whether the column exists and works either way.
+
+`orders.php` `update` returns `repriced`: the lines still charged at what
+they sold for while the catalogue has since moved. It is not an error —
+it is the guarantee, said out loud.
 
 Products carry `image_url` and `product_url` — the same two columns the
 website's Products page writes, which feed the public `menu.php` catalogue

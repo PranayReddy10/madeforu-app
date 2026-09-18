@@ -55,8 +55,21 @@ function api_customer(): array {
  *
  * Prices come from $ITEMS. Duplicates merge, so "Cup x2" twice becomes
  * "Cup x4" rather than two lines that look like a double charge on the bill.
+ *
+ * $agreed is what makes a price rise safe. On an edit it carries the
+ * unit_price each line was ALREADY sold at, and those lines keep it: a
+ * sale is a thing that happened at a price, not a thing that gets
+ * recalculated whenever the catalogue moves. Without it, raising Square
+ * Magnet from 50 to 60 and then merely ticking an old order "ready"
+ * turned a paid-in-full ₹500 sale into ₹600 with ₹100 apparently still
+ * owed — money the customer never agreed to and nobody would ever
+ * collect. Only lines that are genuinely new to the order are priced at
+ * today's rate; passing [] (a new sale) prices everything at today's.
+ *
+ * $costs is the same rule for the cost side, frozen into
+ * order_items.unit_cost so Stats cannot restate past profit either.
  */
-function api_lines(array $ITEMS): array {
+function api_lines(array $ITEMS, array $agreed = [], array $costs = [], array $agreedCosts = []): array {
     $raw = api_in('items', null);
     $pairs = [];
 
@@ -78,20 +91,110 @@ function api_lines(array $ITEMS): array {
     $merged = [];
     foreach ($pairs as [$name, $qty]) {
         if ($name === '') continue;
-        if (!isset($ITEMS[$name])) throw new ApiInputError('That product is no longer in the catalogue: ' . $name);
+        // An item already on this order stays valid even if it has since
+        // been retired from the catalogue — otherwise the day a product is
+        // hidden, every past order containing it becomes uneditable and
+        // nobody can so much as tick it delivered.
+        if (!isset($ITEMS[$name]) && !array_key_exists($name, $agreed)) {
+            throw new ApiInputError('That product is no longer in the catalogue: ' . $name);
+        }
         if ($qty < 1 || $qty > 999) throw new ApiInputError('Quantity must be between 1 and 999.');
         $merged[$name] = ($merged[$name] ?? 0) + $qty;
     }
     if (!$merged) throw new ApiInputError('Add at least one product.');
 
-    $out = []; $subtotal = 0.0;
+    $out = []; $subtotal = 0.0; $repriced = [];
     foreach ($merged as $name => $qty) {
-        $unit  = (float)$ITEMS[$name];
-        $line  = round($unit * $qty, 2);
+        // A line already on this order keeps the price it was sold at.
+        // A line being added now is a new agreement, so it takes today's.
+        $wasSold = array_key_exists($name, $agreed);
+        $unit    = $wasSold ? (float)$agreed[$name] : (float)$ITEMS[$name];
+        $cost    = array_key_exists($name, $agreedCosts)
+            ? (float)$agreedCosts[$name]
+            : (float)($costs[$name] ?? 0);
+        $line    = round($unit * $qty, 2);
         $subtotal += $line;
-        $out[] = ['item' => $name, 'qty' => $qty, 'unit' => $unit, 'lt' => $line];
+
+        // Surfaced so the apps can say "this line is at the price it sold
+        // at, the catalogue now says something else" rather than leaving
+        // someone to wonder why the totals do not match the price list.
+        if ($wasSold && isset($ITEMS[$name]) && abs($unit - (float)$ITEMS[$name]) > 0.001) {
+            $repriced[] = ['item' => $name, 'sold_at' => round($unit, 2),
+                           'catalogue' => round((float)$ITEMS[$name], 2)];
+        }
+
+        $out[] = ['item' => $name, 'qty' => $qty, 'unit' => $unit,
+                  'cost' => $cost, 'lt' => $line];
     }
-    return [$out, round($subtotal, 2)];
+    return [$out, round($subtotal, 2), $repriced];
+}
+
+/**
+ * What an order's lines were sold at: item => unit_price, and the costs
+ * beside them. Read before an edit rewrites the rows, because the rewrite
+ * is a DELETE followed by an INSERT and the old prices are gone after it.
+ */
+function api_sold_prices(mysqli $conn, int $orderId): array {
+    // Same reason as api_write_lines: unit_cost may not exist yet on a
+    // server where api/ was uploaded before the migration was run, and an
+    // order nobody can edit is worse than one with no cost recorded.
+    $hasCost = db_has_column($conn, 'order_items', 'unit_cost');
+    $s = $conn->prepare(
+        $hasCost
+            ? 'SELECT item, unit_price, unit_cost FROM order_items WHERE order_id = ?'
+            : 'SELECT item, unit_price FROM order_items WHERE order_id = ?'
+    );
+    $s->bind_param('i', $orderId);
+    $s->execute();
+    $res = $s->get_result();
+    $prices = []; $costs = [];
+    while ($r = $res->fetch_assoc()) {
+        $prices[$r['item']] = (float)$r['unit_price'];
+        $costs[$r['item']]  = (float)($r['unit_cost'] ?? 0);
+    }
+    $s->close();
+    return [$prices, $costs];
+}
+
+/**
+ * Write an order's lines, with the cost frozen on if the column is there.
+ *
+ * order_items.unit_cost arrives with a migration that is uploaded by hand
+ * and may not have been run yet. Naming it unconditionally would mean a
+ * shop that uploaded api/ first could not take an order at all, so the
+ * statement adapts instead.
+ */
+function api_write_lines(mysqli $conn, int $orderId, array $rows): void {
+    if (db_has_column($conn, 'order_items', 'unit_cost')) {
+        $s = $conn->prepare(
+            'INSERT INTO order_items (order_id, item, quantity, unit_price, unit_cost, line_total)
+             VALUES (?,?,?,?,?,?)'
+        );
+        foreach ($rows as $r) {
+            $s->bind_param('isiddd', $orderId, $r['item'], $r['qty'], $r['unit'], $r['cost'], $r['lt']);
+            $s->execute();
+        }
+    } else {
+        $s = $conn->prepare(
+            'INSERT INTO order_items (order_id, item, quantity, unit_price, line_total)
+             VALUES (?,?,?,?,?)'
+        );
+        foreach ($rows as $r) {
+            $s->bind_param('isidd', $orderId, $r['item'], $r['qty'], $r['unit'], $r['lt']);
+            $s->execute();
+        }
+    }
+    $s->close();
+}
+
+/** Today's cost per item, for stamping onto a brand-new sale. */
+function api_costs(mysqli $conn): array {
+    $out = [];
+    try {
+        $res = $conn->query('SELECT item, unit_cost FROM product_costs');
+        while ($res && ($r = $res->fetch_assoc())) $out[$r['item']] = (float)$r['unit_cost'];
+    } catch (mysqli_sql_exception $e) { /* optional table */ }
+    return $out;
 }
 
 function api_mode(): string {
@@ -342,7 +445,9 @@ api_dispatch([
     // ── POST create ────────────────────────────────────────────────
     'create' => function () use ($conn, $ITEMS, $me) {
         [$name, $phone, $notes] = api_customer();
-        [$rows, $subtotal]      = api_lines($ITEMS);
+        // A new sale: everything at today's price, and today's cost
+        // frozen alongside it so profit on this sale never moves again.
+        [$rows, $subtotal]      = api_lines($ITEMS, [], api_costs($conn));
         [$extra, $extraReason]  = api_extra_charge();
         [$disc, $discReason]    = api_discount($subtotal, $extra);
         $eventId                = api_event_id($conn);
@@ -385,14 +490,7 @@ api_dispatch([
                 }
             }
 
-            $s = $conn->prepare(
-                'INSERT INTO order_items (order_id, item, quantity, unit_price, line_total) VALUES (?,?,?,?,?)'
-            );
-            foreach ($rows as $r) {
-                $s->bind_param('isidd', $orderId, $r['item'], $r['qty'], $r['unit'], $r['lt']);
-                $s->execute();
-            }
-            $s->close();
+            api_write_lines($conn, $orderId, $rows);
 
             if ($paid > 0.001) {
                 $mode = api_mode();
@@ -426,8 +524,11 @@ api_dispatch([
         $id = api_int('id');
         if ($id < 1) throw new ApiInputError('Invalid order id.');
 
+        // Read the agreed prices BEFORE the rewrite below deletes them.
+        [$soldPrices, $soldCosts] = api_sold_prices($conn, $id);
+
         [$name, $phone, $notes] = api_customer();
-        [$rows, $subtotal]      = api_lines($ITEMS);
+        [$rows, $subtotal, $repriced] = api_lines($ITEMS, $soldPrices, api_costs($conn), $soldCosts);
         [$extra, $extraReason]  = api_extra_charge();
         [$disc, $discReason]    = api_discount($subtotal, $extra);
         [$awb, $dispatchDate]   = api_dispatch_fields();
@@ -498,14 +599,7 @@ api_dispatch([
             $s->execute();
             $s->close();
 
-            $s = $conn->prepare(
-                'INSERT INTO order_items (order_id, item, quantity, unit_price, line_total) VALUES (?,?,?,?,?)'
-            );
-            foreach ($rows as $r) {
-                $s->bind_param('isidd', $id, $r['item'], $r['qty'], $r['unit'], $r['lt']);
-                $s->execute();
-            }
-            $s->close();
+            api_write_lines($conn, $id, $rows);
 
             recalc_total($conn, $id);
             $conn->commit();
@@ -514,7 +608,20 @@ api_dispatch([
             throw $ex;
         }
 
-        api_ok(['order' => load_order($conn, $id), 'message' => 'Order updated.']);
+        // `repriced` names any line still charged at what it sold for
+        // while the catalogue has since moved. It is not a warning that
+        // something went wrong — it is the guarantee working, said out
+        // loud so nobody has to wonder why the total is not the price
+        // list times the quantity.
+        api_ok([
+            'order'    => load_order($conn, $id),
+            'repriced' => $repriced,
+            'message'  => $repriced
+                ? 'Order updated. ' . count($repriced) . ' line'
+                    . (count($repriced) === 1 ? '' : 's')
+                    . ' kept the price it was sold at.'
+                : 'Order updated.',
+        ]);
     },
 
     // ── POST add_payment ───────────────────────────────────────────

@@ -24,10 +24,10 @@ const DEFAULT_API = new URL('../api/', location.href).href;
  * browser, the server or the app is the stale one. It must match the
  * CACHE name in sw.js.
  */
-const BUILD = '2026-09-18.2';
+const BUILD = '2026-09-18.3';
 
 /** What this build of the app expects the server to be able to do. */
-const NEEDS_FEATURES = ['revenue_breakdown', 'expense_create'];
+const NEEDS_FEATURES = ['revenue_breakdown', 'expense_create', 'price_history'];
 
 const store = {
   get token() { return localStorage.getItem('mfu.token') || ''; },
@@ -660,6 +660,15 @@ async function paintOrder(id) {
   const { order: o } = await api('orders.php', 'get', { params: { id } });
   const settled = o.balance <= 0.5;
 
+  // Today's prices, only so a line sold at a different one can say so.
+  // A sale keeps the price it was made at; showing both side by side is
+  // what stops that looking like a mistake.
+  let catalogueNow = {};
+  try {
+    const c = await api('catalog.php', 'products', { params: { include_hidden: 'true' } });
+    (c.products || []).forEach((p) => { catalogueNow[p.name] = p.price; });
+  } catch (e) { /* the order still renders without it */ }
+
   document.getElementById('body').innerHTML = `
     <div class="hero" style="${settled ? '' : 'background:linear-gradient(135deg,#B3261E,#7A1610)'}">
       <div class="row" style="border:none;padding:0">
@@ -692,7 +701,12 @@ async function paintOrder(id) {
     </div></section>
 
     <section><h2 class="section">Items</h2><div class="card">
-      ${o.items.map((i) => detailRow(`${esc(i.item)} × ${i.quantity}`, money(i.line_total))).join('')}
+      ${o.items.map((i) => `<div class="row"><div class="grow">
+        <div class="t" style="font-weight:500">${esc(i.item)} × ${i.quantity}</div>
+        <div class="s">at ${money(i.unit_price)} each${
+          catalogueNow[i.item] != null && Math.abs(catalogueNow[i.item] - i.unit_price) > 0.005
+            ? ' · now ' + money(catalogueNow[i.item]) + ' in the catalogue' : ''}</div></div>
+        <div class="amt">${money(i.line_total)}</div></div>`).join('')}
       <div class="row"><div class="grow s">Subtotal</div><div class="amt">${money(o.subtotal)}</div></div>
       ${o.extra_charge > 0.001 ? detailRow(o.extra_charge_reason || 'Extra charge', '+' + money(o.extra_charge)) : ''}
       ${o.discount > 0.001 ? detailRow(o.discount_reason || 'Discount', '−' + money(o.discount)) : ''}
@@ -1472,14 +1486,97 @@ route('catalog', async () => {
     <div id="body">${spinner()}</div></div>`);
   const { products } = await api('catalog.php', 'products', { params: { include_hidden: 'true' } });
   document.getElementById('body').innerHTML = `<div class="card">${products.map((p) => `
-    <div class="row" style="${p.is_active ? '' : 'opacity:.55'}">
+    <button class="row" data-edit="${esc(p.name)}" style="width:100%;text-align:left;${p.is_active ? '' : 'opacity:.55'}">
       ${p.image_url ? `<img class="tile" src="${esc(p.image_url)}" alt="" style="object-fit:cover">` : tile(p.name)}
       <div class="grow"><div class="t">${esc(p.name)}${p.is_active ? '' : ' · hidden'}</div>
         <div class="s">Costs ${money(p.unit_cost)}${p.margin_pct != null ? ' · ' + p.margin_pct + '% margin' : ''}</div></div>
       <div class="amt">${money(p.price)}<div class="s pos">+${moneyShort(p.margin)}</div></div>
-    </div>`).join('')}</div>
-    <p class="muted" style="margin-top:12px">Prices are edited in the Android app or on the website.</p>`;
+    </button>`).join('')}</div>
+    <p class="muted" style="margin-top:12px">Tap a product to change its price. A new price applies to
+      sales made from then on — orders already sold keep the price they were sold at.</p>`;
+
+  document.querySelectorAll('[data-edit]').forEach((b) => b.onclick = () => {
+    priceSheet(products.find((p) => p.name === b.dataset.edit));
+  });
 });
+
+/**
+ * Change a price, having said plainly what that does and does not touch.
+ *
+ * The guarantee is enforced on the server — order_items keeps the
+ * unit_price each line sold at, and editing an old order no longer
+ * re-prices it. This screen's job is to make that visible before someone
+ * commits, because "will this change my completed sales?" is the question
+ * that stops people putting prices up.
+ */
+async function priceSheet(product) {
+  if (!product) return;
+  const sheet = openSheet(product.name, `<div id="priceBody">${spinner()}</div>`);
+
+  let past = 0, history = [];
+  try {
+    const h = await api('catalog.php', 'price_history', { params: { item: product.name } });
+    past = h.past_orders || 0;
+    history = h.history || [];
+  } catch (e) { /* an older server has no history; the form still works */ }
+
+  sheet.panel.querySelector('#priceBody').innerHTML = `
+    <div class="card">
+      <label class="field"><span>Selling price (₹)</span>
+        <input id="pprice" inputmode="decimal" value="${esc(String(product.price))}"></label>
+      <label class="field"><span>What it costs us (₹)</span>
+        <input id="pcost" inputmode="decimal" value="${esc(String(product.unit_cost || 0))}"></label>
+      <p class="muted" id="pmargin" style="margin-top:10px"></p>
+    </div>
+
+    <div class="card" style="margin-top:10px">
+      <div class="t">This applies to new sales only</div>
+      <p class="muted">${past > 0
+        ? `The ${past} order${past === 1 ? '' : 's'} that already include this product keep the price
+           ${past === 1 ? 'it was' : 'they were'} sold at. Their totals, bills and the partner
+           accounts built on them do not move.`
+        : 'Nothing has been sold with this product yet, so there is no history to protect.'}</p>
+    </div>
+
+    ${history.length ? `<section><h2 class="section">Price history</h2><div class="card">
+      ${history.map((h) => `<div class="row"><div class="grow">
+        <div class="t" style="font-weight:500">${money(h.price)}</div>
+        <div class="s">${esc(prettyDate(h.changed_at))}${h.changed_by ? ' · ' + esc(h.changed_by) : ''}${
+          h.note ? ' · ' + esc(h.note) : ''}</div></div>
+        <div class="amt s">cost ${money(h.unit_cost)}</div></div>`).join('')}
+    </div></section>` : ''}
+
+    <button class="btn" id="psave" style="margin-top:12px">Save price</button>`;
+
+  const num = (id) => Number(String(document.getElementById(id).value).replace(/[^\d.]/g, '')) || 0;
+  function paintMargin() {
+    const margin = num('pprice') - num('pcost');
+    const pct = num('pprice') > 0 ? (margin / num('pprice') * 100) : 0;
+    const el = document.getElementById('pmargin');
+    el.textContent = `Margin ${money(margin)} — ${pct.toFixed(1)}% of the price.`;
+    el.className = margin >= 0 ? 'muted pos' : 'muted neg';
+  }
+  ['pprice', 'pcost'].forEach((id) =>
+    document.getElementById(id).addEventListener('input', paintMargin));
+  paintMargin();
+
+  document.getElementById('psave').onclick = async () => {
+    const button = document.getElementById('psave');
+    if (num('pprice') < 0) { toast('Price cannot be negative.'); return; }
+    button.disabled = true; button.textContent = 'Saving…';
+    try {
+      const r = await api('catalog.php', 'update_product', {
+        body: { id: product.id, price: num('pprice'), unit_cost: num('pcost') },
+      });
+      sheet.close();
+      toast(r.message || 'Price updated.');
+      routes.catalog();
+    } catch (e) {
+      toast(e.message);
+      button.disabled = false; button.textContent = 'Save price';
+    }
+  };
+}
 
 route('settings', async () => {
   const standalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone;

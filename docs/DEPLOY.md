@@ -1,11 +1,12 @@
 # Making a change actually appear
 
-Three things update separately, and none of them tells you when it is the
+Four things update separately, and none of them tells you when it is the
 one that is behind. This is the whole checklist.
 
 | Thing | Lives where | How it updates |
 |---|---|---|
 | **The API** (`api/*.php`) | `sale.madeforu.co.in/api/` | You upload the files |
+| **The database** | the MySQL database | You run `api/migrations/*.sql` in phpMyAdmin |
 | **The web app** (`pwa/*`) | `sale.madeforu.co.in/app/` | You upload the files |
 | **The Android app** | On each partner's phone | You rebuild and install the APK |
 
@@ -40,6 +41,20 @@ Check it worked:
 
 should answer with `"api_version":"1.1.0"` and a `features` list. If it
 still says `1.0.0`, the files did not land.
+
+## 1b. Run the database migration
+
+`api/migrations/` holds `.sql` files. Run any you have not run yet, in
+hPanel → **Databases → phpMyAdmin** → pick `u291217659_sale` → **SQL** tab
+→ paste the file → Go.
+
+They are written to be safe to run twice, so if you are unsure whether one
+has been applied, run it again.
+
+The API works with or without them — it checks what the database actually
+has and adapts — so the upload order does not matter. Until
+`2026-09-price-history.sql` is run, price history is empty and Stats falls
+back to live costs, which is what it did before.
 
 ## 2. Upload the web app
 

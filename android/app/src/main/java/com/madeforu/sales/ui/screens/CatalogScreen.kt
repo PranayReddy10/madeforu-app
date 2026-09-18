@@ -54,13 +54,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.madeforu.sales.core.ApiResult
+import com.madeforu.sales.core.Dates
 import com.madeforu.sales.core.Money
 import com.madeforu.sales.core.isAuthFailure
 import com.madeforu.sales.data.Product
+import com.madeforu.sales.data.PriceHistory
 import com.madeforu.sales.data.Repository
 import com.madeforu.sales.ui.components.ErrorBanner
 import com.madeforu.sales.ui.components.LoadingBox
 import com.madeforu.sales.ui.components.ProductThumb
+import com.madeforu.sales.ui.components.softCardColors
 import com.madeforu.sales.ui.components.Pill
 import com.madeforu.sales.ui.theme.positiveColor
 import kotlinx.coroutines.launch
@@ -87,6 +90,7 @@ fun CatalogScreen(
     var loading by remember { mutableStateOf(true) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    var message by remember { mutableStateOf<String?>(null) }
     var editing by remember { mutableStateOf<Product?>(null) }
     var showAdd by remember { mutableStateOf(false) }
 
@@ -136,6 +140,21 @@ fun CatalogScreen(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             item { ErrorBanner(error, onRetry = { load() }) }
+
+            // A price change answers a question, so the answer stays on
+            // screen until it is dismissed rather than flashing past in a
+            // toast that nobody finishes reading.
+            message?.let { text ->
+                item {
+                    Card(shape = RoundedCornerShape(18.dp), colors = softCardColors()) {
+                        Column(Modifier.fillMaxWidth().padding(16.dp)) {
+                            Text(text, style = MaterialTheme.typography.bodyMedium)
+                            Spacer(Modifier.height(8.dp))
+                            TextButton(onClick = { message = null }) { Text("Got it") }
+                        }
+                    }
+                }
+            }
 
             items(products.size) { index ->
                 val product = products[index]
@@ -208,15 +227,22 @@ fun CatalogScreen(
             product = product,
             busy = busy,
             onDismiss = { editing = null },
+            onLoadHistory = { repository.priceHistory(product.name).successOrNull },
             onSave = { price, cost, active, imageUrl, productUrl ->
                 editing = null
                 busy = true
                 scope.launch {
-                    val result = repository.updateProduct(
+                    val result = repository.updateProductDetailed(
                         product.id, price, cost, active, imageUrl, productUrl,
                     )
                     when (result) {
-                        is ApiResult.Success -> products = result.value
+                        is ApiResult.Success -> {
+                            products = result.value.products
+                            // The server's sentence says what the change
+                            // does and does not touch; showing it is how
+                            // the guarantee reaches the person who needs it.
+                            message = result.value.message.ifBlank { null }
+                        }
                         is ApiResult.Failure -> error = result.message
                     }
                     busy = false
@@ -249,14 +275,20 @@ private fun EditProductSheet(
     product: Product,
     busy: Boolean,
     onDismiss: () -> Unit,
+    onLoadHistory: suspend () -> PriceHistory?,
     onSave: (Double, Double, Boolean, String, String) -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var priceText by remember { mutableStateOf(numberText(product.price)) }
+    var history by remember { mutableStateOf<PriceHistory?>(null) }
     var costText by remember { mutableStateOf(numberText(product.unitCost)) }
     var active by remember { mutableStateOf(product.isActive) }
     var imageUrl by remember { mutableStateOf(product.imageUrl) }
     var productUrl by remember { mutableStateOf(product.productUrl) }
+
+    // An older server has no price_history route; the sheet then simply
+    // shows the general guarantee instead of the specific numbers.
+    LaunchedEffect(product.id) { history = onLoadHistory() }
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
         Column(
@@ -265,8 +297,20 @@ private fun EditProductSheet(
         ) {
             Text(product.name, style = MaterialTheme.typography.titleLarge)
             Text(
-                "Changing the price affects new orders only. Orders already taken keep " +
-                    "the price they were billed at.",
+                if (history == null) {
+                    "Changing the price affects new sales only. Orders already taken keep " +
+                        "the price they were sold at."
+                } else if (history!!.pastOrders > 0) {
+                    "Changing the price affects new sales only. The " + history!!.pastOrders +
+                        " order" + (if (history!!.pastOrders == 1) "" else "s") +
+                        " that already include this product keep the price " +
+                        (if (history!!.pastOrders == 1) "it was" else "they were") +
+                        " sold at — their totals, bills and the partner accounts built on " +
+                        "them do not move."
+                } else {
+                    "Nothing has been sold with this product yet, so there is no history " +
+                        "to protect."
+                },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -342,6 +386,36 @@ private fun EditProductSheet(
                 enabled = !busy && price >= 0,
                 modifier = Modifier.fillMaxWidth().height(50.dp),
             ) { Text("Save") }
+
+            // What it used to sell for. Shown under the form because the
+            // question "what was it before?" comes up the moment someone
+            // is about to change it.
+            history?.history?.takeIf { it.isNotEmpty() }?.let { rows ->
+                Spacer(Modifier.height(4.dp))
+                Text("Price history", style = MaterialTheme.typography.titleSmall)
+                rows.take(8).forEach { h ->
+                    Row(
+                        Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(Money.full(h.price), style = MaterialTheme.typography.bodyMedium)
+                            Text(
+                                Dates.pretty(h.changedAt) +
+                                    (h.changedBy?.let { " · " + it } ?: "") +
+                                    (h.note?.let { " · " + it } ?: ""),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Text(
+                            "cost " + Money.full(h.unitCost),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
             Spacer(Modifier.height(24.dp))
         }
     }

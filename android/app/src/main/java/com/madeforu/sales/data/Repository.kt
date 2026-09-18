@@ -82,6 +82,40 @@ class Repository(private val api: ApiClient, private val prefs: Prefs) {
             },
         ).map { api.decode<ProductsResponse>(it).products }
 
+    /** What this product has sold for over time, newest first. */
+    suspend fun priceHistory(item: String): ApiResult<PriceHistory> =
+        api.get("catalog.php", "price_history", mapOf("item" to item))
+            .map { api.decode<PriceHistory>(it) }
+
+    /**
+     * Update a product, keeping the server's sentence about it.
+     *
+     * The message names what a price change does and does not touch
+     * ("applies to new sales only; the 62 orders already sold keep the
+     * price they were sold at"), which is the reassurance the partner
+     * changing the price actually needs. Dropping it for the product
+     * list alone would throw away the answer.
+     */
+    suspend fun updateProductDetailed(
+        id: Int,
+        price: Double? = null,
+        unitCost: Double? = null,
+        isActive: Boolean? = null,
+        imageUrl: String? = null,
+        productUrl: String? = null,
+    ): ApiResult<ProductsResponse> =
+        api.post(
+            "catalog.php", "update_product",
+            ApiClient.body {
+                put("id", JsonPrimitive(id))
+                price?.let { put("price", JsonPrimitive(it)) }
+                unitCost?.let { put("unit_cost", JsonPrimitive(it)) }
+                isActive?.let { put("is_active", JsonPrimitive(it)) }
+                imageUrl?.let { put("image_url", JsonPrimitive(it)) }
+                productUrl?.let { put("product_url", JsonPrimitive(it)) }
+            },
+        ).map { api.decode<ProductsResponse>(it) }
+
     suspend fun updateProduct(
         id: Int,
         price: Double? = null,

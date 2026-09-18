@@ -32,7 +32,7 @@ set_exception_handler(function (Throwable $t) {
 });
 
 // ── API-wide constants ─────────────────────────────────────────────
-define('API_VERSION',      '1.1.0');
+define('API_VERSION',      '1.2.0');
 
 /**
  * What this build of the API can do, for the apps to check against.
@@ -50,6 +50,7 @@ define('API_FEATURES', [
     'expense_items',       // expenses.php: line items on `get`
     'bills',               // bills.php: issue/get/list/html
     'app_version',         // auth.php: the Android release channel
+    'price_history',       // catalog.php: price history, and prices frozen onto sold lines
 ]);
 define('TOKEN_TTL_DAYS',   90);     // a partner phone stays signed in for a quarter
 define('MAX_PAGE_SIZE',    200);
@@ -363,6 +364,35 @@ function fy_label(string $date): string {
     $m  = (int)date('n', $ts);
     $start = $m >= 4 ? $y : $y - 1;
     return substr((string)$start, 2) . '-' . substr((string)($start + 1), 2);
+}
+
+/**
+ * Does this table have this column?
+ *
+ * Shared hosting means the PHP files and the SQL migration are uploaded
+ * by hand, minutes or days apart, in whichever order. Code that assumes
+ * the migration ran first turns "I uploaded the new api/" into "nobody
+ * can take an order", which is the worst possible failure for a shop.
+ * Asking is cheap and cached for the request.
+ */
+function db_has_column(mysqli $conn, string $table, string $column): bool {
+    static $cache = [];
+    $key = $table . '.' . $column;
+    if (isset($cache[$key])) return $cache[$key];
+
+    try {
+        $s = $conn->prepare(
+            'SELECT 1 FROM information_schema.COLUMNS
+              WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ? LIMIT 1'
+        );
+        $s->bind_param('ss', $table, $column);
+        $s->execute();
+        $found = (bool)$s->get_result()->fetch_row();
+        $s->close();
+    } catch (mysqli_sql_exception $e) {
+        $found = false;
+    }
+    return $cache[$key] = $found;
 }
 
 function amount_in_words(float $amount): string {

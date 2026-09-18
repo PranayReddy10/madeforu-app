@@ -453,6 +453,30 @@ data class ServerInfo(
     val isStale: Boolean get() = features.isEmpty() || missing.isNotEmpty()
 }
 
+/** One recorded change to what a product costs and sells for. */
+@Serializable
+data class PriceChange(
+    val price: Double = 0.0,
+    @SerialName("unit_cost") val unitCost: Double = 0.0,
+    @SerialName("changed_at") val changedAt: String = "",
+    @SerialName("changed_by") val changedBy: String? = null,
+    val note: String? = null,
+)
+
+/**
+ * A product's price history, and how many orders already hold it.
+ *
+ * `pastOrders` is the number a partner actually wants before changing a
+ * price: how many completed sales this does NOT touch. They keep the
+ * unit_price frozen onto their own order_items rows.
+ */
+@Serializable
+data class PriceHistory(
+    val item: String = "",
+    val history: List<PriceChange> = emptyList(),
+    @SerialName("past_orders") val pastOrders: Int = 0,
+)
+
 @Serializable
 data class RevenueWindow(val orders: Int = 0, val amount: Double = 0.0)
 

@@ -97,6 +97,11 @@ fun OrderDetailScreen(
     var showDispatchSheet by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
 
+    // Today's catalogue, held only so a line sold at a different price can
+    // say so. It never changes what the order is worth — the order keeps
+    // the prices it was sold at.
+    var catalogueNow by remember { mutableStateOf<Map<String, Double>>(emptyMap()) }
+
     fun refresh() {
         scope.launch {
             when (val result = repository.order(orderId)) {
@@ -109,6 +114,14 @@ fun OrderDetailScreen(
     }
 
     LaunchedEffect(orderId) { refresh() }
+
+    LaunchedEffect(Unit) {
+        // Best effort: a failure here just means no "the catalogue has
+        // since moved" note, which is a nicety, not the order.
+        repository.products(includeHidden = true).successOrNull?.let { list ->
+            catalogueNow = list.associate { it.name to it.price }
+        }
+    }
 
     /** Every write returns the fresh order, so one helper covers them all. */
     fun act(block: suspend () -> ApiResult<com.madeforu.sales.data.OrderResponse>) {
@@ -235,9 +248,18 @@ fun OrderDetailScreen(
                 ) {
                     Column(Modifier.padding(16.dp)) {
                         current.items.forEach { line ->
-                            DetailRow(
-                                "${line.item} × ${line.quantity}",
-                                Money.full(line.lineTotal),
+                            // The unit price is on the line because it is
+                            // the price this sale was made at, which is not
+                            // necessarily what the catalogue says today —
+                            // and someone checking the total against the
+                            // price list needs to see which is which.
+                            val now = catalogueNow[line.item]
+                            SoldLine(
+                                label = line.item + " × " + line.quantity,
+                                soldAt = line.unitPrice,
+                                catalogueNow = if (now != null &&
+                                    kotlin.math.abs(now - line.unitPrice) > 0.005) now else null,
+                                amount = Money.full(line.lineTotal),
                             )
                         }
                         ThinDivider(Modifier.padding(vertical = 8.dp))

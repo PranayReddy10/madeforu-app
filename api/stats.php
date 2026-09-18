@@ -6,6 +6,12 @@
  * asks two different questions:
  *
  *   product_profit = revenue - (units sold x unit_cost)
+ *
+ * unit_cost is read from order_items, where it was frozen at the moment
+ * of sale, and only falls back to the live product_costs table for rows
+ * written before that column existed. Reading it live meant that putting
+ * up what an item costs us restated the profit on every sale ever made —
+ * the cost-side twin of repricing a completed order.
  *       "are we pricing the mugs right?" Uses the per-event cost override
  *       when the order belongs to an event, exactly like event_costs.php.
  *
@@ -38,6 +44,21 @@ function previous_range(string $from, string $to): array {
 }
 
 /** Optional event filter shared by every query on this page. */
+/**
+ * What one unit of a sold item cost us.
+ *
+ * Preferring the frozen order_items.unit_cost is what stops a change to
+ * our own costs restating the profit on every sale ever made. It falls
+ * back to the live tables for rows written before that column existed —
+ * and for a server where api/ was uploaded before the migration ran, in
+ * which case the column is not there to select at all.
+ */
+function cost_expr(mysqli $conn): string {
+    return db_has_column($conn, 'order_items', 'unit_cost')
+        ? 'COALESCE(NULLIF(oi.unit_cost, 0), eic.unit_cost, pc.unit_cost, 0)'
+        : 'COALESCE(eic.unit_cost, pc.unit_cost, 0)';
+}
+
 function stats_event_clause(): array {
     $event = api_str('event', 'all');
     if ($event === 'offline') return [' AND o.event_id IS NULL', '', []];
@@ -96,7 +117,7 @@ function stats_headline(mysqli $conn, string $from, string $to): array {
 function stats_cogs(mysqli $conn, string $from, string $to): float {
     [$evSql, $evTypes, $evParams] = stats_event_clause();
 
-    $sql = 'SELECT COALESCE(SUM(oi.quantity * COALESCE(eic.unit_cost, pc.unit_cost, 0)),0) cogs
+    $sql = 'SELECT COALESCE(SUM(oi.quantity * ' . cost_expr($conn) . '),0) cogs
               FROM order_items oi
               JOIN orders o ON o.id = oi.order_id
               LEFT JOIN event_item_costs eic ON eic.event_id = o.event_id AND eic.item = oi.item
@@ -271,7 +292,7 @@ api_dispatch([
             'SELECT oi.item,
                     SUM(oi.quantity) qty,
                     SUM(oi.line_total) revenue,
-                    SUM(oi.quantity * COALESCE(eic.unit_cost, pc.unit_cost, 0)) cost
+                    SUM(oi.quantity * ' . cost_expr($conn) . ') cost
                FROM order_items oi
                JOIN orders o ON o.id = oi.order_id
                LEFT JOIN event_item_costs eic ON eic.event_id = o.event_id AND eic.item = oi.item

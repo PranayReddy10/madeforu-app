@@ -102,6 +102,56 @@ function catalog_events(mysqli $conn, bool $activeOnly = false): array {
     return $out;
 }
 
+/** Today's selling price and unit cost for one product. */
+function product_current_figures(mysqli $conn, int $id, string $name): array {
+    $s = $conn->prepare('SELECT price FROM products WHERE id = ?');
+    $s->bind_param('i', $id);
+    $s->execute();
+    $price = (float)($s->get_result()->fetch_assoc()['price'] ?? 0);
+    $s->close();
+
+    $cost = 0.0;
+    try {
+        $s = $conn->prepare('SELECT unit_cost FROM product_costs WHERE item = ?');
+        $s->bind_param('s', $name);
+        $s->execute();
+        $cost = (float)($s->get_result()->fetch_assoc()['unit_cost'] ?? 0);
+        $s->close();
+    } catch (mysqli_sql_exception $e) { /* optional table */ }
+
+    return [$price, $cost];
+}
+
+/**
+ * Append a row to the price history.
+ *
+ * Never fails the price change itself: the history is a record of what
+ * happened, and refusing a legitimate price rise because a log table is
+ * missing would be the tail wagging the dog.
+ */
+function record_price_change(mysqli $conn, int $id, string $name,
+                             float $price, float $cost, ?int $by): void {
+    try {
+        $s = $conn->prepare(
+            'INSERT INTO product_price_history (product_id, item, price, unit_cost, changed_by)
+             VALUES (?,?,?,?,?)'
+        );
+        $s->bind_param('isddi', $id, $name, $price, $cost, $by);
+        $s->execute();
+        $s->close();
+    } catch (mysqli_sql_exception $e) { /* table arrives with the migration */ }
+}
+
+/** How many orders already contain this item — i.e. how many are protected. */
+function past_sales_count(mysqli $conn, string $name): int {
+    $s = $conn->prepare('SELECT COUNT(DISTINCT order_id) n FROM order_items WHERE item = ?');
+    $s->bind_param('s', $name);
+    $s->execute();
+    $n = (int)($s->get_result()->fetch_assoc()['n'] ?? 0);
+    $s->close();
+    return $n;
+}
+
 api_dispatch([
 
     /**
@@ -184,7 +234,7 @@ api_dispatch([
     },
 
     // ── POST update_product {id, price?, unit_cost?, is_active?} ───
-    'update_product' => function () use ($conn) {
+    'update_product' => function () use ($conn, $me) {
         $id = api_int('id');
         if ($id < 1) throw new ApiInputError('Invalid product.');
 
@@ -195,6 +245,10 @@ api_dispatch([
         $s->close();
         if (!$row) api_fail(404, 'not_found', 'That product no longer exists.');
         $name = $row['name'];
+
+        // What it was, before this call changes anything — the history row
+        // written at the end is only worth writing if something moved.
+        [$wasPrice, $wasCost] = product_current_figures($conn, $id, $name);
 
         if (api_in('price', null) !== null) {
             $price = api_float('price', -1);
@@ -236,9 +290,76 @@ api_dispatch([
             $s->close();
         }
 
-        // Existing orders keep the price they were billed at: order_items
-        // stores unit_price per line, so repricing never rewrites history.
-        api_ok(['products' => catalog_products($conn, true), 'message' => $name . ' updated.']);
+        [$nowPrice, $nowCost] = product_current_figures($conn, $id, $name);
+        $priceMoved = abs($nowPrice - $wasPrice) > 0.001;
+        $costMoved  = abs($nowCost - $wasCost) > 0.001;
+
+        $message = $name . ' updated.';
+        if ($priceMoved || $costMoved) {
+            record_price_change($conn, $id, $name, $nowPrice, $nowCost, $me['id'] ?? null);
+
+            // Said plainly, because this is the question anyone asking for
+            // a price rise actually has. Past sales are untouched: each
+            // order_items row keeps the unit_price it was sold at, and an
+            // edit to an old order now keeps it too (orders.php).
+            $past = past_sales_count($conn, $name);
+            if ($priceMoved) {
+                $message = $name . ' is now ' . money($nowPrice)
+                    . ' (was ' . money($wasPrice) . '). This applies to new sales only'
+                    . ($past > 0
+                        ? '; the ' . $past . ' order' . ($past === 1 ? '' : 's')
+                          . ' already sold keep the price they were sold at.'
+                        : '.');
+            }
+        }
+
+        api_ok([
+            'products' => catalog_products($conn, true),
+            'price_changed' => $priceMoved,
+            'was_price'     => round($wasPrice, 2),
+            'now_price'     => round($nowPrice, 2),
+            'past_orders'   => ($priceMoved || $costMoved) ? past_sales_count($conn, $name) : 0,
+            'message'       => $message,
+        ]);
+    },
+
+    /**
+     * GET price_history&item= — what this product has cost and sold for.
+     *
+     * Newest first. The apps show it beside the price field so a partner
+     * changing a price can see what it used to be, and see for themselves
+     * that past sales are recorded separately from the current figure.
+     */
+    'price_history' => function () use ($conn) {
+        $item = api_str('item');
+        if ($item === '') throw new ApiInputError('Which product?');
+
+        $out = [];
+        try {
+            $s = $conn->prepare(
+                'SELECT h.price, h.unit_cost, h.changed_at, h.note, a.name changed_by
+                   FROM product_price_history h
+                   LEFT JOIN admins a ON a.id = h.changed_by
+                  WHERE h.item = ? ORDER BY h.changed_at DESC, h.id DESC LIMIT 40'
+            );
+            $s->bind_param('s', $item);
+            $s->execute();
+            $res = $s->get_result();
+            while ($r = $res->fetch_assoc()) {
+                $out[] = ['price' => round((float)$r['price'], 2),
+                          'unit_cost' => round((float)$r['unit_cost'], 2),
+                          'changed_at' => $r['changed_at'],
+                          'changed_by' => $r['changed_by'],
+                          'note' => $r['note']];
+            }
+            $s->close();
+        } catch (mysqli_sql_exception $e) {
+            // The table arrives with a migration; an older server just has
+            // no history to show, which is not an error worth failing on.
+        }
+
+        api_ok(['item' => $item, 'history' => $out,
+                'past_orders' => past_sales_count($conn, $item)]);
     },
 
     // ── POST reorder {ids:[...]} — drag-to-sort on the phone ───────

@@ -270,6 +270,40 @@ fun <T> ChipRow(
 
 /** A label/value row — the workhorse of every detail screen. */
 @Composable
+/**
+ * An order line, showing what it was sold at.
+ *
+ * `catalogueNow` is passed only when today's price differs, and saying
+ * both is the point: a completed sale keeps its own price, so a total
+ * that does not match the current price list is the system working
+ * rather than a mistake to go hunting for.
+ */
+@Composable
+fun SoldLine(
+    label: String,
+    soldAt: Double,
+    catalogueNow: Double?,
+    amount: String,
+) {
+    Row(
+        Modifier.fillMaxWidth().padding(vertical = 5.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(label, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+            Text(
+                "at " + Money.full(soldAt) + " each" +
+                    (if (catalogueNow != null)
+                        " · now " + Money.full(catalogueNow) + " in the catalogue" else ""),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Spacer(Modifier.width(12.dp))
+        Text(amount, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+    }
+}
+
 fun DetailRow(
     label: String,
     value: String,
