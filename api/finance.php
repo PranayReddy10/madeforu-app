@@ -104,6 +104,10 @@ function partner_rows(mysqli $conn): array {
         'balance'   => round($totalBal, 2),
         'fair_share' => $fairShare,
         'fair_balance' => $fairBal,
+        // Each side's fair share, so the app can show the arithmetic
+        // rather than asking a partner to take the gap on trust.
+        'fair_paid' => $n > 0 ? round(array_sum(array_column($rows, 'paid')) / $n, 2) : 0.0,
+        'fair_credited' => $fairCred,
         'share_pct' => $n > 0 ? round(100 / $n, 1) : 0.0,
     ]];
 }

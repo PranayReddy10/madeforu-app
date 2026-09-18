@@ -212,6 +212,7 @@ function bill_payload(mysqli $conn, array $row): array {
             'site'  => $settings['business_site'],
             'gstin' => $settings['gstin'],
         ],
+        'logo_url'     => trim((string)($settings['logo_url'] ?? '')),
         'footer'       => $settings['bill_footer'],
         'terms'        => $settings['bill_terms'],
         'upi_intent'   => upi_intent($settings, (string)($snap['order_no'] ?? ''), (float)($snap['balance'] ?? 0)),
@@ -271,8 +272,6 @@ function bill_html(array $p, string $size = 'a4'): string {
     $track = !empty($o['track_url'])
         ? '<div class="sec small">Delhivery tracking: <b>' . e((string)$o['awb']) . '</b><br>' . e((string)$o['track_url']) . '</div>' : '';
 
-    $rev = (int)$p['revision'] > 1 ? ' <span class="rev">rev ' . (int)$p['revision'] . '</span>' : '';
-
     return '<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>' . e($p['bill_no']) . ' — ' . e($b['name']) . '</title>
@@ -288,7 +287,7 @@ function bill_html(array $p, string $size = 'a4'): string {
           border-bottom:2px solid #14161a; padding-bottom:10px; ' . ($th ? 'flex-direction:column;' : '') . ' }
   .billno { text-align:' . ($th ? 'left' : 'right') . '; font-size:' . ($th ? '10px' : '12px') . '; }
   .billno b { display:block; font-size:' . ($th ? '12px' : '15px') . '; }
-  .rev { color:#b45309; font-weight:600; }
+  .logo { max-height:52px; max-width:180px; display:block; margin-bottom:8px; }
   .meta { display:flex; gap:16px; margin:12px 0; ' . ($th ? 'flex-direction:column; gap:6px;' : '') . ' }
   .meta > div { flex:1; }
   .lbl { color:#6b7280; font-size:' . ($th ? '9px' : '10px') . '; text-transform:uppercase; letter-spacing:.6px; }
@@ -313,10 +312,11 @@ function bill_html(array $p, string $size = 'a4'): string {
   @media print { .noprint { display:none; } body { padding:0; } }
 </style></head><body>
 <div class="head">
-  <div><h1>' . e($b['name']) . '</h1><div class="tag">' . e($b['tag']) . '</div>
+  <div>' . ($p['logo_url'] !== '' ? '<img class="logo" src="' . e($p['logo_url']) . '" alt="">' : '') . '
+    <h1>' . e($b['name']) . '</h1><div class="tag">' . e($b['tag']) . '</div>
     <div class="small">' . e($b['addr']) . ($b['phone'] ? ' &middot; ' . e($b['phone']) : '') . '</div>'
     . ($b['gstin'] ? '<div class="small">GSTIN: ' . e($b['gstin']) . '</div>' : '') . '</div>
-  <div class="billno"><span class="lbl">Invoice</span><b>' . e($p['bill_no']) . $rev . '</b>'
+  <div class="billno"><span class="lbl">Invoice</span><b>' . e($p['bill_no']) . '</b>'
     . e(date('d M Y, g:i a', strtotime((string)$p['issued_at']))) . '</div>
 </div>
 <div class="meta">
@@ -414,6 +414,10 @@ api_dispatch([
      * token, and it is random enough not to be guessed.
      */
     'html' => function () use ($conn) {
+        // `token` is a bill's public token and nothing else. A signed-in
+        // partner passes order_id plus `auth` (handled by api_raw_token),
+        // never a session token here — putting one in `token` is what made
+        // printing answer {"ok":false} instead of a page.
         $token = api_str('token');
         $size  = api_str('size', 'a4') === 'thermal' ? 'thermal' : 'a4';
 

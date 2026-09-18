@@ -14,3 +14,6 @@ android/captures/
 .DS_Store
 *.iml
 .vscode/
+
+# Kotlin compiler scratch/error logs
+android/.kotlin/

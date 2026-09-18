@@ -160,4 +160,21 @@ api_dispatch([
     'ping' => function () use ($conn) {
         api_ok(['api_version' => API_VERSION, 'server_time' => date('c')]);
     },
+
+    /**
+     * GET app_version — the release channel for the Android app.
+     *
+     * Deliberately open: a partner whose build is too old to sign in still
+     * needs to be told where the new one is. It exposes nothing but the
+     * version numbers and the download link.
+     */
+    'app_version' => function () use ($conn) {
+        $s = app_settings($conn);
+        api_ok(['release' => [
+            'version_code' => (int)($s['apk_version_code'] ?? 0),
+            'version_name' => (string)($s['apk_version_name'] ?? ''),
+            'apk_url'      => (string)($s['apk_url'] ?? ''),
+            'notes'        => (string)($s['apk_notes'] ?? ''),
+        ]]);
+    },
 ]);

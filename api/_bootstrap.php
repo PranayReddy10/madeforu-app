@@ -178,7 +178,14 @@ function api_raw_token(): string {
         }
     }
     if (stripos($hdr, 'Bearer ') === 0) return trim(substr($hdr, 7));
-    return api_str('token');
+
+    // `auth` is the query-string fallback, for the one case that cannot
+    // send a header: a WebView loading the printable bill. It is separate
+    // from `token`, which means a bill's own public token — sending a
+    // session token as `token` made every print look up a bill that does
+    // not exist and answer {"ok":false}.
+    $q = api_str('auth');
+    return $q !== '' ? $q : api_str('token');
 }
 
 function api_hash_token(string $raw): string {
@@ -243,6 +250,15 @@ const APP_SETTING_DEFAULTS = [
     'bill_prefix'    => 'MFU',
     'bill_footer'    => 'Thank you for shopping with MadeForU!',
     'bill_terms'     => 'Custom-made items are not returnable. Damage on arrival must be reported within 48 hours with photos.',
+    // Printed at the top of every bill. Any public image URL works; the
+    // WordPress media library is the easy place to host it.
+    'logo_url'       => '',
+    // Release channel for the Android app. The app compares apk_version_code
+    // against its own and offers the download when this one is higher.
+    'apk_url'          => '',
+    'apk_version_name' => '',
+    'apk_version_code' => '0',
+    'apk_notes'        => '',
 ];
 
 function app_settings(mysqli $conn): array {

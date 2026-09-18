@@ -36,6 +36,33 @@ function expense_row(array $r): array {
     ];
 }
 
+/**
+ * Read the "who paid from pocket" split. Omitted means the whole net
+ * amount against paid_by, which is the common case. When given, it must
+ * add up: expense_payments is what investment.php reads as a partner's
+ * contribution, so a split that does not total the expense silently
+ * distorts every partner's fair share.
+ */
+function expense_split(float $net, int $paidBy): array {
+    $raw = api_in('payments', null);
+    if (!is_array($raw) || !$raw) return [[$paidBy, $net]];
+
+    $split = []; $sum = 0.0;
+    foreach ($raw as $row) {
+        if (!is_array($row)) continue;
+        $pid = (int)($row['partner_id'] ?? 0);
+        $amt = round((float)($row['amount'] ?? 0), 2);
+        if ($pid < 1 || $amt <= 0) continue;
+        $split[] = [$pid, $amt];
+        $sum += $amt;
+    }
+    if (!$split) throw new ApiInputError('The payment split has no valid rows.');
+    if (abs($sum - $net) > 0.01) {
+        throw new ApiInputError('The split adds up to ' . money($sum) . ' but the expense is ' . money($net) . '.');
+    }
+    return $split;
+}
+
 api_dispatch([
 
     // ── GET list&from&to&category&partner_id ───────────────────────
@@ -199,27 +226,9 @@ api_dispatch([
         $item     = mb_substr($item, 0, 200);
         $net      = round($amount - $disc, 2);
 
-        // Work out the split before writing anything, so a bad split does
-        // not leave an expense behind with nobody recorded as paying it.
-        $split = [];
-        $raw = api_in('payments', null);
-        if (is_array($raw) && $raw) {
-            $sum = 0.0;
-            foreach ($raw as $row) {
-                if (!is_array($row)) continue;
-                $pid = (int)($row['partner_id'] ?? 0);
-                $amt = round((float)($row['amount'] ?? 0), 2);
-                if ($pid < 1 || $amt <= 0) continue;
-                $split[] = [$pid, $amt];
-                $sum += $amt;
-            }
-            if (!$split) throw new ApiInputError('The payment split has no valid rows.');
-            if (abs($sum - $net) > 0.01) {
-                throw new ApiInputError('The split adds up to ' . money($sum) . ' but the expense is ' . money($net) . '.');
-            }
-        } else {
-            $split[] = [$paidBy, $net];
-        }
+        // Worked out before writing anything, so a bad split cannot leave
+        // an expense behind with nobody recorded as paying it.
+        $split = expense_split($net, $paidBy);
 
         $conn->begin_transaction();
         try {
@@ -244,6 +253,73 @@ api_dispatch([
         } catch (Exception $ex) { $conn->rollback(); throw $ex; }
 
         api_ok(['expense_id' => $eid, 'message' => money($net) . ' expense recorded.']);
+    },
+
+    /**
+     * POST update — correct an expense that was entered wrong.
+     *
+     * The payment split is rewritten wholesale rather than patched: a
+     * partial edit could leave expense_payments summing to something other
+     * than the expense, and that table is what investment.php reads as a
+     * partner's contribution.
+     */
+    'update' => function () use ($conn) {
+        $id = api_int('id');
+        if ($id < 1) throw new ApiInputError('Invalid expense.');
+
+        $chk = $conn->prepare('SELECT id FROM expenses WHERE id = ?');
+        $chk->bind_param('i', $id);
+        $chk->execute();
+        if (!$chk->get_result()->fetch_assoc()) api_fail(404, 'not_found', 'That expense no longer exists.');
+        $chk->close();
+
+        $date   = api_date('exp_date', date('Y-m-d'));
+        $item   = mb_substr(api_str('item'), 0, 200);
+        $amount = api_float('amount', 0);
+        $disc   = api_float('discount', 0);
+        $paidBy = api_int('paid_by');
+
+        if ($item === '')    throw new ApiInputError('What was the money spent on?');
+        if ($amount <= 0)    throw new ApiInputError('Enter an amount greater than zero.');
+        if ($disc < 0)       throw new ApiInputError('Discount cannot be negative.');
+        if ($disc > $amount) throw new ApiInputError('The discount is more than the amount.');
+        if ($paidBy < 1)     throw new ApiInputError('Choose who paid.');
+
+        $category = mb_substr(api_str('category', 'Other') ?: 'Other', 0, 80);
+        $paidTo   = mb_substr(api_str('paid_to'), 0, 200);
+        $details  = mb_substr(api_str('details'), 0, 500);
+        $net      = round($amount - $disc, 2);
+
+        $split = expense_split($net, $paidBy);
+
+        $conn->begin_transaction();
+        try {
+            $s = $conn->prepare(
+                'UPDATE expenses SET exp_date = ?, item = ?, amount = ?, discount = ?,
+                                     paid_by = ?, paid_to = ?, category = ?, details = ?
+                  WHERE id = ?'
+            );
+            $s->bind_param('ssddisssi', $date, $item, $amount, $disc, $paidBy, $paidTo, $category, $details, $id);
+            $s->execute();
+            $s->close();
+
+            $s = $conn->prepare('DELETE FROM expense_payments WHERE expense_id = ?');
+            $s->bind_param('i', $id);
+            $s->execute();
+            $s->close();
+
+            $s = $conn->prepare(
+                'INSERT INTO expense_payments (expense_id, partner_id, amount, pay_date) VALUES (?,?,?,?)'
+            );
+            foreach ($split as [$pid, $amt]) {
+                $s->bind_param('iids', $id, $pid, $amt, $date);
+                $s->execute();
+            }
+            $s->close();
+            $conn->commit();
+        } catch (Exception $ex) { $conn->rollback(); throw $ex; }
+
+        api_ok(['message' => 'Expense updated.']);
     },
 
     // ── POST delete ────────────────────────────────────────────────
