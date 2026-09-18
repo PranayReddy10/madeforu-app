@@ -182,6 +182,9 @@ fun AppRoot(signedIn: Boolean) {
                         onNewOrder = { navController.navigate(Routes.NEW_ORDER) },
                         onOpenSettings = { navController.navigate(Routes.SETTINGS) },
                         onOpenBills = { navController.navigate(Routes.BILLS) },
+                        onOpenExpenses = { navController.navigate(Routes.EXPENSES) },
+                        onOpenEvents = { navController.navigate(Routes.EVENTS) },
+                        onOpenCatalog = { navController.navigate(Routes.CATALOG) },
                         onSessionExpired = signOut,
                     )
                 }
@@ -277,14 +280,7 @@ fun AppRoot(signedIn: Boolean) {
                 }
 
                 composable(Routes.MONEY) {
-                    MoneyScreen(
-                        repository = repository,
-                        onOpenExpenses = { navController.navigate(Routes.EXPENSES) },
-                        onOpenEvents = { navController.navigate(Routes.EVENTS) },
-                        onOpenCatalog = { navController.navigate(Routes.CATALOG) },
-                        onOpenSettings = { navController.navigate(Routes.SETTINGS) },
-                        onSessionExpired = signOut,
-                    )
+                    MoneyScreen(repository = repository, onSessionExpired = signOut)
                 }
 
                 composable(Routes.EXPENSES) {

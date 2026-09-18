@@ -19,6 +19,7 @@ Two new things this adds beyond what the website does:
 madeforu-app/
 ├── api/           PHP JSON API — upload beside config.php on the server
 ├── android/       Kotlin + Jetpack Compose app — open in Android Studio
+├── pwa/           the same system as a web app — for iPhones, and any browser
 ├── web-patch/     one function in save.php the website needs changed
 └── docs/          deploy, build and API reference
 ```
@@ -31,6 +32,8 @@ madeforu-app/
    `save.php` so the website can still edit a walk-in order.
 3. **[docs/BUILD-ANDROID.md](docs/BUILD-ANDROID.md)** — open `android/` in
    Android Studio and press Run.
+4. **[docs/DEPLOY-PWA.md](docs/DEPLOY-PWA.md)** — upload `pwa/` as `app/`
+   for the partner on an iPhone. Safari → Share → Add to Home Screen.
 
 Partners sign in with the **same phone and password as the website**. No
 new accounts, no separate password to forget.

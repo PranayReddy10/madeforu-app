@@ -7,6 +7,11 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.material3.ButtonDefaults
 import com.madeforu.sales.ui.theme.BrandGradient
+import androidx.compose.material.icons.filled.Payments
+import androidx.compose.material.icons.filled.Sell
+import androidx.compose.material.icons.filled.Storefront
+import androidx.compose.ui.text.style.TextOverflow
+import com.madeforu.sales.ui.components.IconTile
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -102,6 +107,9 @@ fun HomeScreen(
     onNewOrder: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenBills: () -> Unit,
+    onOpenExpenses: () -> Unit,
+    onOpenEvents: () -> Unit,
+    onOpenCatalog: () -> Unit,
     onSessionExpired: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -415,5 +423,79 @@ private fun greeting(): String {
         hour < 12 -> "Good morning"
         hour < 17 -> "Good afternoon"
         else -> "Good evening"
+    }
+}
+
+/**
+ * The things a partner opens between sales: expenses, events, the price
+ * list, the bill book and settings.
+ *
+ * These used to sit at the very bottom of the Money screen, which meant
+ * scrolling past every partner balance to reach the price list. They
+ * belong on the screen that opens first.
+ *
+ * Laid out as a grid of tiles rather than a stack of buttons: five full
+ * width buttons would push the revenue chart off the screen, and these are
+ * destinations rather than actions — a tile reads as a place to go.
+ */
+@Composable
+private fun QuickActions(
+    onExpenses: () -> Unit,
+    onEvents: () -> Unit,
+    onCatalog: () -> Unit,
+    onBills: () -> Unit,
+    onSettings: () -> Unit,
+) {
+    val actions = listOf(
+        QuickAction("Expenses", Icons.Filled.Payments, onExpenses),
+        QuickAction("Events & stalls", Icons.Filled.Storefront, onEvents),
+        QuickAction("Products & prices", Icons.Filled.Sell, onCatalog),
+        QuickAction("Bill book", Icons.Filled.ReceiptLong, onBills),
+        QuickAction("Settings", Icons.Filled.Settings, onSettings),
+    )
+
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        // Two per row, and the odd one out takes the full width rather
+        // than sitting next to a hole.
+        actions.chunked(2).forEach { pair ->
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                pair.forEach { action ->
+                    QuickActionTile(action, Modifier.weight(1f))
+                }
+                if (pair.size == 1) Spacer(Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+private data class QuickAction(
+    val label: String,
+    val icon: androidx.compose.ui.graphics.vector.ImageVector,
+    val onClick: () -> Unit,
+)
+
+@Composable
+private fun QuickActionTile(action: QuickAction, modifier: Modifier = Modifier) {
+    Card(
+        onClick = action.onClick,
+        modifier = modifier,
+        shape = RoundedCornerShape(20.dp),
+        colors = softCardColors(),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+    ) {
+        Row(
+            Modifier.fillMaxWidth().padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            IconTile(label = action.label, icon = action.icon, size = 38.dp)
+            Spacer(Modifier.width(10.dp))
+            Text(
+                action.label,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
     }
 }

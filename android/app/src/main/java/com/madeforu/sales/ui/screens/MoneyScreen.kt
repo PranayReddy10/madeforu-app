@@ -15,16 +15,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Category
-import androidx.compose.material.icons.filled.Event
-import androidx.compose.material.icons.filled.Payments
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -73,10 +68,6 @@ import kotlinx.coroutines.launch
 @Composable
 fun MoneyScreen(
     repository: Repository,
-    onOpenExpenses: () -> Unit,
-    onOpenEvents: () -> Unit,
-    onOpenCatalog: () -> Unit,
-    onOpenSettings: () -> Unit,
     onSessionExpired: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
@@ -378,17 +369,6 @@ fun MoneyScreen(
                     }
                 }
 
-                // ── Shortcuts ──────────────────────────────────────
-                item { SectionHeader("Manage") }
-                item {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        ManageButton("Expenses", Icons.Filled.Payments, onOpenExpenses)
-                        ManageButton("Events & stalls", Icons.Filled.Event, onOpenEvents)
-                        ManageButton("Products & prices", Icons.Filled.Category, onOpenCatalog)
-                        ManageButton("Settings", Icons.Filled.Settings, onOpenSettings)
-                    }
-                }
-
                 item { Spacer(Modifier.height(32.dp)) }
             }
         }
@@ -432,18 +412,5 @@ private fun PartnerCard(partner: PartnerFinance) {
                 valueColor = if (partner.balance < -0.5) negativeColor() else null,
             )
         }
-    }
-}
-
-@Composable
-private fun ManageButton(
-    label: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    onClick: () -> Unit,
-) {
-    OutlinedButton(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
-        Icon(icon, contentDescription = null)
-        Spacer(Modifier.width(10.dp))
-        Text(label, modifier = Modifier.weight(1f))
     }
 }
