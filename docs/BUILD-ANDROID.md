@@ -27,10 +27,38 @@ cd android
 ./gradlew installDebug           # straight onto a connected phone
 ```
 
-The Gradle wrapper is not committed (it is a binary). Android Studio
-generates it on first open; from the command line run `gradle wrapper`
-once if you have Gradle installed, or use the IDE's terminal, which has
-the wrapper on its path.
+## The Gradle version is pinned — use the wrapper
+
+`gradle/wrapper/gradle-wrapper.properties` pins **Gradle 8.11.1**, and the
+wrapper downloads exactly that on first run, checking it against the
+SHA-256 recorded beside it.
+
+Always run `./gradlew`, never a `gradle` on your PATH. Without the wrapper
+the build uses whatever version happens to be installed, and a mismatched
+one produces noise like:
+
+```
+Deprecated Gradle features were used in this build, making it
+incompatible with Gradle 10.0.
+```
+
+That message is a **warning, not an error** — the build still succeeds.
+It appears when a pre-release Gradle (a 9.x milestone) runs Android Gradle
+Plugin 8.7.3, which still calls APIs Gradle 9 has deprecated. The
+deprecations are inside AGP, so there is nothing in this project to fix;
+the answer is to run the version AGP supports, which is what the wrapper
+now guarantees.
+
+If you want to see which features a build is complaining about:
+
+```bash
+./gradlew assembleDebug --warning-mode all
+```
+
+Gradle and AGP move as a pair. When you bump one in
+`gradle/libs.versions.toml`, bump the other in the wrapper properties to a
+version its release notes list as supported — AGP 8.7 requires Gradle 8.9
+or newer.
 
 ## Pointing it at your server
 
