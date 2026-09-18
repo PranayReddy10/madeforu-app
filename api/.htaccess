@@ -1,0 +1,21 @@
+# The Authorization header is the app's entire authentication. Hostinger
+# runs PHP through CGI/FastCGI, which drops that header before PHP sees it,
+# so re-inject it here. Without this every request would look unsigned and
+# the app would loop back to the login screen.
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteCond %{HTTP:Authorization} ^(.+)$
+  RewriteRule .* - [E=HTTP_AUTHORIZATION:%1]
+</IfModule>
+<IfModule mod_setenvif.c>
+  SetEnvIf Authorization "(.*)" HTTP_AUTHORIZATION=$1
+</IfModule>
+
+# The API answers in JSON; there is nothing here to index or list.
+Options -Indexes
+
+# Everything below the API is served by PHP only. A file uploaded into this
+# folder by accident should never execute as anything else.
+<FilesMatch "\.(sql|md|log)$">
+  Require all denied
+</FilesMatch>
