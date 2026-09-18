@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- Generated bills live in the cache: they are always reproducible
+         from the server, so there is nothing to lose if Android reclaims
+         the space. -->
+    <cache-path name="bills" path="bills/" />
+</paths>

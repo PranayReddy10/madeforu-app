@@ -1,0 +1,366 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+
+package com.madeforu.sales.ui.screens
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.dp
+import com.madeforu.sales.core.ApiResult
+import com.madeforu.sales.core.Money
+import com.madeforu.sales.core.isAuthFailure
+import com.madeforu.sales.data.Product
+import com.madeforu.sales.data.Repository
+import com.madeforu.sales.ui.components.ErrorBanner
+import com.madeforu.sales.ui.components.LoadingBox
+import com.madeforu.sales.ui.components.Pill
+import com.madeforu.sales.ui.theme.positiveColor
+import kotlinx.coroutines.launch
+
+/**
+ * Products: prices, costs and what is on the menu.
+ *
+ * Renaming and deleting are not here on purpose. The database joins these
+ * items by NAME across seven tables, so a rename has to propagate through
+ * all of them in one transaction — work that belongs on the website's
+ * products page, not on a phone in a noisy stall. Everything safe (add,
+ * reprice, recost, hide) is here.
+ */
+@Composable
+fun CatalogScreen(
+    repository: Repository,
+    onBack: () -> Unit,
+    onSessionExpired: () -> Unit,
+) {
+    val scope = rememberCoroutineScope()
+
+    var products by remember { mutableStateOf<List<Product>>(emptyList()) }
+    var loading by remember { mutableStateOf(true) }
+    var busy by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var editing by remember { mutableStateOf<Product?>(null) }
+    var showAdd by remember { mutableStateOf(false) }
+
+    fun load() {
+        scope.launch {
+            when (val result = repository.products(includeHidden = true)) {
+                is ApiResult.Success -> { products = result.value; error = null }
+                is ApiResult.Failure ->
+                    if (result.isAuthFailure()) onSessionExpired() else error = result.message
+            }
+            loading = false
+        }
+    }
+
+    LaunchedEffect(Unit) { load() }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Products & prices") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+            )
+        },
+        floatingActionButton = {
+            ExtendedFloatingActionButton(
+                onClick = { showAdd = true },
+                icon = { Icon(Icons.Filled.Add, contentDescription = null) },
+                text = { Text("New product") },
+            )
+        },
+    ) { padding ->
+        if (loading) {
+            LoadingBox(Modifier.padding(padding))
+            return@Scaffold
+        }
+
+        LazyColumn(
+            modifier = Modifier.fillMaxSize().padding(padding),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 96.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            item { ErrorBanner(error, onRetry = { load() }) }
+
+            items(products.size) { index ->
+                val product = products[index]
+                Card(
+                    onClick = { editing = product },
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(
+                            alpha = if (product.isActive) 0.32f else 0.15f,
+                        ),
+                    ),
+                ) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    product.name,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = if (product.isActive) MaterialTheme.colorScheme.onSurface
+                                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                if (!product.isActive) {
+                                    Spacer(Modifier.width(8.dp))
+                                    Pill("Hidden", MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                            Text(
+                                "Costs " + Money.full(product.unitCost) +
+                                    (product.marginPct?.let { "  ·  $it% margin" } ?: ""),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text(
+                                Money.full(product.price),
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                            )
+                            Text(
+                                "+" + Money.short(product.margin),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = positiveColor(),
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    editing?.let { product ->
+        EditProductSheet(
+            product = product,
+            busy = busy,
+            onDismiss = { editing = null },
+            onSave = { price, cost, active ->
+                editing = null
+                busy = true
+                scope.launch {
+                    val result = repository.updateProduct(product.id, price, cost, active)
+                    when (result) {
+                        is ApiResult.Success -> products = result.value
+                        is ApiResult.Failure -> error = result.message
+                    }
+                    busy = false
+                }
+            },
+        )
+    }
+
+    if (showAdd) {
+        AddProductSheet(
+            busy = busy,
+            onDismiss = { showAdd = false },
+            onSave = { name, price, cost ->
+                showAdd = false
+                busy = true
+                scope.launch {
+                    when (val result = repository.addProduct(name, price, cost)) {
+                        is ApiResult.Success -> products = result.value
+                        is ApiResult.Failure -> error = result.message
+                    }
+                    busy = false
+                }
+            },
+        )
+    }
+}
+
+@Composable
+private fun EditProductSheet(
+    product: Product,
+    busy: Boolean,
+    onDismiss: () -> Unit,
+    onSave: (Double, Double, Boolean) -> Unit,
+) {
+    val sheetState = rememberModalBottomSheetState()
+    var priceText by remember { mutableStateOf(numberText(product.price)) }
+    var costText by remember { mutableStateOf(numberText(product.unitCost)) }
+    var active by remember { mutableStateOf(product.isActive) }
+
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+        Column(
+            Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(product.name, style = MaterialTheme.typography.titleLarge)
+            Text(
+                "Changing the price affects new orders only. Orders already taken keep " +
+                    "the price they were billed at.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            Row {
+                OutlinedTextField(
+                    value = priceText,
+                    onValueChange = { priceText = it.filter { c -> c.isDigit() || c == '.' } },
+                    label = { Text("Selling price") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    modifier = Modifier.weight(1f),
+                )
+                Spacer(Modifier.width(8.dp))
+                OutlinedTextField(
+                    value = costText,
+                    onValueChange = { costText = it.filter { c -> c.isDigit() || c == '.' } },
+                    label = { Text("Unit cost") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    modifier = Modifier.weight(1f),
+                )
+            }
+
+            val price = priceText.toDoubleOrNull() ?: 0.0
+            val cost = costText.toDoubleOrNull() ?: 0.0
+            Text(
+                "Margin: " + Money.full(price - cost) +
+                    if (price > 0) "  (${((price - cost) / price * 100).toInt()}%)" else "",
+                style = MaterialTheme.typography.bodyMedium,
+                color = positiveColor(),
+            )
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Switch(checked = active, onCheckedChange = { active = it })
+                Spacer(Modifier.width(12.dp))
+                Column {
+                    Text("Show on the order screen")
+                    Text(
+                        "Hiding keeps every past order intact; it only takes the item off the list.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+
+            Button(
+                onClick = { onSave(price, cost, active) },
+                enabled = !busy && price >= 0,
+                modifier = Modifier.fillMaxWidth().height(50.dp),
+            ) { Text("Save") }
+            Spacer(Modifier.height(24.dp))
+        }
+    }
+}
+
+@Composable
+private fun AddProductSheet(
+    busy: Boolean,
+    onDismiss: () -> Unit,
+    onSave: (String, Double, Double) -> Unit,
+) {
+    val sheetState = rememberModalBottomSheetState()
+    var name by remember { mutableStateOf("") }
+    var priceText by remember { mutableStateOf("") }
+    var costText by remember { mutableStateOf("") }
+
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+        Column(
+            Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text("New product", style = MaterialTheme.typography.titleLarge)
+            Text(
+                "Pick the name carefully: costs, stock and past orders are all matched " +
+                    "by name, so renaming later is a job for the website.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            OutlinedTextField(
+                value = name,
+                onValueChange = { name = it },
+                label = { Text("Name") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Row {
+                OutlinedTextField(
+                    value = priceText,
+                    onValueChange = { priceText = it.filter { c -> c.isDigit() || c == '.' } },
+                    label = { Text("Selling price") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    modifier = Modifier.weight(1f),
+                )
+                Spacer(Modifier.width(8.dp))
+                OutlinedTextField(
+                    value = costText,
+                    onValueChange = { costText = it.filter { c -> c.isDigit() || c == '.' } },
+                    label = { Text("Unit cost") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    modifier = Modifier.weight(1f),
+                )
+            }
+
+            Button(
+                onClick = {
+                    onSave(
+                        name.trim(),
+                        priceText.toDoubleOrNull() ?: 0.0,
+                        costText.toDoubleOrNull() ?: 0.0,
+                    )
+                },
+                enabled = !busy && name.isNotBlank() && (priceText.toDoubleOrNull() ?: -1.0) >= 0,
+                modifier = Modifier.fillMaxWidth().height(50.dp),
+            ) { Text("Add product") }
+            TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) { Text("Cancel") }
+            Spacer(Modifier.height(24.dp))
+        }
+    }
+}
+
+private fun numberText(value: Double): String =
+    if (value == value.toLong().toDouble()) value.toLong().toString()
+    else String.format(java.util.Locale.US, "%.2f", value)

@@ -1,0 +1,425 @@
+package com.madeforu.sales.data
+
+import com.madeforu.sales.core.ApiResult
+import com.madeforu.sales.core.Prefs
+import com.madeforu.sales.core.map
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+
+/**
+ * Typed wrapper over the API. Screens call these; nothing above this layer
+ * knows an endpoint name or a query parameter.
+ */
+class Repository(private val api: ApiClient, private val prefs: Prefs) {
+
+    // ── Session ────────────────────────────────────────────────────
+
+    suspend fun login(phone: String, password: String, device: String): ApiResult<Admin> {
+        val result = api.post(
+            "auth.php", "login",
+            ApiClient.body {
+                put("phone", JsonPrimitive(phone))
+                put("password", JsonPrimitive(password))
+                put("device", JsonPrimitive(device))
+            },
+        )
+        return when (result) {
+            is ApiResult.Failure -> result
+            is ApiResult.Success -> {
+                val parsed: LoginResponse = api.decode(result.value)
+                prefs.saveSession(parsed.token, parsed.admin.name, parsed.admin.phone)
+                ApiResult.Success(parsed.admin)
+            }
+        }
+    }
+
+    /**
+     * Ends the session locally whatever the server says. A token the app
+     * has thrown away cannot be used from this phone, and refusing to sign
+     * out because the network is down would be absurd.
+     */
+    suspend fun logout() {
+        api.post("auth.php", "logout")
+        prefs.clearSession()
+    }
+
+    suspend fun clearSessionLocally() = prefs.clearSession()
+
+    suspend fun ping(): ApiResult<Unit> = api.get("auth.php", "ping").map { }
+
+    suspend fun changePassword(current: String, new: String): ApiResult<String> =
+        api.post(
+            "auth.php", "change_password",
+            ApiClient.body {
+                put("current_password", JsonPrimitive(current))
+                put("new_password", JsonPrimitive(new))
+            },
+        ).map { api.decode<SimpleMessage>(it).message }
+
+    // ── Catalogue ──────────────────────────────────────────────────
+
+    suspend fun bootstrap(): ApiResult<Bootstrap> =
+        api.get("catalog.php", "bootstrap").map { api.decode<Bootstrap>(it) }
+
+    suspend fun products(includeHidden: Boolean = false): ApiResult<List<Product>> =
+        api.get("catalog.php", "products", mapOf("include_hidden" to includeHidden.toString()))
+            .map { api.decode<ProductsResponse>(it).products }
+
+    suspend fun addProduct(name: String, price: Double, unitCost: Double): ApiResult<List<Product>> =
+        api.post(
+            "catalog.php", "add_product",
+            ApiClient.body {
+                put("name", JsonPrimitive(name))
+                put("price", JsonPrimitive(price))
+                put("unit_cost", JsonPrimitive(unitCost))
+            },
+        ).map { api.decode<ProductsResponse>(it).products }
+
+    suspend fun updateProduct(
+        id: Int,
+        price: Double? = null,
+        unitCost: Double? = null,
+        isActive: Boolean? = null,
+    ): ApiResult<List<Product>> =
+        api.post(
+            "catalog.php", "update_product",
+            ApiClient.body {
+                put("id", JsonPrimitive(id))
+                price?.let { put("price", JsonPrimitive(it)) }
+                unitCost?.let { put("unit_cost", JsonPrimitive(it)) }
+                isActive?.let { put("is_active", JsonPrimitive(it)) }
+            },
+        ).map { api.decode<ProductsResponse>(it).products }
+
+    suspend fun events(activeOnly: Boolean = false): ApiResult<List<Event>> =
+        api.get("catalog.php", "events", mapOf("active_only" to activeOnly.toString()))
+            .map { api.decode<EventsResponse>(it).events }
+
+    suspend fun addEvent(
+        name: String,
+        isPaid: Boolean,
+        entryCost: Double,
+        startDate: String,
+        endDate: String,
+        notes: String,
+    ): ApiResult<List<Event>> =
+        api.post(
+            "catalog.php", "add_event",
+            ApiClient.body {
+                put("name", JsonPrimitive(name))
+                put("is_paid", JsonPrimitive(isPaid))
+                put("entry_cost", JsonPrimitive(entryCost))
+                put("start_date", JsonPrimitive(startDate))
+                put("end_date", JsonPrimitive(endDate))
+                put("notes", JsonPrimitive(notes))
+            },
+        ).map { api.decode<EventsResponse>(it).events }
+
+    suspend fun setEventActive(id: Int, active: Boolean): ApiResult<List<Event>> =
+        api.post(
+            "catalog.php", "set_event_active",
+            ApiClient.body {
+                put("id", JsonPrimitive(id))
+                put("is_active", JsonPrimitive(active))
+            },
+        ).map { api.decode<EventsResponse>(it).events }
+
+    suspend fun saveSettings(values: Map<String, String>): ApiResult<Settings> =
+        api.post(
+            "catalog.php", "save_settings",
+            ApiClient.body { values.forEach { (k, v) -> put(k, JsonPrimitive(v)) } },
+        ).map { api.decode<SettingsResponse>(it).settings }
+
+    // ── Orders ─────────────────────────────────────────────────────
+
+    suspend fun orders(
+        query: String = "",
+        payFilter: String = "all",
+        statusFilter: String = "all",
+        event: String = "all",
+        from: String = "",
+        to: String = "",
+        limit: Int = 40,
+        offset: Int = 0,
+    ): ApiResult<OrderListResponse> =
+        api.get(
+            "orders.php", "list",
+            mapOf(
+                "q" to query,
+                "pay" to payFilter,
+                "status" to statusFilter,
+                "event" to event,
+                "from" to from,
+                "to" to to,
+                "limit" to limit.toString(),
+                "offset" to offset.toString(),
+            ),
+        ).map { api.decode<OrderListResponse>(it) }
+
+    suspend fun order(id: Int): ApiResult<Order> =
+        api.get("orders.php", "get", mapOf("id" to id.toString()))
+            .map { api.decode<OrderResponse>(it).order }
+
+    /**
+     * Create an order. Name and phone are both optional — leaving them out
+     * is what makes this a walk-in sale, which is the fast path at a stall.
+     */
+    suspend fun createOrder(draft: OrderDraft): ApiResult<OrderResponse> =
+        api.post("orders.php", "create", draft.toBody()).map { api.decode<OrderResponse>(it) }
+
+    suspend fun updateOrder(id: Int, draft: OrderDraft): ApiResult<OrderResponse> =
+        api.post(
+            "orders.php", "update",
+            JsonObject(draft.toBody().toMutableMap().apply { put("id", JsonPrimitive(id)) }),
+        ).map { api.decode<OrderResponse>(it) }
+
+    suspend fun addPayment(id: Int, amount: Double, mode: String, note: String): ApiResult<OrderResponse> =
+        api.post(
+            "orders.php", "add_payment",
+            ApiClient.body {
+                put("id", JsonPrimitive(id))
+                put("amount", JsonPrimitive(amount))
+                put("payment_mode", JsonPrimitive(mode))
+                put("note", JsonPrimitive(note))
+            },
+        ).map { api.decode<OrderResponse>(it) }
+
+    suspend fun deletePayment(orderId: Int, paymentId: Int): ApiResult<OrderResponse> =
+        api.post(
+            "orders.php", "delete_payment",
+            ApiClient.body {
+                put("id", JsonPrimitive(orderId))
+                put("payment_id", JsonPrimitive(paymentId))
+            },
+        ).map { api.decode<OrderResponse>(it) }
+
+    suspend fun toggle(id: Int, field: String): ApiResult<OrderResponse> =
+        api.post(
+            "orders.php", "toggle",
+            ApiClient.body {
+                put("id", JsonPrimitive(id))
+                put("field", JsonPrimitive(field))
+            },
+        ).map { api.decode<OrderResponse>(it) }
+
+    suspend fun dispatch(id: Int, awb: String, date: String): ApiResult<OrderResponse> =
+        api.post(
+            "orders.php", "dispatch",
+            ApiClient.body {
+                put("id", JsonPrimitive(id))
+                // An empty AWB with is_online false is how the server is
+                // told to clear a dispatch entirely.
+                put("is_online", JsonPrimitive(awb.isNotBlank()))
+                put("awb", JsonPrimitive(awb))
+                put("dispatch_date", JsonPrimitive(date))
+            },
+        ).map { api.decode<OrderResponse>(it) }
+
+    suspend fun deleteOrder(id: Int): ApiResult<String> =
+        api.post("orders.php", "delete", ApiClient.body { put("id", JsonPrimitive(id)) })
+            .map { api.decode<SimpleMessage>(it).message }
+
+    // ── Bills ──────────────────────────────────────────────────────
+
+    suspend fun bill(orderId: Int): ApiResult<Bill> =
+        api.get("bills.php", "get", mapOf("order_id" to orderId.toString()))
+            .map { api.decode<BillResponse>(it).bill }
+
+    /** Re-snapshot a bill after the order changed; bumps its revision. */
+    suspend fun reissueBill(orderId: Int): ApiResult<Bill> =
+        api.post(
+            "bills.php", "issue",
+            ApiClient.body {
+                put("order_id", JsonPrimitive(orderId))
+                put("refresh", JsonPrimitive(true))
+            },
+        ).map { api.decode<BillResponse>(it).bill }
+
+    suspend fun bills(limit: Int = 50, offset: Int = 0): ApiResult<BillListResponse> =
+        api.get("bills.php", "list", mapOf("limit" to limit.toString(), "offset" to offset.toString()))
+            .map { api.decode<BillListResponse>(it) }
+
+    suspend fun billUrl(orderId: Int, thermal: Boolean = false): String = api.billUrl(orderId, thermal)
+
+    // ── Statistics ─────────────────────────────────────────────────
+
+    suspend fun dashboard(from: String, to: String, event: String = "all"): ApiResult<Dashboard> =
+        api.get("stats.php", "dashboard", mapOf("from" to from, "to" to to, "event" to event))
+            .map { api.decode<Dashboard>(it) }
+
+    suspend fun series(from: String, to: String, bucket: String, event: String = "all"): ApiResult<SeriesResponse> =
+        api.get(
+            "stats.php", "series",
+            mapOf("from" to from, "to" to to, "bucket" to bucket, "event" to event),
+        ).map { api.decode<SeriesResponse>(it) }
+
+    suspend fun breakdown(from: String, to: String, event: String = "all"): ApiResult<Breakdown> =
+        api.get("stats.php", "breakdown", mapOf("from" to from, "to" to to, "event" to event))
+            .map { api.decode<Breakdown>(it) }
+
+    // ── Finance ────────────────────────────────────────────────────
+
+    suspend fun financeOverview(): ApiResult<FinanceOverview> =
+        api.get("finance.php", "overview").map { api.decode<FinanceOverview>(it) }
+
+    suspend fun movements(partnerId: Int = 0, from: String = "", to: String = ""): ApiResult<MovementsResponse> =
+        api.get(
+            "finance.php", "movements",
+            mapOf("partner_id" to partnerId.toString(), "from" to from, "to" to to),
+        ).map { api.decode<MovementsResponse>(it) }
+
+    suspend fun addMovement(
+        partnerId: Int,
+        direction: String,
+        amount: Double,
+        date: String,
+        source: String,
+        note: String,
+    ): ApiResult<String> =
+        api.post(
+            "finance.php", "add_movement",
+            ApiClient.body {
+                put("partner_id", JsonPrimitive(partnerId))
+                put("direction", JsonPrimitive(direction))
+                put("amount", JsonPrimitive(amount))
+                put("mov_date", JsonPrimitive(date))
+                put("source", JsonPrimitive(source))
+                put("note", JsonPrimitive(note))
+            },
+        ).map { api.decode<SimpleMessage>(it).message }
+
+    suspend fun creditOffline(partnerId: Int, from: String, to: String): ApiResult<String> =
+        api.post(
+            "finance.php", "credit_offline",
+            ApiClient.body {
+                put("partner_id", JsonPrimitive(partnerId))
+                put("from", JsonPrimitive(from))
+                put("to", JsonPrimitive(to))
+            },
+        ).map { api.decode<SimpleMessage>(it).message }
+
+    suspend fun creditEvent(eventId: Int, partnerId: Int): ApiResult<String> =
+        api.post(
+            "finance.php", "credit_event",
+            ApiClient.body {
+                put("event_id", JsonPrimitive(eventId))
+                put("partner_id", JsonPrimitive(partnerId))
+            },
+        ).map { api.decode<SimpleMessage>(it).message }
+
+    suspend fun settle(fromId: Int, toId: Int, amount: Double, note: String): ApiResult<String> =
+        api.post(
+            "finance.php", "settle",
+            ApiClient.body {
+                put("from_partner_id", JsonPrimitive(fromId))
+                put("to_partner_id", JsonPrimitive(toId))
+                put("amount", JsonPrimitive(amount))
+                put("note", JsonPrimitive(note))
+            },
+        ).map { api.decode<SimpleMessage>(it).message }
+
+    // ── Expenses ───────────────────────────────────────────────────
+
+    suspend fun expenses(from: String, to: String, category: String = "all", query: String = ""): ApiResult<ExpenseListResponse> =
+        api.get(
+            "expenses.php", "list",
+            mapOf("from" to from, "to" to to, "category" to category, "q" to query),
+        ).map { api.decode<ExpenseListResponse>(it) }
+
+    suspend fun addExpense(
+        date: String,
+        item: String,
+        amount: Double,
+        discount: Double,
+        paidBy: Int,
+        category: String,
+        paidTo: String,
+        details: String,
+    ): ApiResult<String> =
+        api.post(
+            "expenses.php", "create",
+            ApiClient.body {
+                put("exp_date", JsonPrimitive(date))
+                put("item", JsonPrimitive(item))
+                put("amount", JsonPrimitive(amount))
+                put("discount", JsonPrimitive(discount))
+                put("paid_by", JsonPrimitive(paidBy))
+                put("category", JsonPrimitive(category))
+                put("paid_to", JsonPrimitive(paidTo))
+                put("details", JsonPrimitive(details))
+            },
+        ).map { api.decode<SimpleMessage>(it).message }
+
+    suspend fun deleteExpense(id: Int): ApiResult<String> =
+        api.post("expenses.php", "delete", ApiClient.body { put("id", JsonPrimitive(id)) })
+            .map { api.decode<SimpleMessage>(it).message }
+}
+
+/** One line on an order being composed. */
+data class DraftLine(val item: String, val price: Double, val quantity: Int)
+
+/**
+ * An order as the app builds it, before the server assigns a number and
+ * recomputes the money. Prices here are only for the running total shown
+ * on screen; the server re-reads every price from the catalogue, so a
+ * stale price in the app cannot change what a customer is charged.
+ */
+data class OrderDraft(
+    val name: String = "",
+    val phone: String = "",
+    val notes: String = "",
+    val eventId: Int? = null,
+    val lines: List<DraftLine> = emptyList(),
+    val extraCharge: Double = 0.0,
+    val extraChargeReason: String = "",
+    val discount: Double = 0.0,
+    val discountReason: String = "",
+    val paidAmount: Double = 0.0,
+    val paymentMode: String = "cash",
+    val isReady: Boolean = false,
+    val isDelivered: Boolean = false,
+    val awb: String = "",
+    val dispatchDate: String = "",
+) {
+    val subtotal: Double get() = lines.sumOf { it.price * it.quantity }
+
+    /** What the server will charge: subtotal + extra, less the discount, floored at zero. */
+    val total: Double get() = (subtotal + extraCharge - discount).coerceAtLeast(0.0)
+
+    val balance: Double get() = (total - paidAmount).coerceAtLeast(0.0)
+
+    val isWalkIn: Boolean get() = name.isBlank() && phone.isBlank()
+
+    fun toBody(): JsonObject {
+        val map = LinkedHashMap<String, JsonElement>()
+        map["name"] = JsonPrimitive(name)
+        map["phone"] = JsonPrimitive(phone)
+        map["notes"] = JsonPrimitive(notes)
+        if (eventId != null) map["event_id"] = JsonPrimitive(eventId)
+        map["items"] = kotlinx.serialization.json.JsonArray(
+            lines.map { line ->
+                JsonObject(
+                    mapOf(
+                        "item" to JsonPrimitive(line.item),
+                        "quantity" to JsonPrimitive(line.quantity),
+                    ),
+                )
+            },
+        )
+        map["extra_charge"] = JsonPrimitive(extraCharge)
+        map["extra_charge_reason"] = JsonPrimitive(extraChargeReason)
+        map["discount"] = JsonPrimitive(discount)
+        map["discount_reason"] = JsonPrimitive(discountReason)
+        map["paid_amount"] = JsonPrimitive(paidAmount)
+        map["payment_mode"] = JsonPrimitive(paymentMode)
+        map["is_ready"] = JsonPrimitive(isReady)
+        map["is_delivered"] = JsonPrimitive(isDelivered)
+        if (awb.isNotBlank()) {
+            map["is_online"] = JsonPrimitive(true)
+            map["awb"] = JsonPrimitive(awb)
+            map["dispatch_date"] = JsonPrimitive(dispatchDate)
+        }
+        return JsonObject(map)
+    }
+}
