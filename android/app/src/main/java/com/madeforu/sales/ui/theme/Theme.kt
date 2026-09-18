@@ -28,39 +28,49 @@ import androidx.core.view.WindowCompat
  * The same three colours mean the same three things on every screen, so a
  * partner learns them once.
  */
-private val BrandLight = Color(0xFF6B2FE0)
-private val BrandDark = Color(0xFFCBB2FF)
+/**
+ * The MadeForU palette, taken from the logo: the rose of the gift mark and
+ * the navy of the wordmark. Sampled from the artwork rather than guessed,
+ * so the app, the bills and the printed logo are the same two colours.
+ */
+private val Rose = Color(0xFFF54A77)          // the gift box and "foru"
+private val RoseDeep = Color(0xFFC81F52)      // pressed states, text on light rose
+private val RoseSoft = Color(0xFFFFD9E2)      // containers in light mode
+private val Navy = Color(0xFF202946)          // the "made" wordmark
 
-val PositiveLight = Color(0xFF166534)
+val PositiveLight = Color(0xFF127A4B)
 val PositiveDark = Color(0xFF6EE7A8)
 val NegativeLight = Color(0xFFB3261E)
 val NegativeDark = Color(0xFFFFB4AB)
 val WarnLight = Color(0xFF9A6300)
 val WarnDark = Color(0xFFFFC96B)
 
+/** The hero gradient: the logo's rose falling into its navy. */
+val BrandGradient = listOf(Rose, Color(0xFF8E2C63), Navy)
+
 private val LightColors = lightColorScheme(
-    primary = BrandLight,
+    primary = Rose,
     onPrimary = Color.White,
-    primaryContainer = Color(0xFFEADDFF),
-    onPrimaryContainer = Color(0xFF23005C),
-    secondary = Color(0xFF00696E),
+    primaryContainer = RoseSoft,
+    onPrimaryContainer = Color(0xFF3E0018),
+    secondary = Navy,
     onSecondary = Color.White,
-    secondaryContainer = Color(0xFF9EF0F6),
-    onSecondaryContainer = Color(0xFF002022),
-    tertiary = Color(0xFF984061),
+    secondaryContainer = Color(0xFFDCE2F2),
+    onSecondaryContainer = Color(0xFF111A30),
+    tertiary = Color(0xFF00696E),
     onTertiary = Color.White,
-    tertiaryContainer = Color(0xFFFFD9E2),
-    onTertiaryContainer = Color(0xFF3E001D),
-    // The background is a shade cooler than the cards on purpose: a white
-    // card on a white page has to be drawn with a border to read as a
-    // card, and borders everywhere make a screen look like a form.
-    background = Color(0xFFF3F3F7),
-    onBackground = Color(0xFF1C1B1F),
-    surface = Color(0xFFFFFFFF),
-    onSurface = Color(0xFF1C1B1F),
-    surfaceVariant = Color(0xFFE7E0EB),
-    onSurfaceVariant = Color(0xFF49454E),
-    outline = Color(0xFF7A757F),
+    tertiaryContainer = Color(0xFF9EF0F6),
+    onTertiaryContainer = Color(0xFF002022),
+    // A shade cooler than the cards: a white card on a white page has to be
+    // drawn with a border to read as a card, and borders everywhere make a
+    // screen look like a form.
+    background = Color(0xFFF6F4F7),
+    onBackground = Navy,
+    surface = Color.White,
+    onSurface = Navy,
+    surfaceVariant = Color(0xFFEDE7EC),
+    onSurfaceVariant = Color(0xFF5B5560),
+    outline = Color(0xFF8C8490),
     error = NegativeLight,
     onError = Color.White,
     errorContainer = Color(0xFFFFDAD6),
@@ -68,25 +78,25 @@ private val LightColors = lightColorScheme(
 )
 
 private val DarkColors = darkColorScheme(
-    primary = BrandDark,
-    onPrimary = Color(0xFF3A0094),
-    primaryContainer = Color(0xFF5218CC),
-    onPrimaryContainer = Color(0xFFEADDFF),
-    secondary = Color(0xFF82D3D9),
-    onSecondary = Color(0xFF00363A),
-    secondaryContainer = Color(0xFF004F53),
-    onSecondaryContainer = Color(0xFF9EF0F6),
-    tertiary = Color(0xFFFFB0C8),
-    onTertiary = Color(0xFF5E1133),
-    tertiaryContainer = Color(0xFF7B2949),
-    onTertiaryContainer = Color(0xFFFFD9E2),
-    background = Color(0xFF0F0E13),
+    primary = Color(0xFFFF9DB6),
+    onPrimary = Color(0xFF5E1133),
+    primaryContainer = RoseDeep,
+    onPrimaryContainer = Color(0xFFFFD9E2),
+    secondary = Color(0xFFB6C4E8),
+    onSecondary = Color(0xFF1F2A44),
+    secondaryContainer = Color(0xFF2E3A5C),
+    onSecondaryContainer = Color(0xFFDCE2F2),
+    tertiary = Color(0xFF82D3D9),
+    onTertiary = Color(0xFF00363A),
+    tertiaryContainer = Color(0xFF004F53),
+    onTertiaryContainer = Color(0xFF9EF0F6),
+    background = Color(0xFF12151F),
     onBackground = Color(0xFFE6E1E6),
-    surface = Color(0xFF1A1820),
+    surface = Color(0xFF1B1F2C),
     onSurface = Color(0xFFE6E1E6),
-    surfaceVariant = Color(0xFF49454E),
-    onSurfaceVariant = Color(0xFFCAC4CF),
-    outline = Color(0xFF948F99),
+    surfaceVariant = Color(0xFF3A3F4E),
+    onSurfaceVariant = Color(0xFFC6C2CC),
+    outline = Color(0xFF8F8A96),
     error = NegativeDark,
     onError = Color(0xFF690005),
     errorContainer = Color(0xFF93000A),

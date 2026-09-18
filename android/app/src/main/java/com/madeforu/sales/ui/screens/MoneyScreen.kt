@@ -29,6 +29,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -109,7 +110,12 @@ fun MoneyScreen(
     LaunchedEffect(Unit) { refresh() }
 
     Column(Modifier.fillMaxSize()) {
-        TopAppBar(title = { Text("Money") })
+        TopAppBar(
+            title = { Text("Money") },
+            colors = TopAppBarDefaults.topAppBarColors(
+                containerColor = MaterialTheme.colorScheme.background,
+            ),
+        )
 
         val data = overview
         if (loading && data == null) {

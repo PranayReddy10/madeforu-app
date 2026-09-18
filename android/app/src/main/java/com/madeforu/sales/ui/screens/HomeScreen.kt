@@ -2,6 +2,11 @@
 
 package com.madeforu.sales.ui.screens
 
+import androidx.compose.foundation.background
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.material3.ButtonDefaults
+import com.madeforu.sales.ui.theme.BrandGradient
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -27,6 +32,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -134,6 +140,9 @@ fun HomeScreen(
 
     Column(Modifier.fillMaxWidth()) {
         TopAppBar(
+            colors = TopAppBarDefaults.topAppBarColors(
+                containerColor = MaterialTheme.colorScheme.background,
+            ),
             title = {
                 Column {
                     Text(
@@ -303,15 +312,26 @@ fun HomeScreen(
     }
 }
 
+/**
+ * The day's takings, on the brand gradient.
+ *
+ * This is the first thing anyone opens the app to see, so it gets the
+ * colour and the biggest number on the screen. White text throughout
+ * because the gradient's mid-point is dark enough that theme colours
+ * would wash out against it.
+ */
 @Composable
 private fun TodayCard(data: Dashboard, onNewOrder: () -> Unit) {
     Card(
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer,
-        ),
+        shape = RoundedCornerShape(26.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
     ) {
-        Column(Modifier.padding(20.dp)) {
+        Column(
+            Modifier
+                .background(Brush.linearGradient(BrandGradient))
+                .padding(22.dp),
+        ) {
             Row(
                 Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -320,28 +340,31 @@ private fun TodayCard(data: Dashboard, onNewOrder: () -> Unit) {
                 Text(
                     "TODAY",
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    color = Color.White.copy(alpha = 0.8f),
                 )
-                Pill("${data.today.orders} orders", MaterialTheme.colorScheme.onPrimaryContainer)
+                Pill("${data.today.orders} orders", Color.White)
             }
             Spacer(Modifier.height(8.dp))
             Text(
                 Money.full(data.today.revenue),
                 style = MaterialTheme.typography.displaySmall,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                color = Color.White,
             )
             Text(
                 Money.short(data.today.collected) + " collected · " +
                     Money.short(data.today.productProfit) + " profit",
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                color = Color.White.copy(alpha = 0.85f),
             )
             Spacer(Modifier.height(10.dp))
-            TextButton(onClick = onNewOrder) {
+            TextButton(
+                onClick = onNewOrder,
+                colors = ButtonDefaults.textButtonColors(contentColor = Color.White),
+            ) {
                 Icon(Icons.Filled.Add, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
-                Text("New sale")
+                Text("New sale", fontWeight = FontWeight.SemiBold)
             }
         }
     }

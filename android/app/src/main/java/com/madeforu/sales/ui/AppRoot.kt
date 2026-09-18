@@ -3,6 +3,7 @@ package com.madeforu.sales.ui
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddCircle
@@ -101,6 +102,11 @@ fun AppRoot(signedIn: Boolean) {
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
+        // Insets are the inner screens' job: each one has its own
+        // Scaffold or TopAppBar, which already handles the status bar.
+        // Letting this Scaffold handle them too applied the same padding
+        // twice and left a blank strip above every app bar.
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         snackbarHost = { SnackbarHost(snackbarHostState) },
         bottomBar = {
             AnimatedVisibility(visible = showBottomBar) {
@@ -149,7 +155,9 @@ fun AppRoot(signedIn: Boolean) {
             }
         },
     ) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding)) {
+        // Only the bottom: that is the space the navigation bar occupies,
+        // and it is this Scaffold that draws it.
+        Box(Modifier.fillMaxSize().padding(bottom = padding.calculateBottomPadding())) {
             NavHost(
                 navController = navController,
                 startDestination = if (signedIn) Routes.HOME else Routes.LOGIN,
