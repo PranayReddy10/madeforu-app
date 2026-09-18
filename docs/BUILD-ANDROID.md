@@ -83,33 +83,58 @@ or stays empty, build once (`./gradlew assembleDebug`) and hit refresh.
 To see a real screen with real data there is no substitute for running the
 app — a preview cannot call the server.
 
-## If the Kotlin daemon dies on startup
+## If the Kotlin daemon "terminates unexpectedly"
 
 ```
 The daemon has terminated unexpectedly on startup attempt #1
-with error code: 0
+with error code: 0. The daemon process output:
+    1. Kotlin compile daemon is ready
 ```
 
-Error code 0 means it exited cleanly — it ran out of heap rather than
-crashing. The Gradle daemon and the Kotlin daemon are separate JVMs, and
-`gradle.properties` now gives each its own:
+Read that carefully, because it is misleading. The daemon **started**, said
+it was ready, and exited with code **0** — a clean exit. Nothing crashed
+and nothing ran out of memory; an out-of-heap JVM dies with a non-zero
+code and a "VM initialization" error. What failed is the handshake: the
+Kotlin plugin forks a second JVM and talks to it over a local socket, and
+the build could not attach to it.
 
-```properties
-org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1024m -Dfile.encoding=UTF-8
-kotlin.daemon.jvmargs=-Xmx2048m -XX:MaxMetaspaceSize=512m
-```
+So extra heap does not help. The usual blockers are:
 
-On a machine with 8 GB or less, halve both. If it still will not start —
-some Windows setups block the local socket the daemon listens on —
-uncomment this line in `gradle.properties`:
+- **Antivirus / endpoint security** intercepting the local socket.
+  Windows Defender's controlled folder access and most corporate agents do
+  this. It is by far the most common cause.
+- A **VPN or firewall** rule that rewrites loopback traffic.
+- A **stale daemon** left behind by an interrupted build.
+
+`gradle.properties` already sets:
 
 ```properties
 kotlin.compiler.execution.strategy=in-process
 ```
 
-That compiles inside the Gradle daemon: slower on repeat builds, but it
-removes the second process entirely. After changing any of these, run
-`./gradlew --stop` so the old daemons are not reused.
+which compiles inside the Gradle daemon, so there is no second process and
+no socket to block. For a project this size the cost is a second or two
+per build.
+
+If you would rather have the daemon back (marginally faster incremental
+builds), comment that line out, uncomment `kotlin.daemon.jvmargs`, and
+work through these in order:
+
+```bash
+./gradlew --stop                       # kill stale daemons
+rm -rf ~/.kotlin/daemon                # Windows: %USERPROFILE%\.kotlin\daemon
+./gradlew assembleDebug --no-daemon
+```
+
+Then check the JDK is consistent: **Settings → Build → Build Tools →
+Gradle → Gradle JDK** should be the JetBrains Runtime that Android Studio
+ships (JBR 21). A JDK picked up from `JAVA_HOME` that differs from the one
+Studio runs on is the second most common cause.
+
+If it still fails, add your project folder and Android Studio to your
+antivirus exclusions — and if that is not something you can change on a
+managed laptop, leave `in-process` on. It is a perfectly good setting, not
+a workaround you need to feel bad about.
 
 ## Pointing it at your server
 
