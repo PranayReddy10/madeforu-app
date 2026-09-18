@@ -2,6 +2,7 @@
 
 package com.madeforu.sales.ui.screens
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -17,6 +18,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.AlertDialog
@@ -40,6 +43,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.madeforu.sales.core.ApiResult
@@ -57,6 +61,7 @@ import com.madeforu.sales.ui.components.Pill
 import com.madeforu.sales.ui.components.SectionHeader
 import com.madeforu.sales.ui.components.ThinDivider
 import com.madeforu.sales.ui.theme.negativeColor
+import com.madeforu.sales.ui.theme.warnColor
 import com.madeforu.sales.ui.theme.positiveColor
 import kotlinx.coroutines.launch
 
@@ -170,6 +175,11 @@ fun ExpenseDetailScreen(
                         }
                     }
                 }
+            }
+
+            if (current.items.isNotEmpty()) {
+                item { SectionHeader("What was in it") }
+                item { ExpenseBreakdown(current) }
             }
 
             item { SectionHeader("Details") }
@@ -335,3 +345,109 @@ fun ExpenseDetailScreen(
         )
     }
 }
+
+/**
+ * The line items behind an expense — what was actually bought, at what
+ * quantity and price.
+ *
+ * A single "Machine · ₹74,010" tells a partner nothing they can check. The
+ * nineteen lines behind it are the whole point, and they were being
+ * fetched from the server and then thrown away.
+ *
+ * Long lists fold after six rows, because an expense with twenty lines
+ * would otherwise bury the payers and the actions below it.
+ */
+@Composable
+private fun ExpenseBreakdown(expense: Expense) {
+    var expanded by remember { mutableStateOf(false) }
+    val lines = expense.items
+    val shown = if (expanded || lines.size <= 6) lines else lines.take(6)
+    val linesTotal = lines.sumOf { it.lineTotal }
+    // The lines should add up to the amount. When they do not, the expense
+    // was edited on one side only, and saying so is more useful than
+    // quietly showing two numbers that disagree.
+    val matches = kotlin.math.abs(linesTotal - expense.amount) < 0.01
+
+    Card(
+        shape = RoundedCornerShape(18.dp),
+        colors = softCardColors(),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+    ) {
+        Column(Modifier.fillMaxWidth().padding(16.dp)) {
+            shown.forEach { line ->
+                Row(
+                    Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            line.descr,
+                            style = MaterialTheme.typography.bodyMedium,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            // Whole quantities read as "5", not "5.0" — a
+                            // fractional quantity is rare and only shown
+                            // when it is real.
+                            qtyText(line.qty) + " × " + Money.full(line.unitCost),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        Money.full(line.lineTotal),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
+                    )
+                }
+                ThinDivider()
+            }
+
+            if (lines.size > 6) {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable { expanded = !expanded }
+                        .padding(vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        if (expanded) "Show fewer" else "Show all ${lines.size} items",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Icon(
+                        if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(6.dp))
+            DetailRow(
+                "${lines.size} item${if (lines.size == 1) "" else "s"}",
+                Money.full(linesTotal),
+                emphasise = true,
+            )
+            if (!matches) {
+                Text(
+                    "These lines add up to " + Money.full(linesTotal) + ", but the expense is " +
+                        Money.full(expense.amount) + ". One side was edited without the other — " +
+                        "the expense total is what counts towards partner accounts.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = warnColor(),
+                    modifier = Modifier.padding(top = 6.dp),
+                )
+            }
+        }
+    }
+}
+
+/** 5.0 -> "5", 2.5 -> "2.5" — a trailing .0 on a quantity is noise. */
+private fun qtyText(qty: Double): String =
+    if (qty == qty.toLong().toDouble()) qty.toLong().toString()
+    else String.format(java.util.Locale.US, "%.2f", qty)

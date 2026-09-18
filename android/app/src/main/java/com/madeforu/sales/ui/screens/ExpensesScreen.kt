@@ -235,6 +235,20 @@ fun ExpensesScreen(
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
+                                // Say up front that there is a breakdown to
+                                // open, and when more than one partner paid.
+                                if (expense.itemCount > 0 || expense.payerCount > 1) {
+                                    Text(
+                                        listOfNotNull(
+                                            expense.itemCount.takeIf { it > 0 }
+                                                ?.let { "$it item${if (it == 1) "" else "s"}" },
+                                            expense.payerCount.takeIf { it > 1 }
+                                                ?.let { "$it partners paid" },
+                                        ).joinToString(" · "),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.primary,
+                                    )
+                                }
                             }
                             Column(horizontalAlignment = Alignment.End) {
                                 Text(Money.short(expense.net), fontWeight = FontWeight.SemiBold)

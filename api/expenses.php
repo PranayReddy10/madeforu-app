@@ -32,6 +32,8 @@ function expense_row(array $r): array {
         'details'   => $r['details'],
         'settled'   => round((float)($r['settled'] ?? 0), 2),
         'has_receipt' => !empty($r['receipt_path']),
+        'item_count'  => isset($r['item_count']) ? (int)$r['item_count'] : 0,
+        'payer_count' => isset($r['payer_count']) ? (int)$r['payer_count'] : 0,
         'created_at'  => $r['created_at'],
     ];
 }
@@ -91,7 +93,9 @@ api_dispatch([
         $offset = max(0, api_int('offset', 0));
 
         $sql = 'SELECT e.*, p.name paid_by_name,
-                       (SELECT COALESCE(SUM(amount),0) FROM expense_payments WHERE expense_id = e.id) settled
+                       (SELECT COALESCE(SUM(amount),0) FROM expense_payments WHERE expense_id = e.id) settled,
+                       (SELECT COUNT(*) FROM expense_items WHERE expense_id = e.id) item_count,
+                       (SELECT COUNT(*) FROM expense_payments WHERE expense_id = e.id) payer_count
                   FROM expenses e
                   LEFT JOIN partners p ON p.id = e.paid_by
                  WHERE ' . implode(' AND ', $where)
@@ -150,7 +154,9 @@ api_dispatch([
 
         $s = $conn->prepare(
             'SELECT e.*, p.name paid_by_name,
-                    (SELECT COALESCE(SUM(amount),0) FROM expense_payments WHERE expense_id = e.id) settled
+                    (SELECT COALESCE(SUM(amount),0) FROM expense_payments WHERE expense_id = e.id) settled,
+                    (SELECT COUNT(*) FROM expense_items WHERE expense_id = e.id) item_count,
+                    (SELECT COUNT(*) FROM expense_payments WHERE expense_id = e.id) payer_count
                FROM expenses e LEFT JOIN partners p ON p.id = e.paid_by WHERE e.id = ?'
         );
         $s->bind_param('i', $id);

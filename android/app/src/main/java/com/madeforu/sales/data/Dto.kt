@@ -494,6 +494,10 @@ data class Expense(
     val details: String = "",
     val settled: Double = 0.0,
     @SerialName("has_receipt") val hasReceipt: Boolean = false,
+    /** How many line items and payers exist — known from the list too, so a
+     *  row can say there is a breakdown worth opening. */
+    @SerialName("item_count") val itemCount: Int = 0,
+    @SerialName("payer_count") val payerCount: Int = 0,
     val payers: List<ExpensePayer> = emptyList(),
     val items: List<ExpenseLine> = emptyList(),
 )
