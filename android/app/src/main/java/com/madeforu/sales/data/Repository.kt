@@ -270,10 +270,6 @@ class Repository(private val api: ApiClient, private val prefs: Prefs) {
     suspend fun financeOverview(): ApiResult<FinanceOverview> =
         api.get("finance.php", "overview").map { api.decode<FinanceOverview>(it) }
 
-    suspend fun profitAndLoss(from: String = "", to: String = ""): ApiResult<ProfitAndLoss> =
-        api.get("finance.php", "profit", mapOf("from" to from, "to" to to))
-            .map { api.decode<ProfitAndLoss>(it) }
-
     suspend fun movements(partnerId: Int = 0, from: String = "", to: String = ""): ApiResult<MovementsResponse> =
         api.get(
             "finance.php", "movements",
@@ -317,6 +313,13 @@ class Repository(private val api: ApiClient, private val prefs: Prefs) {
                 put("event_id", JsonPrimitive(eventId))
                 put("partner_id", JsonPrimitive(partnerId))
             },
+        ).map { api.decode<SimpleMessage>(it).message }
+
+    /** Equal split across active partners, exactly as investment.php does it. */
+    suspend fun distributeProfit(amount: Double): ApiResult<String> =
+        api.post(
+            "finance.php", "distribute_profit",
+            ApiClient.body { put("amount", JsonPrimitive(amount)) },
         ).map { api.decode<SimpleMessage>(it).message }
 
     suspend fun settle(fromId: Int, toId: Int, amount: Double, note: String): ApiResult<String> =

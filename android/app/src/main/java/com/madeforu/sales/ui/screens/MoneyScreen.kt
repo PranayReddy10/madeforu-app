@@ -48,14 +48,12 @@ import com.madeforu.sales.core.isAuthFailure
 import com.madeforu.sales.data.FinanceOverview
 import com.madeforu.sales.data.Movement
 import com.madeforu.sales.data.PartnerFinance
-import com.madeforu.sales.data.ProfitAndLoss
 import com.madeforu.sales.data.Repository
 import com.madeforu.sales.ui.components.ChipRow
 import com.madeforu.sales.ui.components.DetailRow
 import com.madeforu.sales.ui.components.ErrorBanner
 import com.madeforu.sales.ui.components.IconTile
 import com.madeforu.sales.ui.components.softCardColors
-import com.madeforu.sales.ui.components.KpiCard
 import com.madeforu.sales.ui.components.LoadingBox
 import com.madeforu.sales.ui.components.Pill
 import com.madeforu.sales.ui.components.SectionHeader
@@ -84,7 +82,6 @@ fun MoneyScreen(
     val scope = rememberCoroutineScope()
 
     var overview by remember { mutableStateOf<FinanceOverview?>(null) }
-    var profit by remember { mutableStateOf<ProfitAndLoss?>(null) }
     var movements by remember { mutableStateOf<List<Movement>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
     var busy by remember { mutableStateOf(false) }
@@ -101,9 +98,6 @@ fun MoneyScreen(
                 is ApiResult.Success -> { overview = result.value; error = null }
                 is ApiResult.Failure ->
                     if (result.isAuthFailure()) onSessionExpired() else error = result.message
-            }
-            repository.profitAndLoss().let {
-                if (it is ApiResult.Success) profit = it.value
             }
             repository.movements().let {
                 if (it is ApiResult.Success) movements = it.value.movements.take(12)
@@ -147,27 +141,8 @@ fun MoneyScreen(
                 }
             }
 
-            profit?.let { pnl ->
-                item { SectionHeader("Profit & loss") }
-                item { ProfitSection(pnl) }
-            }
-
             if (data != null) {
-                item { SectionHeader("Partner money") }
-                item {
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        KpiCard(
-                            "Put in by partners", Money.short(data.totals.paid),
-                            caption = "${data.totals.partners} partners · ${data.totals.sharePct}% each",
-                            modifier = Modifier.weight(1f),
-                        )
-                        KpiCard(
-                            "In partner accounts", Money.short(data.totals.balance),
-                            caption = "credited less drawn",
-                            modifier = Modifier.weight(1f),
-                        )
-                    }
-                }
+                item { InvestmentHeadline(data) }
 
                 // ── Uncredited offline sales ───────────────────────
                 if (data.uncreditedOffline.orders > 0) {
@@ -258,8 +233,10 @@ fun MoneyScreen(
                 item { SectionHeader("How the split works") }
                 item { EqualShareSection(data) }
 
-                item { SectionHeader("Each partner") }
+                item { SectionHeader("Per-partner breakdown") }
+                item { PartnerBreakdown(data) }
 
+                item { SectionHeader("Each partner in detail") }
                 items(data.partners.size) { index ->
                     PartnerCard(data.partners[index])
                 }
@@ -338,7 +315,37 @@ fun MoneyScreen(
                     }
                 }
 
-                                // ── Recent ledger ──────────────────────────────────
+                                item { SectionHeader("Account balance") }
+                item {
+                    AccountBalanceShare(
+                        data = data,
+                        busy = busy,
+                        onSettle = { _, _, _ -> },
+                    )
+                }
+
+                item { SectionHeader("Profit & distribution") }
+                item {
+                    ProfitAndDistribution(
+                        data = data,
+                        busy = busy,
+                        onDistribute = { amount ->
+                            busy = true
+                            scope.launch {
+                                when (val result = repository.distributeProfit(amount)) {
+                                    is ApiResult.Success -> { message = result.value; refresh() }
+                                    is ApiResult.Failure -> error = result.message
+                                }
+                                busy = false
+                            }
+                        },
+                    )
+                }
+
+                item { SectionHeader("Expenses by category") }
+                item { ExpensesByCategory(data) }
+
+                // ── Recent ledger ──────────────────────────────────
                 item { SectionHeader("Recent movements") }
                 items(movements.size) { index ->
                     val movement = movements[index]
