@@ -41,10 +41,15 @@ import com.madeforu.sales.core.ApiResult
 import com.madeforu.sales.core.ServiceLocator
 import com.madeforu.sales.data.Repository
 import com.madeforu.sales.data.Settings
+import com.madeforu.sales.data.ServerInfo
 import com.madeforu.sales.ui.components.ChipRow
+import com.madeforu.sales.ui.components.DetailRow
 import com.madeforu.sales.ui.components.ErrorBanner
 import com.madeforu.sales.ui.components.SectionHeader
+import com.madeforu.sales.ui.components.softCardColors
 import com.madeforu.sales.ui.theme.negativeColor
+import com.madeforu.sales.ui.theme.positiveColor
+import com.madeforu.sales.ui.theme.warnColor
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -72,6 +77,7 @@ fun SettingsScreen(
     var error by remember { mutableStateOf<String?>(null) }
     var message by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
+    var serverInfo by remember { mutableStateOf<ServerInfo?>(null) }
 
     // Bill fields, edited locally then saved in one go.
     var businessName by remember { mutableStateOf("") }
@@ -92,6 +98,11 @@ fun SettingsScreen(
         adminName = prefs.adminName.first()
         baseUrl = prefs.currentBaseUrl()
         theme = prefs.theme.first()
+        // Asked on open, not on a button: the whole point is that someone
+        // who thinks the app did not update finds the answer already on
+        // the screen. A failure here is not worth an error banner — the
+        // Version card just keeps saying "not checked yet".
+        repository.ping().successOrNull?.let { serverInfo = it }
         repository.bootstrap().let { result ->
             if (result is ApiResult.Success) {
                 settings = result.value.settings
@@ -235,6 +246,47 @@ fun SettingsScreen(
                 }
             }
 
+            // Three things update separately — this build, the api/ folder
+            // on the server, and the phone's copy of the app — and none of
+            // them says when it is the one that is behind. Printing all of
+            // it turns "I updated and nothing changed" into a fact.
+            item { SectionHeader("Version") }
+            item {
+                Card(shape = RoundedCornerShape(20.dp), colors = softCardColors()) {
+                    Column(Modifier.fillMaxWidth().padding(16.dp)) {
+                        DetailRow(
+                            "This app",
+                            BuildConfig.VERSION_NAME + " (code " + BuildConfig.VERSION_CODE + ")",
+                        )
+                        DetailRow(
+                            "Server API",
+                            serverInfo?.apiVersion?.ifBlank { "older than 1.1.0" } ?: "not checked yet",
+                        )
+                        val info = serverInfo
+                        if (info != null && info.isStale) {
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                "The server is running older API files. The app is fine — but " +
+                                    "screens that need " +
+                                    (if (info.missing.isNotEmpty()) info.missing.joinToString(", ")
+                                     else "the newer API") +
+                                    " stay blank until the api/ folder is uploaded to " +
+                                    "sale.madeforu.co.in again.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = warnColor(),
+                            )
+                        } else if (info != null) {
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                "Server and app are in step.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = positiveColor(),
+                            )
+                        }
+                    }
+                }
+            }
+
             item { SectionHeader("App updates for partners") }
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -296,9 +348,23 @@ fun SettingsScreen(
                             busy = true
                             scope.launch {
                                 prefs.setBaseUrl(baseUrl)
-                                when (repository.ping()) {
+                                when (val r = repository.ping()) {
                                     is ApiResult.Success -> {
-                                        message = "Connected. The server answered."
+                                        serverInfo = r.value
+                                        // A reachable server is not
+                                        // necessarily an up-to-date one,
+                                        // and saying only "connected"
+                                        // here is what let a stale api/
+                                        // folder pass for a working one.
+                                        message = if (r.value.isStale) {
+                                            "Connected, but the server is running older API files" +
+                                                (if (r.value.missing.isNotEmpty())
+                                                    " — missing " + r.value.missing.joinToString(", ")
+                                                 else "") +
+                                                ". Upload the api/ folder again."
+                                        } else {
+                                            "Connected. Server API " + r.value.apiVersion + "."
+                                        }
                                         error = null
                                     }
                                     is ApiResult.Failure ->

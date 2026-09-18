@@ -158,7 +158,15 @@ api_dispatch([
 
     // ── GET ping — used by Settings to test a server URL ───────────
     'ping' => function () use ($conn) {
-        api_ok(['api_version' => API_VERSION, 'server_time' => date('c')]);
+        // `features` is what an app checks before blaming itself: it says
+        // which api/ files are actually on this server, so "I updated and
+        // nothing changed" has an answer on the Settings screen instead of
+        // being guesswork.
+        api_ok([
+            'api_version' => API_VERSION,
+            'features'    => API_FEATURES,
+            'server_time' => date('c'),
+        ]);
     },
 
     /**

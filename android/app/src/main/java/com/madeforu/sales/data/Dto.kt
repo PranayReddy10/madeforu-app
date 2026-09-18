@@ -432,6 +432,27 @@ data class BusinessProfit(
     val remaining: Double = 0.0,
 )
 
+/**
+ * What the server says it is: its version, and which api/ files are
+ * actually on it. `features` is absent on any server older than 1.1.0,
+ * which is itself the answer when a screen looks unchanged after an
+ * upload — the app can then say the server is behind rather than
+ * silently rendering nothing.
+ */
+@Serializable
+data class ServerInfo(
+    @SerialName("api_version") val apiVersion: String = "",
+    val features: List<String> = emptyList(),
+) {
+    companion object {
+        /** What this build of the app needs the server to be able to do. */
+        val NEEDED = listOf("revenue_breakdown", "expense_create")
+    }
+
+    val missing: List<String> get() = NEEDED.filter { it !in features }
+    val isStale: Boolean get() = features.isEmpty() || missing.isNotEmpty()
+}
+
 @Serializable
 data class RevenueWindow(val orders: Int = 0, val amount: Double = 0.0)
 

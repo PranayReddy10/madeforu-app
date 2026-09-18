@@ -354,8 +354,28 @@ fun ProfitAndDistribution(
 @Composable
 fun RevenueWorking(data: FinanceOverview) {
     val r = data.revenueBreakdown
-    if (r.orders == 0) return
     var expanded by remember { mutableStateOf(false) }
+
+    // An older api/finance.php sends no revenue_breakdown, and the DTO
+    // defaults it to zero orders. Returning early here is what made a
+    // stale upload on the server look like an app that had not changed,
+    // so it names the file that is behind instead of vanishing.
+    if (r.orders == 0) {
+        Card(shape = RoundedCornerShape(20.dp), colors = softCardColors()) {
+            Column(Modifier.fillMaxWidth().padding(16.dp)) {
+                Text("Where this number comes from", style = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "The working behind this figure needs a newer api/finance.php than the " +
+                        "server has. Upload the api/ folder to sale.madeforu.co.in and it will " +
+                        "appear here. Settings shows which parts are behind.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = warnColor(),
+                )
+            }
+        }
+        return
+    }
 
     Card(shape = RoundedCornerShape(20.dp), colors = softCardColors()) {
         Column(Modifier.fillMaxWidth().padding(16.dp)) {

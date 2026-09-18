@@ -32,7 +32,25 @@ set_exception_handler(function (Throwable $t) {
 });
 
 // ── API-wide constants ─────────────────────────────────────────────
-define('API_VERSION',      '1.0.0');
+define('API_VERSION',      '1.1.0');
+
+/**
+ * What this build of the API can do, for the apps to check against.
+ *
+ * An app is upgraded by rebuilding it; the API is upgraded by uploading
+ * files to the server, and the two happen days apart. When a screen needs
+ * something the server does not have yet, the app has to be able to say
+ * so — silently rendering nothing is what makes a stale upload look like
+ * a broken app. Add a name here when you add a route or a payload field
+ * an app depends on.
+ */
+define('API_FEATURES', [
+    'revenue_breakdown',   // finance.php: the working behind "Revenue (all sales)"
+    'expense_create',      // expenses.php: create/update/delete with a payment split
+    'expense_items',       // expenses.php: line items on `get`
+    'bills',               // bills.php: issue/get/list/html
+    'app_version',         // auth.php: the Android release channel
+]);
 define('TOKEN_TTL_DAYS',   90);     // a partner phone stays signed in for a quarter
 define('MAX_PAGE_SIZE',    200);
 

@@ -46,7 +46,13 @@ class Repository(private val api: ApiClient, private val prefs: Prefs) {
 
     suspend fun clearSessionLocally() = prefs.clearSession()
 
-    suspend fun ping(): ApiResult<Unit> = api.get("auth.php", "ping").map { }
+    /**
+     * Ping, keeping the answer. The version and feature list are what
+     * Settings shows so "I updated and nothing changed" has a factual
+     * answer: the app, the server, or neither.
+     */
+    suspend fun ping(): ApiResult<ServerInfo> =
+        api.get("auth.php", "ping").map { api.decode<ServerInfo>(it) }
 
     suspend fun changePassword(current: String, new: String): ApiResult<String> =
         api.post(

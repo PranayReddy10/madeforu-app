@@ -17,6 +17,18 @@
 // from the sign-in screen for anyone testing against another server.
 const DEFAULT_API = new URL('../api/', location.href).href;
 
+/*
+ * Bump BUILD whenever these files change. It is the only way to answer
+ * "did my upload actually land?" from the phone: Settings prints it, so a
+ * partner can read it back instead of everyone guessing whether the
+ * browser, the server or the app is the stale one. It must match the
+ * CACHE name in sw.js.
+ */
+const BUILD = '2026-09-18.2';
+
+/** What this build of the app expects the server to be able to do. */
+const NEEDS_FEATURES = ['revenue_breakdown', 'expense_create'];
+
 const store = {
   get token() { return localStorage.getItem('mfu.token') || ''; },
   set token(v) { v ? localStorage.setItem('mfu.token', v) : localStorage.removeItem('mfu.token'); },
@@ -1151,7 +1163,16 @@ route('money', async () => {
  * headline adds up from, and every nearby figure it is NOT.
  */
 function revenueWorking(r, business) {
-  if (!r) return '';
+  // An older api/finance.php has no revenue_breakdown at all. Rendering
+  // nothing here is what made a stale upload look like an app that had
+  // not changed, so it says which file is behind instead.
+  if (!r || !r.orders) {
+    return `<div class="card" style="margin-top:10px">
+      <div class="t">Where this number comes from</div>
+      <p class="muted warn">The working behind this figure needs a newer
+        <code>api/finance.php</code> than the server has. Upload the <code>api/</code> folder and
+        it will appear here. Settings &rsaquo; Version says which parts are behind.</p></div>`;
+  }
   const body = `
     <p class="muted">Every order ever booked, at its billed total — not what has been
       collected, and not only this year. ${r.orders} orders${r.first_order
@@ -1468,6 +1489,9 @@ route('settings', async () => {
     <div class="card"><div class="stat"><div class="l">Signed in as</div>
       <div class="v" style="font-size:19px">${esc(store.name || 'this device')}</div></div></div>
 
+    <section><h2 class="section">Version</h2><div class="card" id="versions">
+      ${spinner()}</div></section>
+
     <section><h2 class="section">Appearance</h2><div class="card">
       <div class="themes" id="themes"></div>
       <p class="muted" style="margin-top:10px" id="themeHint"></p>
@@ -1490,6 +1514,8 @@ route('settings', async () => {
     <section><h2 class="section">Account</h2>
       <button class="btn danger" id="signout">Sign out</button></section>
   </div>`);
+
+  paintVersions();
 
   const themeBox = document.getElementById('themes');
   const themeHint = document.getElementById('themeHint');
@@ -1534,6 +1560,73 @@ route('settings', async () => {
     render();
   };
 });
+
+/**
+ * Is this phone running the files that were just uploaded?
+ *
+ * Three things update separately and none of them tells you when it has
+ * not: the app files on the server, the api/ folder next to them, and the
+ * copy the browser cached for offline use. "I updated and nothing
+ * changed" is nearly always one of those three, so rather than guess,
+ * this prints all three and names the one that is behind.
+ */
+async function paintVersions() {
+  const box = document.getElementById('versions');
+  if (!box) return;
+
+  const cached = await (async () => {
+    try {
+      const names = await caches.keys();
+      const mine = names.filter((n) => n.startsWith('madeforu'));
+      if (!mine.length) return 'nothing cached';
+      return mine.map((n) => n.replace('madeforu-shell-', '')).join(', ');
+    } catch (e) { return 'not available'; }
+  })();
+
+  let server = null, serverError = '';
+  try {
+    server = await api('auth.php', 'ping');
+  } catch (e) { serverError = e.message; }
+
+  const features = (server && server.features) || [];
+  const missing = NEEDS_FEATURES.filter((f) => !features.includes(f));
+  // An old server has no `features` key at all, which is itself the answer.
+  const serverStale = !!server && (missing.length > 0 || !server.features);
+
+  box.innerHTML = `
+    ${detailRow('App build', BUILD)}
+    ${detailRow('Offline cache', cached)}
+    ${server ? detailRow('Server API', server.api_version || 'older than 1.1.0')
+             : `<div class="row"><div class="grow t">Server API</div>
+                <div class="amt neg">unreachable</div></div>`}
+    ${serverError ? `<p class="muted neg" style="margin-top:8px">${esc(serverError)}</p>` : ''}
+    ${serverStale ? `<p class="muted warn" style="margin-top:10px">
+        <b>The server is running older API files.</b> The apps are fine — but screens that need
+        ${esc(missing.join(', ') || 'the newer API')} will stay blank until the
+        <code>api/</code> folder is uploaded to the server again. Uploading the app files alone
+        is not enough.</p>`
+      : server ? `<p class="muted pos" style="margin-top:10px">Server and app are in step.</p>` : ''}
+    <button class="btn ghost small" id="hardRefresh" style="margin-top:12px">Force a fresh copy</button>
+    <p class="muted" style="margin-top:8px">Clears the offline cache and reloads. Use this first if
+      an update does not show up.</p>`;
+
+  document.getElementById('hardRefresh').onclick = async () => {
+    // Belt and braces: drop every cache, drop the worker, then reload. A
+    // phone that has been serving a stale shell for days will not come
+    // back from reg.update() alone.
+    try {
+      const names = await caches.keys();
+      await Promise.all(names.map((n) => caches.delete(n)));
+    } catch (e) { /* private mode, or blocked — the unregister still helps */ }
+    try {
+      if ('serviceWorker' in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map((r) => r.unregister()));
+      }
+    } catch (e) { /* nothing more to do */ }
+    location.reload(true);
+  };
+}
 
 /* ── Boot ─────────────────────────────────────────────────────── */
 
