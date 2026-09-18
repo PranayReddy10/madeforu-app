@@ -257,6 +257,20 @@ fun HomeScreen(
                     }
                 }
 
+                // The places a partner goes between sales. On Home because
+                // that is the screen that opens; at the bottom of Money they
+                // were behind every partner balance.
+                item { SectionHeader("Manage") }
+                item {
+                    QuickActions(
+                        onExpenses = onOpenExpenses,
+                        onEvents = onOpenEvents,
+                        onCatalog = onOpenCatalog,
+                        onBills = onOpenBills,
+                        onSettings = onOpenSettings,
+                    )
+                }
+
                 item {
                     SectionHeader(
                         "Revenue trend",
