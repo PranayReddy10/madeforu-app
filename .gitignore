@@ -1,19 +1,7 @@
-# Android / Gradle
-android/.gradle/
-android/build/
-android/app/build/
-android/local.properties
-android/.idea/
-android/captures/
-*.apk
-*.aab
-*.keystore
-!debug.keystore
+# The live database credentials. NEVER commit this: the repository is
+# public. The copy on the server is the authoritative one, and
+# sale/config.example.php shows its shape.
+sale/config.php
 
-# Editor
-.DS_Store
-*.iml
-.vscode/
-
-# Kotlin compiler scratch/error logs
-android/.kotlin/
+# Receipts and photos uploaded by customers and partners.
+sale/uploads/

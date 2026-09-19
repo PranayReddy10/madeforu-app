@@ -6,9 +6,9 @@ one that is behind. This is the whole checklist.
 | Thing | Lives where | How it updates |
 |---|---|---|
 | **The website** (`sale/*.php`) | `sale.madeforu.co.in/` | You upload the files |
-| **The API** (`api/*.php`) | `sale.madeforu.co.in/api/` | You upload the files |
-| **The database** | the MySQL database | You run `api/migrations/*.sql` in phpMyAdmin |
-| **The web app** (`pwa/*`) | `sale.madeforu.co.in/app/` | You upload the files |
+| **The API** (`sale/api/`) | `sale.madeforu.co.in/api/` | You upload the files |
+| **The database** | the MySQL database | You run `sale/api/migrations/*.sql` in phpMyAdmin |
+| **The web app** (`sale/app/`) | `sale.madeforu.co.in/app/` | You upload the files |
 | **The Android app** | On each partner's phone | You rebuild and install the APK |
 
 `git pull` updates the copy on **your Mac**. It does not touch the server.
@@ -45,7 +45,7 @@ still says `1.0.0`, the files did not land.
 
 ## 1b. Run the database migration
 
-`api/migrations/` holds `.sql` files. Run any you have not run yet, in
+`sale/api/migrations/` holds `.sql` files. Run any you have not run yet, in
 hPanel → **Databases → phpMyAdmin** → pick `u291217659_sale` → **SQL** tab
 → paste the file → Go.
 
@@ -73,7 +73,7 @@ photos people have uploaded, and the server's copy is the real one.
 
 ## 2. Upload the web app
 
-Upload this repo's `pwa/` folder to `public_html/app/` (the folder on the
+Upload this repo's `sale/app/` folder to `public_html/app/` (the folder on the
 server is called `app`, the one here is called `pwa` — same files).
 
 Then, on each phone that already has it: **Settings → Force a fresh copy**.
@@ -87,7 +87,7 @@ show up.
 The web app is versioned: `index.html` asks for `app.js?v=2026-09-19.1`,
 and a new version is a new URL that no cache can answer from. If you edit
 these files yourself, bump the version in all four places and run
-`pwa/check-versions.sh` — it fails if they disagree. `pwa/.htaccess` also
+`sale/app/check-versions.sh` — it fails if they disagree. `sale/app/.htaccess` also
 tells the server never to cache `index.html` or `sw.js`; upload it with
 the rest.
 
