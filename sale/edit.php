@@ -517,9 +517,17 @@ function attachPhone(id) {
 
 const ITEMS    = <?= json_encode($ITEMS) ?>;
 const MAXQ     = <?= max($QTY_OPTIONS) ?>;
+// Each existing line carries the price it was SOLD at. Without it the
+// form priced every line from today's catalogue, so raising a product
+// from 50 to 52 made every old order on this screen read 52 -- while the
+// database still held 50, because save.php keeps the agreed price. The
+// figures were never wrong; this screen was.
 const EXISTING = <?php
   $seed = [];
-  foreach ($items as $i) $seed[] = ['item' => $i['item'], 'qty' => (int)$i['quantity']];
+  foreach ($items as $i) {
+      $seed[] = ['item' => $i['item'], 'qty' => (int)$i['quantity'],
+                 'sold' => round((float)$i['unit_price'], 2)];
+  }
   echo json_encode($seed);
 ?>;
 let seq = 0;
@@ -534,7 +542,14 @@ function syncStatus(changed) {
   document.getElementById('wrap_ready').classList.toggle('dim', d.checked);
 }
 
-function addLine(item = '', qty = 1) {
+/**
+ * `sold` is the price this line was billed at, for a line that already
+ * exists on the order. It wins over the catalogue price until the
+ * product on the line is changed, at which point the line is a new
+ * agreement and takes today's rate -- the same rule save.php applies
+ * when it writes.
+ */
+function addLine(item = '', qty = 1, sold = null) {
   const id = 'ln' + (seq++);
   const opts = Object.entries(ITEMS).map(([n, p]) =>
     `<option value="${escAttr(n)}" data-price="${p}" ${n === item ? 'selected' : ''}>${esc(n)} — ₹${p}</option>`).join('');
@@ -542,9 +557,10 @@ function addLine(item = '', qty = 1) {
   const div = document.createElement('div');
   div.className = 'line';
   div.id = id;
+  if (sold !== null) div.dataset.sold = sold;
   div.innerHTML = `
     <div class="cbx">
-      <select name="item[]" required onchange="calc()" style="display:none">
+      <select name="item[]" required onchange="dropSold(this); calc()" style="display:none">
         <option value="">Select product</option>${opts}</select>
       <input type="text" class="cbx-in" placeholder="Type to search product…" autocomplete="off"
              value="${item ? escAttr(item) : ''}">
@@ -631,15 +647,39 @@ function rmLine(id) {
 
 const PAID = <?= json_encode(round($paid, 2)) ?>;
 
+/** Swapping the product makes the line a new agreement at today's price. */
+function dropSold(sel) {
+  const line = sel.closest('.line');
+  if (line) delete line.dataset.sold;
+}
+
 function subtotal() {
   let sub = 0;
   document.querySelectorAll('.line').forEach(l => {
     const sel  = l.querySelector('select[name="item[]"]');
     const opt  = sel.options[sel.selectedIndex];
-    const rate = opt ? parseFloat(opt.dataset.price || 0) : 0;
+    const list = opt ? parseFloat(opt.dataset.price || 0) : 0;
+    // A line already on this order keeps what it sold for; only a new
+    // or swapped line takes the catalogue price. This mirrors save.php
+    // exactly, so what is shown is what will be stored.
+    const sold = l.dataset.sold !== undefined ? parseFloat(l.dataset.sold) : null;
+    const rate = sold !== null ? sold : list;
     const q    = parseInt(l.querySelector('[name="quantity[]"]').value) || 0;
     const lt   = rate * q;
-    l.querySelector('.lt').textContent = '₹' + lt.toFixed(2);
+
+    const cell = l.querySelector('.lt');
+    cell.textContent = '₹' + lt.toFixed(2);
+    // Say why, when the two differ, rather than leaving someone to
+    // wonder why the total is not quantity times the price list.
+    if (sold !== null && Math.abs(sold - list) > 0.001) {
+      cell.title = 'Sold at ₹' + sold.toFixed(2) + ' each; the catalogue now says ₹'
+                 + list.toFixed(2) + '.';
+      cell.innerHTML = '₹' + lt.toFixed(2)
+        + '<div style="font-size:11px;color:#65676b">at ₹' + sold.toFixed(2)
+        + ' each · now ₹' + list.toFixed(2) + '</div>';
+    } else {
+      cell.title = '';
+    }
     sub += lt;
   });
   return sub;
@@ -706,7 +746,7 @@ function toggleOnline() {
   }
 }
 
-if (EXISTING.length) EXISTING.forEach(r => addLine(r.item, r.qty));
+if (EXISTING.length) EXISTING.forEach(r => addLine(r.item, r.qty, r.sold ?? null));
 else addLine();
 syncStatus('init');
 attachPhone('phone');
