@@ -46,7 +46,9 @@ import androidx.compose.ui.unit.dp
 import com.madeforu.sales.core.Dates
 import com.madeforu.sales.core.Money
 import com.madeforu.sales.data.FinanceOverview
+import com.madeforu.sales.data.PartnerDetail
 import com.madeforu.sales.ui.components.ThinDivider
+import com.madeforu.sales.ui.components.IconTile
 import com.madeforu.sales.ui.components.softCardColors
 import com.madeforu.sales.ui.theme.BrandGradient
 import com.madeforu.sales.ui.theme.negativeColor
@@ -288,7 +290,29 @@ fun ProfitAndDistribution(
             )
             Spacer(Modifier.height(12.dp))
 
-            StatLine("Revenue (all sales)", Money.full(b.revenue))
+            // Split, because "revenue" that only counts orders was
+            // understating what the business took in by every Meesho
+            // payout and every other channel that writes no order.
+            StatLine("Sales through orders", Money.full(b.revenueOrders))
+            StatLine("Other channels", Money.full(b.revenueOther))
+            b.sources.bySource.forEach { line ->
+                Row(
+                    Modifier.fillMaxWidth().padding(start = 14.dp, top = 2.dp, bottom = 2.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text(
+                        line.source + (if (line.count > 0) " · " + line.count else ""),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        Money.full(line.amount),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            StatLine("Revenue (all sales)", Money.full(b.revenue), bold = true)
             StatLine("Expenses", Money.full(b.expenses))
             ThinDivider(Modifier.padding(vertical = 8.dp))
             StatLine(
@@ -336,6 +360,16 @@ fun ProfitAndDistribution(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "Money credited into partner accounts from offline sales (" +
+                    Money.full(b.sources.alreadyCounted.offlineCredits) + ") and event sales (" +
+                    Money.full(b.sources.alreadyCounted.eventCredits) + ") is order money moving " +
+                    "into an account, not new money, so it is counted once — in the orders line.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
@@ -412,7 +446,7 @@ fun RevenueWorking(data: FinanceOverview) {
                     Spacer(Modifier.height(10.dp))
 
                     StatLine("Items, before adjustments", Money.full(r.subtotal))
-                    StatLine("Less discounts given", "−" + Money.full(r.discount))
+                    StatLine("Less discounts given", "-" + Money.full(r.discount))
                     StatLine("Plus delivery and extras", "+" + Money.full(r.extra))
                     ThinDivider(Modifier.padding(vertical = 8.dp))
                     StatLine("Revenue (all sales)", Money.full(r.total), bold = true)
@@ -483,6 +517,136 @@ private fun WorkingLine(label: String, caption: String, value: String) {
         Spacer(Modifier.width(10.dp))
         Text(value, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
     }
+}
+
+/**
+ * One card per partner, with every figure that concerns them.
+ *
+ * Four sections, kept apart because they are the things most easily
+ * confused with each other:
+ *
+ *   what they paid out of their own pocket, against an equal share;
+ *   their quarter of what the business earned;
+ *   what has actually reached their account, and what is left in it;
+ *   what still has to move to even everyone up.
+ *
+ * A partner can be owed profit, have overpaid their share, and hold a
+ * zero balance all at once — which is why these are never added together
+ * into a single "what I'm owed" number.
+ */
+@Composable
+fun PartnerBoxes(detail: PartnerDetail) {
+    if (detail.partners.isEmpty()) return
+
+    Column(Modifier.fillMaxWidth()) {
+        Text(
+            detail.count.toString() + " partners, " + sharePctText(detail.sharePct) +
+                " each. Every total below divides " + detail.count +
+                " ways — what was put in, and what was earned.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(10.dp))
+
+        detail.partners.forEach { p ->
+            Card(shape = RoundedCornerShape(20.dp), colors = softCardColors()) {
+                Column(Modifier.fillMaxWidth().padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconTile(label = p.name, size = 40.dp)
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(p.name, style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                when (p.position) {
+                                    "even" -> "square with the others"
+                                    "owed" -> "owed " + Money.full(p.investmentGap)
+                                    else   -> "owes " + Money.full(-p.investmentGap)
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+
+                    BoxHeading("Paid from own pocket")
+                    StatLine("They paid", Money.full(p.paid))
+                    StatLine("An equal share would be", Money.full(p.fairPaid))
+                    StatLine(
+                        "Investment gap", signedMoney(p.investmentGap), bold = true,
+                        tint = if (p.investmentGap >= 0) positiveColor() else negativeColor(),
+                    )
+
+                    BoxHeading("Share of profit")
+                    StatLine(
+                        "Their " + sharePctText(detail.sharePct) + " of " + Money.full(detail.profit),
+                        Money.full(p.profitShare),
+                    )
+                    StatLine("Already distributed", Money.full(p.profitDistributed))
+                    StatLine(
+                        "Still to come", Money.full(p.profitPending), bold = true,
+                        tint = if (p.profitPending >= 0) positiveColor() else negativeColor(),
+                    )
+
+                    BoxHeading("Money in their account")
+                    StatLine("Credited to them", Money.full(p.credited))
+                    StatLine("Drawn out", Money.full(p.debited))
+                    StatLine(
+                        "Balance", Money.full(p.balance), bold = true,
+                        tint = if (p.balance >= 0) positiveColor() else negativeColor(),
+                    )
+
+                    BoxHeading("Settlement")
+                    if (kotlin.math.abs(p.settledAdjust) > 0.005) {
+                        StatLine("Already settled", signedMoney(p.settledAdjust))
+                    }
+                    p.owes.forEach {
+                        StatLine("pays " + (it.to ?: ""), Money.full(it.amount), tint = negativeColor())
+                    }
+                    p.owed.forEach {
+                        StatLine("receives from " + (it.from ?: ""), Money.full(it.amount),
+                                 tint = positiveColor())
+                    }
+                    if (p.owes.isEmpty() && p.owed.isEmpty() &&
+                        kotlin.math.abs(p.settledAdjust) <= 0.005) {
+                        Text(
+                            "Nothing outstanding.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+        }
+
+        Text(
+            "Investment is money put in. Profit share is money earned. The account balance is " +
+                "what has actually been taken in and not drawn out — three different things, " +
+                "which is why they are listed separately.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/** "25%" — a share, so no leading sign. */
+private fun sharePctText(pct: Double): String {
+    val rounded = kotlin.math.round(pct * 10) / 10.0
+    return (if (rounded == kotlin.math.floor(rounded)) rounded.toLong().toString()
+            else rounded.toString()) + "%"
+}
+
+/** The small rose heading that separates the four parts of a partner box. */
+@Composable
+private fun BoxHeading(text: String) {
+    Spacer(Modifier.height(12.dp))
+    Text(
+        text.uppercase(),
+        style = MaterialTheme.typography.labelSmall,
+        fontWeight = FontWeight.Bold,
+        color = MaterialTheme.colorScheme.primary,
+    )
+    Spacer(Modifier.height(2.dp))
 }
 
 /** Expenses by category, with the website's share bars. */
@@ -657,6 +821,12 @@ private fun Body(text: String, width: Dp, bold: Boolean = false, tint: Color? = 
     )
 }
 
-/** "+₹20.72" / "−₹8.56" — the sign is the whole point of a gap column. */
+/**
+ * "+₹20.72" / "-₹8.56" — the sign is the whole point of a gap column.
+ *
+ * The hyphen is the one Money.full() already uses for a negative, so a
+ * gap and a negative amount beside it do not read as two different kinds
+ * of number because of two different characters.
+ */
 private fun signedMoney(value: Double): String =
-    if (value >= 0) "+" + Money.full(value) else "−" + Money.full(-value)
+    if (value >= 0) "+" + Money.full(value) else "-" + Money.full(-value)

@@ -283,7 +283,7 @@ internal fun BillPreview(bill: Bill) {
             if (order.discount > 0.001) {
                 DetailRow(
                     order.discountReason?.takeIf { it.isNotBlank() } ?: "Discount",
-                    "−" + Money.full(order.discount),
+                    "-" + Money.full(order.discount),
                     valueColor = positiveColor(),
                 )
             }

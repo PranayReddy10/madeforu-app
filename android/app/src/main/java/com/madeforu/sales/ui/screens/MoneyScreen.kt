@@ -337,6 +337,9 @@ fun MoneyScreen(
                 // answers is always asked about the number just above it.
                 item { RevenueWorking(data) }
 
+                item { SectionHeader("Each partner in detail") }
+                item { PartnerBoxes(data.partnerDetail) }
+
                 item { SectionHeader("Expenses by category") }
                 item { ExpensesByCategory(data) }
 
@@ -366,7 +369,7 @@ fun MoneyScreen(
                         // like a bug, so show what actually moved.
                         val shown = if (movement.amount > 0.001) movement.amount else movement.investAdjust
                         Text(
-                            (if (credit) "+" else "−") + Money.short(kotlin.math.abs(shown)),
+                            (if (credit) "+" else "-") + Money.short(kotlin.math.abs(shown)),
                             style = MaterialTheme.typography.titleMedium,
                             color = if (credit) positiveColor() else negativeColor(),
                         )

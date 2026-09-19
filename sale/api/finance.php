@@ -110,15 +110,21 @@ function revenue_breakdown_api(mysqli $conn): array {
     ];
 }
 
+/** The shared definition lives in sale/lib_money.php — see the note there. */
+function revenue_sources_api(mysqli $conn): array { return revenue_sources($conn); }
+
 /** Revenue − expenses, and how much of it is already in partners' accounts. */
 function business_profit_api(mysqli $conn): array {
-    $rev = (float)($conn->query('SELECT COALESCE(SUM(total),0) v FROM orders')->fetch_assoc()['v'] ?? 0);
+    $src = revenue_sources_api($conn);
+    $rev = (float)$src['total'];
     $exp = (float)($conn->query('SELECT COALESCE(SUM(amount - discount),0) v FROM expenses')->fetch_assoc()['v'] ?? 0);
     $dist = (float)($conn->query("SELECT COALESCE(SUM(amount),0) v FROM account_movements WHERE kind = 'profit'")
                          ->fetch_assoc()['v'] ?? 0);
     $profit = round($rev - $exp, 2);
     return ['revenue' => round($rev, 2), 'expenses' => round($exp, 2), 'profit' => $profit,
-            'distributed' => round($dist, 2), 'remaining' => round($profit - $dist, 2)];
+            'distributed' => round($dist, 2), 'remaining' => round($profit - $dist, 2),
+            'revenue_orders' => $src['orders'], 'revenue_other' => $src['other'],
+            'sources' => $src];
 }
 
 /** Per-partner rows on the basis documented at the top of this file. */
@@ -229,11 +235,98 @@ function settle_plan(array $rows, string $gapKey, bool $flip = false): array {
     return $plan;
 }
 
+/**
+ * One box per partner, with every figure that concerns them in it.
+ *
+ * The four partners hold equal shares, so every total here divides four
+ * ways — but the two halves must not be confused, and putting them side
+ * by side is the point of this structure:
+ *
+ *   INVESTMENT is money a partner put IN from their own pocket. The fair
+ *   share is the total paid divided equally; the gap says whether they
+ *   are owed (they paid more than their quarter) or owe (less).
+ *
+ *   PROFIT is what the business earned — all revenue less all expenses —
+ *   and each partner's quarter of it. It is NOT the same as their
+ *   account balance: profit is earned, a balance is what has actually
+ *   been taken into their account. A partner can be owed profit and have
+ *   drawn nothing, or have drawn money against a loss.
+ *
+ *   CREDITED / DEBITED / BALANCE is that account: money taken in, money
+ *   drawn out, and what is left sitting there.
+ *
+ *   SETTLEMENT is the transfer that would even the two gaps up.
+ */
+function partner_detail_api(array $rows, array $business, array $settleInvest,
+                            array $settleBalance): array {
+    $n = count($rows);
+    if ($n === 0) return [];
+
+    $profit       = (float)$business['profit'];
+    $profitShare  = round($profit / $n, 2);
+    $distributed  = (float)$business['distributed'];
+    $distShare    = round($distributed / $n, 2);
+
+    // Who owes whom, indexed so each partner's box can state their own
+    // side of it rather than making them read a list of everyone's.
+    $owes = []; $owed = [];
+    foreach ($settleInvest as $step) {
+        $owes[$step['from']][] = ['to' => $step['to'], 'amount' => $step['amount']];
+        $owed[$step['to']][]   = ['from' => $step['from'], 'amount' => $step['amount']];
+    }
+
+    $out = [];
+    foreach ($rows as $r) {
+        $name = $r['name'];
+        $out[] = [
+            'id'   => $r['id'],
+            'name' => $name,
+
+            // Out of their own pocket, and their equal share of the total.
+            'paid'            => $r['paid'],
+            'fair_paid'       => $r['fair_share'],
+            'invested_net'    => $r['contribution'],
+            'investment_gap'  => $r['gap'],
+
+            // Their quarter of what the business earned.
+            'profit_share'      => $profitShare,
+            'profit_distributed'=> $distShare,
+            'profit_pending'    => round($profitShare - $distShare, 2),
+
+            // Their account: in, out, and what is left.
+            'credited' => $r['credited'],
+            'debited'  => $r['debited'],
+            'balance'  => $r['balance'],
+
+            // Settle-up already recorded, and what is still outstanding.
+            'settled_adjust' => $r['adj'],
+            'owes'           => $owes[$name] ?? [],
+            'owed'           => $owed[$name] ?? [],
+
+            'position' => abs($r['gap']) < 0.01 ? 'even'
+                        : ($r['gap'] > 0 ? 'owed' : 'owes'),
+        ];
+    }
+    return [
+        'partners'      => $out,
+        'count'         => $n,
+        'share_pct'     => round(100 / $n, 1),
+        'profit'        => round($profit, 2),
+        'profit_share'  => $profitShare,
+        'total_paid'    => round(array_sum(array_column($rows, 'paid')), 2),
+        'total_credited'=> round(array_sum(array_column($rows, 'credited')), 2),
+        'total_balance' => round(array_sum(array_column($rows, 'balance')), 2),
+    ];
+}
+
 api_dispatch([
 
     // ── GET overview — the whole Money tab in one request ──────────
     'overview' => function () use ($conn) {
+        $business = business_profit_api($conn);
         [$rows, $totals] = partner_rows($conn);
+        $settleInvest  = settle_plan($rows, 'gap');
+        $settleBalance = settle_plan($rows, 'balance_gap', true);
 
         // Uncredited offline money: sales nobody has taken into an account
         // yet. This is the number that tells a partner there is cash to
@@ -264,10 +357,11 @@ api_dispatch([
             'totals'          => $totals,
             'categories'      => $categories,
             'category_total'  => round($catTotal, 2),
-            'business'        => business_profit_api($conn),
+            'business'        => $business,
+            'partner_detail'  => partner_detail_api($rows, $business, $settleInvest, $settleBalance),
             'revenue_breakdown' => revenue_breakdown_api($conn),
-            'settle_invest'   => settle_plan($rows, 'gap'),
-            'settle_balance'  => settle_plan($rows, 'balance_gap', true),
+            'settle_invest'   => $settleInvest,
+            'settle_balance'  => $settleBalance,
             'uncredited_offline' => [
                 'orders' => (int)$pending['n'],
                 'amount' => round((float)$pending['amt'], 2),

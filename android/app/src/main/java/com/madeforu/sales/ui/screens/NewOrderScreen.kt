@@ -384,7 +384,7 @@ fun NewOrderScreen(
                 ExpandableSection(
                     title = "Discount & extra charges",
                     subtitle = buildString {
-                        if (draft.discount > 0) append("−" + Money.short(draft.discount))
+                        if (draft.discount > 0) append("-" + Money.short(draft.discount))
                         if (draft.extraCharge > 0) {
                             if (isNotEmpty()) append(" · ")
                             append("+" + Money.short(draft.extraCharge))
@@ -517,7 +517,7 @@ fun NewOrderScreen(
                             if (draft.discount > 0) {
                                 DetailRow(
                                     draft.discountReason.ifBlank { "Discount" },
-                                    "−" + Money.full(draft.discount),
+                                    "-" + Money.full(draft.discount),
                                     valueColor = positiveColor(),
                                 )
                             }

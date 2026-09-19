@@ -1,10 +1,17 @@
 <?php
 require 'config.php';
+require_once __DIR__ . '/lib_money.php';
 $me = require_login();
 
 // ── Business profit helper (Revenue − all expenses, net of discount) ──
 function business_profit(mysqli $conn): array {
-    $rev = (float)($conn->query("SELECT COALESCE(SUM(total),0) v FROM orders")->fetch_assoc()['v'] ?? 0);
+    // Revenue is orders PLUS money that arrived as account credits from
+    // channels with no order book -- a Meesho payout is a sale too.
+    // revenue_sources() is the single definition of that, shared with the
+    // app's API so the two cannot drift; it is careful not to
+    // double-count credits that are order money being moved about.
+    $src = revenue_sources($conn);
+    $rev = (float)$src['total'];
     $exp = (float)($conn->query("SELECT COALESCE(SUM(amount - discount),0) v FROM expenses")->fetch_assoc()['v'] ?? 0);
     $distributed = (float)($conn->query(
         "SELECT COALESCE(SUM(amount),0) v FROM account_movements WHERE kind = 'profit'"
@@ -12,6 +19,9 @@ function business_profit(mysqli $conn): array {
     $profit = round($rev - $exp, 2);
     return [
         'revenue'     => $rev,
+        'revenue_orders' => $src['orders'],
+        'revenue_other'  => $src['other'],
+        'sources'        => $src,
         'expenses'    => $exp,
         'profit'      => $profit,
         'distributed' => round($distributed, 2),
@@ -522,9 +532,20 @@ if (($_GET['export'] ?? '') === 'csv') {
   <!-- ── PROFIT DISTRIBUTION ──────────────────────────────────── -->
   <div class="card">
     <h2>Profit &amp; distribution</h2>
-    <p class="desc">Business profit = all sales revenue − all expenses. Distributing credits each investing partner an equal share to their account.</p>
+    <p class="desc">Business profit = all revenue − all expenses. Revenue counts orders <em>and</em>
+       money credited in from channels with no order book (a Meesho payout is a sale too).
+       Credits that are order money being moved into an account — offline sales and event
+       sales — are not counted twice.
+       <?php if (!empty($bp['sources']['by_source'])): ?>
+         <br>Other channels:
+         <?= e(implode(', ', array_map(fn($x) => $x['source'] . ' ' . money($x['amount']),
+                                        $bp['sources']['by_source']))) ?>.
+       <?php endif; ?>
+       Distributing credits each investing partner an equal share to their account.</p>
     <div class="stats" style="margin-bottom:14px">
-      <div class="stat"><div class="l">Revenue (all sales)</div><div class="v"><?= money($bp['revenue']) ?></div></div>
+      <div class="stat"><div class="l">Revenue (all sales)</div><div class="v"><?= money($bp['revenue']) ?></div>
+        <div class="c" style="font-size:11px;color:#65676b">
+          <?= money($bp['revenue_orders']) ?> orders + <?= money($bp['revenue_other']) ?> other channels</div></div>
       <div class="stat"><div class="l">Expenses</div><div class="v"><?= money($bp['expenses']) ?></div></div>
       <div class="stat"><div class="l">Business profit</div><div class="v <?= $bp['profit']>=0?'green':'red' ?>"><?= money($bp['profit']) ?></div></div>
       <div class="stat"><div class="l">Already distributed</div><div class="v"><?= money($bp['distributed']) ?></div></div>

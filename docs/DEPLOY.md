@@ -59,6 +59,23 @@ back to live costs, which is what it did before.
 
 ## 1c. Upload the website
 
+**One edit to `config.php` on the server, optional but recommended.**
+Replace this line:
+
+```php
+function money($v) { return '₹' . number_format((float)$v, 2); }
+```
+
+with the version in `sale/config.example.php`. It gives ₹1,98,014.16
+instead of ₹198,014.16, and -₹1,57,378.29 instead of ₹-157,378.29 — the
+same format the apps use, so a figure reads the same everywhere.
+
+**Replace it, do not delete it.** Every page of the website calls
+`money()`, so deleting the line takes the site down. Leaving it alone is
+also fine; only the grouping differs.
+
+
+
 `sale/` is the website itself — the same PHP that runs
 `sale.madeforu.co.in` today, with the price fix applied. Upload its
 contents to `public_html/`.

@@ -424,12 +424,95 @@ data class FinanceTotals(
 )
 
 @Serializable
+data class RevenueSourceLine(
+    val source: String = "",
+    val count: Int = 0,
+    val amount: Double = 0.0,
+)
+
+@Serializable
+data class AlreadyCounted(
+    @SerialName("offline_credits") val offlineCredits: Double = 0.0,
+    @SerialName("event_credits") val eventCredits: Double = 0.0,
+)
+
+/**
+ * Where the money came from.
+ *
+ * `orders` is the order book; `other` is money credited in from channels
+ * that write no order — a Meesho payout is a sale too. `alreadyCounted`
+ * names the credits deliberately NOT added on top, because they are
+ * order money being moved into a partner's account rather than new
+ * money, and adding them would inflate revenue.
+ */
+@Serializable
+data class RevenueSources(
+    val orders: Double = 0.0,
+    val other: Double = 0.0,
+    val total: Double = 0.0,
+    @SerialName("by_source") val bySource: List<RevenueSourceLine> = emptyList(),
+    @SerialName("already_counted") val alreadyCounted: AlreadyCounted = AlreadyCounted(),
+)
+
+@Serializable
 data class BusinessProfit(
     val revenue: Double = 0.0,
     val expenses: Double = 0.0,
     val profit: Double = 0.0,
     val distributed: Double = 0.0,
     val remaining: Double = 0.0,
+    @SerialName("revenue_orders") val revenueOrders: Double = 0.0,
+    @SerialName("revenue_other") val revenueOther: Double = 0.0,
+    val sources: RevenueSources = RevenueSources(),
+)
+
+@Serializable
+data class SettleLink(
+    val to: String? = null,
+    val from: String? = null,
+    val amount: Double = 0.0,
+)
+
+/**
+ * One partner's box: what they put in, what they earned, what reached
+ * their account, and what is still to settle.
+ *
+ * These are four different things and the app keeps them apart on
+ * purpose. Investment is money out of a pocket. Profit share is a
+ * quarter of what the business earned. The balance is what has actually
+ * been credited and not drawn. A partner can be owed profit, have paid
+ * more than their share, and still hold a zero balance.
+ */
+@Serializable
+data class PartnerBox(
+    val id: Int = 0,
+    val name: String = "",
+    val paid: Double = 0.0,
+    @SerialName("fair_paid") val fairPaid: Double = 0.0,
+    @SerialName("invested_net") val investedNet: Double = 0.0,
+    @SerialName("investment_gap") val investmentGap: Double = 0.0,
+    @SerialName("profit_share") val profitShare: Double = 0.0,
+    @SerialName("profit_distributed") val profitDistributed: Double = 0.0,
+    @SerialName("profit_pending") val profitPending: Double = 0.0,
+    val credited: Double = 0.0,
+    val debited: Double = 0.0,
+    val balance: Double = 0.0,
+    @SerialName("settled_adjust") val settledAdjust: Double = 0.0,
+    val owes: List<SettleLink> = emptyList(),
+    val owed: List<SettleLink> = emptyList(),
+    val position: String = "even",
+)
+
+@Serializable
+data class PartnerDetail(
+    val partners: List<PartnerBox> = emptyList(),
+    val count: Int = 0,
+    @SerialName("share_pct") val sharePct: Double = 0.0,
+    val profit: Double = 0.0,
+    @SerialName("profit_share") val profitShare: Double = 0.0,
+    @SerialName("total_paid") val totalPaid: Double = 0.0,
+    @SerialName("total_credited") val totalCredited: Double = 0.0,
+    @SerialName("total_balance") val totalBalance: Double = 0.0,
 )
 
 /**
@@ -528,6 +611,7 @@ data class FinanceOverview(
     val partners: List<PartnerFinance> = emptyList(),
     val totals: FinanceTotals = FinanceTotals(),
     val business: BusinessProfit = BusinessProfit(),
+    @SerialName("partner_detail") val partnerDetail: PartnerDetail = PartnerDetail(),
     @SerialName("revenue_breakdown") val revenueBreakdown: RevenueBreakdown = RevenueBreakdown(),
     @SerialName("settle_invest") val settleInvest: List<SettleStep> = emptyList(),
     @SerialName("settle_balance") val settleBalance: List<SettleStep> = emptyList(),

@@ -254,7 +254,7 @@ fun ExpensesScreen(
                                 Text(Money.short(expense.net), fontWeight = FontWeight.SemiBold)
                                 if (expense.discount > 0.5) {
                                     Text(
-                                        "−" + Money.short(expense.discount),
+                                        "-" + Money.short(expense.discount),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )

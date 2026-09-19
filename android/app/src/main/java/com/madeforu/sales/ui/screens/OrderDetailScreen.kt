@@ -274,7 +274,7 @@ fun OrderDetailScreen(
                         if (current.discount > 0.001) {
                             DetailRow(
                                 current.discountReason ?: "Discount",
-                                "−" + Money.full(current.discount),
+                                "-" + Money.full(current.discount),
                                 valueColor = positiveColor(),
                             )
                         }

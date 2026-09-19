@@ -104,7 +104,28 @@ function normalise_phone(string $raw): string {
     if (strlen($d) > 10) $d = substr($d, -10);
     return $d;
 }
-function money($v) { return '₹' . number_format((float)$v, 2); }
+/**
+ * ₹1,98,014.16 — Indian grouping, minus before the symbol, matching the
+ * Android app and the web app exactly. The old one-liner was
+ *
+ *     function money($v) { return '₹' . number_format((float)$v, 2); }
+ *
+ * which gives ₹198,014.16 and ₹-157,378.29: the same figures, grouped
+ * the Western way and with the sign on the wrong side, so the website and
+ * the apps read differently. Replace the line in your config.php with
+ * this. Do not delete it — every page uses money().
+ */
+function money($v) {
+    $n   = (float)$v;
+    $abs = number_format(abs($n), 2, '.', '');
+    [$whole, $frac] = explode('.', $abs);
+    if (strlen($whole) > 3) {
+        $last3 = substr($whole, -3);
+        $rest  = preg_replace('/\B(?=(\d{2})+(?!\d))/', ',', substr($whole, 0, -3));
+        $whole = $rest . ',' . $last3;
+    }
+    return ($n < 0 ? '-₹' : '₹') . $whole . '.' . $frac;
+}
 
 /** Fetch item => unit_cost, seeding any missing catalogue items at 0. */
 function product_costs(mysqli $conn, array $items): array {

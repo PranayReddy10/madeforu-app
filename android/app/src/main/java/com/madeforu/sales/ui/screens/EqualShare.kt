@@ -266,4 +266,4 @@ private fun SignedCell(value: Double, width: androidx.compose.ui.unit.Dp, bold: 
 
 /** "+₹7,185.89" / "−₹39,351.11" — the sign is the whole point of the column. */
 private fun signed(value: Double): String =
-    if (value >= 0) "+" + Money.full(value) else "−" + Money.full(-value)
+    if (value >= 0) "+" + Money.full(value) else "-" + Money.full(-value)

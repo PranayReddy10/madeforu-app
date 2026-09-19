@@ -22,6 +22,7 @@ declare(strict_types=1);
 ob_start();
 
 require __DIR__ . '/../config.php';
+require_once __DIR__ . '/../lib_money.php';   // revenue_sources(), shared with the website
 
 // config.php installs a text/plain exception handler meant for HTML pages.
 // Replace it so an escaped throwable still reaches the app as JSON.
@@ -32,7 +33,7 @@ set_exception_handler(function (Throwable $t) {
 });
 
 // ── API-wide constants ─────────────────────────────────────────────
-define('API_VERSION',      '1.3.0');
+define('API_VERSION',      '1.4.0');
 
 /**
  * What this build of the API can do, for the apps to check against.
@@ -52,6 +53,7 @@ define('API_FEATURES', [
     'app_version',         // auth.php: the Android release channel
     'price_history',       // catalog.php: price history, and prices frozen onto sold lines
     'movements_ledger',    // finance.php: filtered totals and delete_movement
+    'all_channel_revenue', // finance.php: revenue from orders AND other credits, per-partner detail
 ]);
 define('TOKEN_TTL_DAYS',   90);     // a partner phone stays signed in for a quarter
 define('MAX_PAGE_SIZE',    200);

@@ -24,10 +24,11 @@ const DEFAULT_API = new URL('../api/', location.href).href;
  * browser, the server or the app is the stale one. It must match the
  * CACHE name in sw.js.
  */
-const BUILD = '2026-09-19.1';
+const BUILD = '2026-09-19.2';
 
 /** What this build of the app expects the server to be able to do. */
-const NEEDS_FEATURES = ['revenue_breakdown', 'expense_create', 'price_history'];
+const NEEDS_FEATURES = ['revenue_breakdown', 'expense_create', 'price_history',
+                        'all_channel_revenue'];
 
 const store = {
   get token() { return localStorage.getItem('mfu.token') || ''; },
@@ -65,7 +66,10 @@ function moneyShort(v) {
 }
 function signed(v) {
   const n = Number(v) || 0;
-  return (n >= 0 ? '+' : '−') + '₹' + inr.format(Math.abs(n));
+  // The same hyphen money() uses. A gap showing −₹6,046.07 beside a
+  // profit share showing -₹39,344.57 reads as two different kinds of
+  // number when it is only two different characters.
+  return (n >= 0 ? '+' : '-') + '₹' + inr.format(Math.abs(n));
 }
 function prettyDate(raw) {
   if (!raw) return '—';
@@ -709,7 +713,7 @@ async function paintOrder(id) {
         <div class="amt">${money(i.line_total)}</div></div>`).join('')}
       <div class="row"><div class="grow s">Subtotal</div><div class="amt">${money(o.subtotal)}</div></div>
       ${o.extra_charge > 0.001 ? detailRow(o.extra_charge_reason || 'Extra charge', '+' + money(o.extra_charge)) : ''}
-      ${o.discount > 0.001 ? detailRow(o.discount_reason || 'Discount', '−' + money(o.discount)) : ''}
+      ${o.discount > 0.001 ? detailRow(o.discount_reason || 'Discount', '-' + money(o.discount)) : ''}
       <div class="row"><div class="grow t">Total</div><div class="amt">${money(o.total)}</div></div>
     </div></section>
 
@@ -1142,7 +1146,15 @@ route('money', async () => {
     </div></section>` : ''}
 
     <section><h2 class="section">Profit &amp; distribution</h2><div class="card">
-      ${detailRow('Revenue (all sales)', money(d.business.revenue))}
+      ${detailRow('Sales through orders', money(d.business.revenue_orders))}
+      ${detailRow('Other channels', money(d.business.revenue_other))}
+      ${(d.business.sources && d.business.sources.by_source || []).map((x) =>
+        `<div class="row" style="padding:3px 0;border:none">
+           <div class="grow s" style="padding-left:14px">${esc(x.source)}${
+             x.count ? ' · ' + x.count : ''}</div>
+           <div class="s">${money(x.amount)}</div></div>`).join('')}
+      <div class="row"><div class="grow t">Revenue (all sales)</div>
+        <div class="amt">${money(d.business.revenue)}</div></div>
       ${detailRow('Expenses', money(d.business.expenses))}
       <div class="row"><div class="grow t">Business profit</div>
         <div class="amt ${d.business.profit >= 0 ? 'pos' : 'neg'}">${money(d.business.profit)}</div></div>
@@ -1151,8 +1163,15 @@ route('money', async () => {
       ${d.business.remaining <= 0.5 ? `<p class="muted" style="margin-top:8px">
         Nothing to distribute yet. This counts every expense, including stock and equipment, so it
         stays negative until those purchases have been earned back.</p>` : ''}
+      ${d.business.sources ? `<p class="muted" style="margin-top:8px">
+        Money credited into partner accounts from offline sales
+        (${money(d.business.sources.already_counted.offline_credits)}) and event sales
+        (${money(d.business.sources.already_counted.event_credits)}) is order money moving into an
+        account, not new money, so it is counted once — in the orders line above.</p>` : ''}
     </div>
     ${revenueWorking(d.revenue_breakdown, d.business)}</section>
+
+    ${partnerBoxes(d.partner_detail)}
 
     ${d.categories.length ? `<section><h2 class="section">Expenses by category</h2><div class="card">
       <p class="muted">Pocket-funded purchases only — total ${money(d.category_total)}.</p>
@@ -1197,7 +1216,7 @@ function revenueWorking(r, business) {
 
     <div class="row" style="margin-top:6px"><div class="grow t" style="font-weight:500">Items, before adjustments</div>
       <div class="amt">${money(r.subtotal)}</div></div>
-    ${detailRow('Less discounts given', '−' + money(r.discount))}
+    ${detailRow('Less discounts given', '-' + money(r.discount))}
     ${detailRow('Plus delivery and extras', '+' + money(r.extra))}
     <div class="row"><div class="grow t">Revenue (all sales)</div>
       <div class="amt">${money(r.total)}</div></div>
@@ -1226,6 +1245,67 @@ function revenueWorking(r, business) {
 
   return `<div style="margin-top:10px">${fold('Where this number comes from',
     money(r.total) + ' across ' + r.orders + ' orders', body)}</div>`;
+}
+
+/**
+ * One box per partner, with every figure that concerns them.
+ *
+ * The two halves are deliberately kept apart and labelled, because they
+ * are the thing most easily confused: what a partner put IN from their
+ * own pocket (investment) is not the same as what the business EARNED
+ * for them (their quarter of the profit), and neither is the same as
+ * what has actually reached their account (credited, less drawn). A
+ * partner can be owed profit and have drawn nothing.
+ */
+function partnerBoxes(pd) {
+  if (!pd || !pd.partners || !pd.partners.length) return '';
+  return `<section><h2 class="section">Each partner in detail</h2>
+    <p class="muted" style="margin-bottom:8px">${pd.count} partners, ${pd.share_pct}% each.
+      Every total below divides ${pd.count} ways — what was put in, and what was earned.</p>
+    ${pd.partners.map((x) => `
+      <div class="card" style="margin-bottom:10px">
+        <div class="row" style="border:none;padding-top:0">
+          ${tile(x.name)}
+          <div class="grow"><div class="t">${esc(x.name)}</div>
+            <div class="s">${x.position === 'even' ? 'square with the others'
+              : x.position === 'owed' ? 'owed ' + money(x.investment_gap)
+              : 'owes ' + money(-x.investment_gap)}</div></div>
+        </div>
+
+        <div class="s" style="margin-top:6px;font-weight:600;color:var(--rose)">PAID FROM OWN POCKET</div>
+        ${detailRow('They paid', money(x.paid))}
+        ${detailRow('An equal share would be', money(x.fair_paid))}
+        <div class="row"><div class="grow t">Investment gap</div>
+          <div class="amt ${x.investment_gap >= 0 ? 'pos' : 'neg'}">${signed(x.investment_gap)}</div></div>
+
+        <div class="s" style="margin-top:10px;font-weight:600;color:var(--rose)">SHARE OF PROFIT</div>
+        ${detailRow('Their ' + pd.share_pct + '% of ' + money(pd.profit), money(x.profit_share))}
+        ${detailRow('Already distributed', money(x.profit_distributed))}
+        <div class="row"><div class="grow t">Still to come</div>
+          <div class="amt ${x.profit_pending >= 0 ? 'pos' : 'neg'}">${money(x.profit_pending)}</div></div>
+
+        <div class="s" style="margin-top:10px;font-weight:600;color:var(--rose)">MONEY IN THEIR ACCOUNT</div>
+        ${detailRow('Credited to them', money(x.credited))}
+        ${detailRow('Drawn out', money(x.debited))}
+        <div class="row"><div class="grow t">Balance</div>
+          <div class="amt ${x.balance >= 0 ? 'pos' : 'neg'}">${money(x.balance)}</div></div>
+
+        <div class="s" style="margin-top:10px;font-weight:600;color:var(--rose)">SETTLEMENT</div>
+        ${Math.abs(x.settled_adjust) > 0.005
+          ? detailRow('Already settled', signed(x.settled_adjust)) : ''}
+        ${x.owes.length ? x.owes.map((o) =>
+            `<div class="row"><div class="grow s">pays ${esc(o.to)}</div>
+             <div class="amt neg">${money(o.amount)}</div></div>`).join('') : ''}
+        ${x.owed.length ? x.owed.map((o) =>
+            `<div class="row"><div class="grow s">receives from ${esc(o.from)}</div>
+             <div class="amt pos">${money(o.amount)}</div></div>`).join('') : ''}
+        ${(!x.owes.length && !x.owed.length && Math.abs(x.settled_adjust) <= 0.005)
+          ? '<p class="muted">Nothing outstanding.</p>' : ''}
+      </div>`).join('')}
+    <p class="muted">Investment is money put in. Profit share is money earned. The account
+      balance is what has actually been taken in and not drawn out — three different things,
+      which is why they are listed separately.</p>
+  </section>`;
 }
 
 /* ── Movements — the account ledger, mirroring movements.php ──── */
@@ -1293,8 +1373,8 @@ route('movements', async () => {
       // the amount on those rows is zero by design.
       const isInvest = m.kind === 'invest';
       const value = isInvest
-        ? (m.invest_adjust >= 0 ? '+' : '−') + money(Math.abs(m.invest_adjust))
-        : (m.direction === 'credit' ? '+' : '−') + money(m.amount);
+        ? (m.invest_adjust >= 0 ? '+' : '-') + money(Math.abs(m.invest_adjust))
+        : (m.direction === 'credit' ? '+' : '-') + money(m.amount);
       const tone = isInvest ? '' : (m.direction === 'credit' ? 'pos' : 'neg');
       return `<div class="row">${tile(m.partner)}
         <div class="grow">
@@ -1597,7 +1677,7 @@ route('expense', async (id) => {
       ${detailRow('Category', e.category)}
       ${e.paid_to ? detailRow('Paid to', e.paid_to) : ''}
       ${detailRow('Amount', money(e.amount))}
-      ${e.discount > 0.5 ? detailRow('Discount', '−' + money(e.discount)) : ''}
+      ${e.discount > 0.5 ? detailRow('Discount', '-' + money(e.discount)) : ''}
       <div class="row"><div class="grow t">Net</div><div class="amt">${money(e.net)}</div></div>
       ${e.details ? `<p class="muted" style="margin-top:8px">${esc(e.details)}</p>` : ''}
     </div></section>

@@ -194,7 +194,7 @@ fun ExpenseDetailScreen(
                         if (current.paidTo.isNotBlank()) DetailRow("Paid to", current.paidTo)
                         DetailRow("Amount", Money.full(current.amount))
                         if (current.discount > 0.5) {
-                            DetailRow("Discount", "−" + Money.full(current.discount), valueColor = positiveColor())
+                            DetailRow("Discount", "-" + Money.full(current.discount), valueColor = positiveColor())
                         }
                         ThinDivider(Modifier.padding(vertical = 8.dp))
                         DetailRow("Net", Money.full(current.net), emphasise = true)

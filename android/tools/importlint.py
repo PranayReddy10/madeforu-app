@@ -55,7 +55,12 @@ for p, src in files.items():
     body = re.sub(r'/\*.*?\*/', '', body, flags=re.S)        # block comments
     body = re.sub(r'//.*$', '', body, flags=re.M)            # line comments
 
+    # A name being CALLED or dereferenced: Foo(), Foo<T>, Foo.bar
     used = set(re.findall(r'(?<![.\w])([A-Za-z_]\w*)\s*[(<.]', body))
+    # A name in TYPE position: ': Foo', ': Foo?', 'List<Foo>', '<A, Foo>'.
+    # Missed at first, which let PartnerDetail through: it appears only as
+    # a parameter type, so it is never followed by '(' or '.'.
+    used |= set(re.findall(r'[:<,]\s*([A-Z]\w*)', body))
     for name in sorted(used):
         if name not in declared:
             continue
