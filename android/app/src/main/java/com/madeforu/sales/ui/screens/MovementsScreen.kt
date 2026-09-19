@@ -57,7 +57,7 @@ import com.madeforu.sales.data.MovementTotals
 import com.madeforu.sales.data.PartnerFinance
 import com.madeforu.sales.data.Repository
 import com.madeforu.sales.ui.components.ChipRow
-import com.madeforu.sales.ui.components.ErrorBanner
+import com.madeforu.sales.ui.components.errorBannerItem
 import com.madeforu.sales.ui.components.IconTile
 import com.madeforu.sales.ui.components.LoadingBox
 import com.madeforu.sales.ui.components.Pill
@@ -144,7 +144,7 @@ fun MovementsScreen(
                 contentPadding = PaddingValues(16.dp, 8.dp, 16.dp, 96.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                item { ErrorBanner(error, onRetry = { refresh() }) }
+                errorBannerItem(error, onRetry = { refresh() })
 
                 message?.let { text ->
                     item {

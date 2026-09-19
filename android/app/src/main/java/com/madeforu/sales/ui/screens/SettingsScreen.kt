@@ -44,7 +44,7 @@ import com.madeforu.sales.data.Settings
 import com.madeforu.sales.data.ServerInfo
 import com.madeforu.sales.ui.components.ChipRow
 import com.madeforu.sales.ui.components.DetailRow
-import com.madeforu.sales.ui.components.ErrorBanner
+import com.madeforu.sales.ui.components.errorBannerItem
 import com.madeforu.sales.ui.components.SectionHeader
 import com.madeforu.sales.ui.components.softCardColors
 import com.madeforu.sales.ui.theme.negativeColor
@@ -143,7 +143,7 @@ fun SettingsScreen(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            item { ErrorBanner(error) }
+            errorBannerItem(error)
             message?.let {
                 item {
                     Card(

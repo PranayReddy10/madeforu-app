@@ -59,7 +59,7 @@ import com.madeforu.sales.data.Dashboard
 import com.madeforu.sales.data.Repository
 import com.madeforu.sales.data.SeriesResponse
 import com.madeforu.sales.ui.components.ChipRow
-import com.madeforu.sales.ui.components.ErrorBanner
+import com.madeforu.sales.ui.components.errorBannerItem
 import com.madeforu.sales.ui.components.softCardColors
 import com.madeforu.sales.ui.components.KpiCard
 import com.madeforu.sales.ui.components.LoadingBox
@@ -194,7 +194,7 @@ fun HomeScreen(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            item { ErrorBanner(error, onRetry = { load() }) }
+            errorBannerItem(error, onRetry = { load() })
             // Quiet unless a newer build has actually been published.
             item { UpdateBanner(repository) }
 

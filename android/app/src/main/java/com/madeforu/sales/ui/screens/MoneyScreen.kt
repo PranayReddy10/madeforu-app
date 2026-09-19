@@ -47,7 +47,7 @@ import com.madeforu.sales.data.PartnerFinance
 import com.madeforu.sales.data.Repository
 import com.madeforu.sales.ui.components.ChipRow
 import com.madeforu.sales.ui.components.DetailRow
-import com.madeforu.sales.ui.components.ErrorBanner
+import com.madeforu.sales.ui.components.errorBannerItem
 import com.madeforu.sales.ui.components.IconTile
 import com.madeforu.sales.ui.components.LoadingBox
 import com.madeforu.sales.ui.components.Pill
@@ -124,7 +124,7 @@ fun MoneyScreen(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            item { ErrorBanner(error, onRetry = { refresh() }) }
+            errorBannerItem(error, onRetry = { refresh() })
             message?.let { text ->
                 item {
                     Card(
