@@ -39,7 +39,7 @@ import com.madeforu.sales.data.SeriesResponse
 import com.madeforu.sales.ui.components.ChipRow
 import com.madeforu.sales.ui.components.DetailRow
 import com.madeforu.sales.ui.components.DonutChart
-import com.madeforu.sales.ui.components.ErrorBanner
+import com.madeforu.sales.ui.components.errorBannerItem
 import com.madeforu.sales.ui.components.softCardColors
 import com.madeforu.sales.ui.components.HorizontalBars
 import com.madeforu.sales.ui.components.HourStrip
@@ -111,7 +111,7 @@ fun StatsScreen(repository: Repository, onSessionExpired: () -> Unit) {
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            item { ErrorBanner(error) }
+            errorBannerItem(error)
 
             if (data != null) {
                 item {

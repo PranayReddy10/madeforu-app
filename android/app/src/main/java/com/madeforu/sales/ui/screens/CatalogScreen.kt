@@ -60,7 +60,7 @@ import com.madeforu.sales.core.isAuthFailure
 import com.madeforu.sales.data.PriceHistory
 import com.madeforu.sales.data.Product
 import com.madeforu.sales.data.Repository
-import com.madeforu.sales.ui.components.ErrorBanner
+import com.madeforu.sales.ui.components.errorBannerItem
 import com.madeforu.sales.ui.components.LoadingBox
 import com.madeforu.sales.ui.components.Pill
 import com.madeforu.sales.ui.components.ProductThumb
@@ -140,7 +140,7 @@ fun CatalogScreen(
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 96.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            item { ErrorBanner(error, onRetry = { load() }) }
+            errorBannerItem(error, onRetry = { load() })
 
             // A price change answers a question, so the answer stays on
             // screen until it is dismissed rather than flashing past in a

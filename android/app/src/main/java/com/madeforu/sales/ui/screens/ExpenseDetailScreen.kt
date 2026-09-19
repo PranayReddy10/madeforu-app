@@ -55,6 +55,7 @@ import com.madeforu.sales.data.Partner
 import com.madeforu.sales.data.Repository
 import com.madeforu.sales.ui.components.DetailRow
 import com.madeforu.sales.ui.components.ErrorBanner
+import com.madeforu.sales.ui.components.errorBannerItem
 import com.madeforu.sales.ui.components.softCardColors
 import com.madeforu.sales.ui.components.LoadingBox
 import com.madeforu.sales.ui.components.Pill
@@ -151,7 +152,7 @@ fun ExpenseDetailScreen(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            item { ErrorBanner(error, onRetry = { load() }) }
+            errorBannerItem(error, onRetry = { load() })
 
             item {
                 Card(

@@ -55,7 +55,7 @@ import com.madeforu.sales.data.Partner
 import com.madeforu.sales.data.Repository
 import com.madeforu.sales.ui.components.ChipRow
 import com.madeforu.sales.ui.components.DonutChart
-import com.madeforu.sales.ui.components.ErrorBanner
+import com.madeforu.sales.ui.components.errorBannerItem
 import com.madeforu.sales.ui.components.IconTile
 import com.madeforu.sales.ui.components.softCardColors
 import com.madeforu.sales.ui.components.KpiCard
@@ -157,7 +157,7 @@ fun ExpensesScreen(
                 contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 96.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                item { ErrorBanner(error, onRetry = { refresh() }) }
+                errorBannerItem(error, onRetry = { refresh() })
                 message?.let { text ->
                     item {
                         Card(

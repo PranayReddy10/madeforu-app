@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -230,6 +231,20 @@ fun ErrorBanner(message: String?, modifier: Modifier = Modifier, onRetry: (() ->
             }
         }
     }
+}
+
+/**
+ * The error banner as a list item that only exists when there is an error.
+ *
+ * `item { ErrorBanner(error) }` looks harmless but is not: an item that
+ * renders nothing is still an item, and a LazyColumn using
+ * Arrangement.spacedBy gives it the full gap regardless of its height.
+ * Every screen doing that carried a band of empty space above its first
+ * card, with nothing on screen to explain it.
+ */
+fun LazyListScope.errorBannerItem(message: String?, onRetry: (() -> Unit)? = null) {
+    if (message == null) return
+    item { ErrorBanner(message, onRetry = onRetry) }
 }
 
 @Composable

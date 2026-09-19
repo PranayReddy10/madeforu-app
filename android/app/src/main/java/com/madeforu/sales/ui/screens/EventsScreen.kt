@@ -55,7 +55,7 @@ import com.madeforu.sales.data.Partner
 import com.madeforu.sales.data.Repository
 import com.madeforu.sales.ui.components.ChipRow
 import com.madeforu.sales.ui.components.DetailRow
-import com.madeforu.sales.ui.components.ErrorBanner
+import com.madeforu.sales.ui.components.errorBannerItem
 import com.madeforu.sales.ui.components.LoadingBox
 import com.madeforu.sales.ui.components.Pill
 import com.madeforu.sales.ui.theme.positiveColor
@@ -132,7 +132,7 @@ fun EventsScreen(
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 96.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            item { ErrorBanner(error, onRetry = { load() }) }
+            errorBannerItem(error, onRetry = { load() })
             message?.let {
                 item {
                     Card(

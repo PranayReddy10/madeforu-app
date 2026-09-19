@@ -64,7 +64,7 @@ import com.madeforu.sales.data.Product
 import com.madeforu.sales.data.Repository
 import com.madeforu.sales.ui.components.ChipRow
 import com.madeforu.sales.ui.components.DetailRow
-import com.madeforu.sales.ui.components.ErrorBanner
+import com.madeforu.sales.ui.components.errorBannerItem
 import com.madeforu.sales.ui.components.softCardColors
 import com.madeforu.sales.ui.components.ProductThumb
 import com.madeforu.sales.ui.components.LoadingBox
@@ -188,6 +188,15 @@ fun NewOrderScreen(
     }
 
     Scaffold(
+        // The keyboard inset is applied to the whole Scaffold, not to the
+        // list inside it. Doing both double-counts: the padding the
+        // Scaffold hands its content already covers the bottom bar and the
+        // navigation bar, and imePadding() on top of that added the
+        // keyboard a second time -- a band of empty space between the
+        // fields and the keyboard. Lifting the Scaffold also keeps the
+        // total and the save button visible while typing, which is the
+        // behaviour that bar exists for.
+        modifier = Modifier.imePadding(),
         topBar = {
             TopAppBar(
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -263,11 +272,15 @@ fun NewOrderScreen(
         }
 
         LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(padding).imePadding(),
+            modifier = Modifier.fillMaxSize().padding(padding),
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            item { ErrorBanner(error) }
+            // Only an item when there is something to show. An item that
+            // renders nothing is still an item, and spacedBy gives it its
+            // 10.dp all the same -- a gap above the first card that had no
+            // visible cause.
+            errorBannerItem(error)
 
             if (events.isNotEmpty()) {
                 item {

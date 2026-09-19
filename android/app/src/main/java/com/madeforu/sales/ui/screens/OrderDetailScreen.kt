@@ -64,7 +64,7 @@ import com.madeforu.sales.core.isAuthFailure
 import com.madeforu.sales.data.Order
 import com.madeforu.sales.data.Repository
 import com.madeforu.sales.ui.components.DetailRow
-import com.madeforu.sales.ui.components.ErrorBanner
+import com.madeforu.sales.ui.components.errorBannerItem
 import com.madeforu.sales.ui.components.softCardColors
 import com.madeforu.sales.ui.components.LoadingBox
 import com.madeforu.sales.ui.components.PayStatusPill
@@ -177,7 +177,7 @@ fun OrderDetailScreen(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            item { ErrorBanner(error, onRetry = { refresh() }) }
+            errorBannerItem(error, onRetry = { refresh() })
 
             item { MoneyHeader(current) }
 

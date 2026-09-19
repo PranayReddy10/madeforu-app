@@ -68,6 +68,7 @@ import com.madeforu.sales.data.Bill
 import com.madeforu.sales.data.Repository
 import com.madeforu.sales.ui.components.DetailRow
 import com.madeforu.sales.ui.components.ErrorBanner
+import com.madeforu.sales.ui.components.errorBannerItem
 import com.madeforu.sales.ui.components.softCardColors
 import com.madeforu.sales.ui.components.LoadingBox
 import com.madeforu.sales.ui.components.Pill
@@ -146,7 +147,7 @@ fun BillScreen(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            item { ErrorBanner(error, onRetry = { load(false) }) }
+            errorBannerItem(error, onRetry = { load(false) })
 
             item {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -410,7 +411,7 @@ fun BillsScreen(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            item { ErrorBanner(error) }
+            errorBannerItem(error)
             if (bills.isEmpty()) {
                 item {
                     Text(
