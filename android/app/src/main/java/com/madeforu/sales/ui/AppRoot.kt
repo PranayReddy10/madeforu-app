@@ -3,7 +3,9 @@ package com.madeforu.sales.ui
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddCircle
@@ -28,6 +30,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
@@ -68,6 +71,7 @@ private val bottomDestinations = listOf(
     BottomDestination(Routes.MONEY, "Money", Icons.Filled.Savings),
 )
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun AppRoot(signedIn: Boolean) {
     val navController = rememberNavController()
@@ -110,7 +114,15 @@ fun AppRoot(signedIn: Boolean) {
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         snackbarHost = { SnackbarHost(snackbarHostState) },
         bottomBar = {
-            AnimatedVisibility(visible = showBottomBar) {
+            // The tabs step aside for the keyboard. They have to: a screen
+            // inside this Scaffold that lifts itself above the keyboard is
+            // measured within the area left over once this bar is taken
+            // out, so it stops a bar's height short of the keyboard and
+            // leaves a blank band under it. Read here rather than in the
+            // body of AppRoot so the keyboard animation only recomposes
+            // this slot, not the whole app.
+            val keyboardOpen = WindowInsets.ime.getBottom(LocalDensity.current) > 0
+            AnimatedVisibility(visible = showBottomBar && !keyboardOpen) {
                 NavigationBar(tonalElevation = 3.dp) {
                     bottomDestinations.forEach { destination ->
                         val selected = currentRoute == destination.route
