@@ -2,6 +2,10 @@
 
 package com.madeforu.sales.ui.screens
 
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -27,9 +31,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -44,10 +48,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
-import android.content.Context
-import android.content.Intent
-import android.net.Uri
-import android.widget.Toast
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -57,14 +57,15 @@ import com.madeforu.sales.core.ApiResult
 import com.madeforu.sales.core.Dates
 import com.madeforu.sales.core.Money
 import com.madeforu.sales.core.isAuthFailure
-import com.madeforu.sales.data.Product
 import com.madeforu.sales.data.PriceHistory
+import com.madeforu.sales.data.Product
 import com.madeforu.sales.data.Repository
 import com.madeforu.sales.ui.components.ErrorBanner
 import com.madeforu.sales.ui.components.LoadingBox
-import com.madeforu.sales.ui.components.ProductThumb
-import com.madeforu.sales.ui.components.softCardColors
 import com.madeforu.sales.ui.components.Pill
+import com.madeforu.sales.ui.components.ProductThumb
+import com.madeforu.sales.ui.components.numberText
+import com.madeforu.sales.ui.components.softCardColors
 import com.madeforu.sales.ui.theme.positiveColor
 import kotlinx.coroutines.launch
 
@@ -488,10 +489,6 @@ private fun AddProductSheet(
         }
     }
 }
-
-private fun numberText(value: Double): String =
-    if (value == value.toLong().toDouble()) value.toLong().toString()
-    else String.format(java.util.Locale.US, "%.2f", value)
 
 /**
  * Sends a product to a customer on WhatsApp.

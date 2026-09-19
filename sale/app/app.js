@@ -24,7 +24,7 @@ const DEFAULT_API = new URL('../api/', location.href).href;
  * browser, the server or the app is the stale one. It must match the
  * CACHE name in sw.js.
  */
-const BUILD = '2026-09-19.2';
+const BUILD = '2026-09-19.3';
 
 /** What this build of the app expects the server to be able to do. */
 const NEEDS_FEATURES = ['revenue_breakdown', 'expense_create', 'price_history',
@@ -1261,7 +1261,9 @@ function partnerBoxes(pd) {
   if (!pd || !pd.partners || !pd.partners.length) return '';
   return `<section><h2 class="section">Each partner in detail</h2>
     <p class="muted" style="margin-bottom:8px">${pd.count} partners, ${pd.share_pct}% each.
-      Every total below divides ${pd.count} ways — what was put in, and what was earned.</p>
+      Two totals divide ${pd.count} ways: ${money(pd.total_paid)} paid from pocket
+      (${money(pd.fair_paid)} each) and ${money(pd.revenue)} of revenue across every channel
+      (${money(pd.revenue_share)} each).</p>
     ${pd.partners.map((x) => `
       <div class="card" style="margin-bottom:10px">
         <div class="row" style="border:none;padding-top:0">
@@ -1274,9 +1276,14 @@ function partnerBoxes(pd) {
 
         <div class="s" style="margin-top:6px;font-weight:600;color:var(--rose)">PAID FROM OWN POCKET</div>
         ${detailRow('They paid', money(x.paid))}
-        ${detailRow('An equal share would be', money(x.fair_paid))}
-        <div class="row"><div class="grow t">Investment gap</div>
-          <div class="amt ${x.investment_gap >= 0 ? 'pos' : 'neg'}">${signed(x.investment_gap)}</div></div>
+        ${detailRow('Equal share of ' + money(pd.total_paid), money(x.fair_paid))}
+        <div class="row"><div class="grow t">Over or under</div>
+          <div class="amt ${x.paid_gap >= 0 ? 'pos' : 'neg'}">${signed(x.paid_gap)}</div></div>
+
+        <div class="s" style="margin-top:10px;font-weight:600;color:var(--rose)">SHARE OF REVENUE</div>
+        ${detailRow('All sales, every channel', money(pd.revenue))}
+        <div class="row"><div class="grow t">Their ${pd.share_pct}% of it</div>
+          <div class="amt">${money(x.revenue_share)}</div></div>
 
         <div class="s" style="margin-top:10px;font-weight:600;color:var(--rose)">SHARE OF PROFIT</div>
         ${detailRow('Their ' + pd.share_pct + '% of ' + money(pd.profit), money(x.profit_share))}
@@ -1291,6 +1298,9 @@ function partnerBoxes(pd) {
           <div class="amt ${x.balance >= 0 ? 'pos' : 'neg'}">${money(x.balance)}</div></div>
 
         <div class="s" style="margin-top:10px;font-weight:600;color:var(--rose)">SETTLEMENT</div>
+        ${detailRow('Net invested', money(x.invested_net))}
+        <div class="row"><div class="grow s">Against an equal ${money(x.fair_invested)}</div>
+          <div class="amt ${x.investment_gap >= 0 ? 'pos' : 'neg'}">${signed(x.investment_gap)}</div></div>
         ${Math.abs(x.settled_adjust) > 0.005
           ? detailRow('Already settled', signed(x.settled_adjust)) : ''}
         ${x.owes.length ? x.owes.map((o) =>

@@ -267,6 +267,21 @@ function partner_detail_api(array $rows, array $business, array $settleInvest,
     $distributed  = (float)$business['distributed'];
     $distShare    = round($distributed / $n, 2);
 
+    // Split on what was actually PAID OUT OF POCKET, not on net invested.
+    // They are different numbers — net invested subtracts what has been
+    // credited back — and a row that says "they paid ₹33,483" next to an
+    // equal share computed from net invested is comparing two different
+    // things. Net invested still drives the settle-up plan, because that
+    // is investment.php's basis and the website must agree; it is just
+    // not what this row is asking about.
+    $totalPaid    = array_sum(array_column($rows, 'paid'));
+    $fairPaid     = round($totalPaid / $n, 2);
+
+    // Revenue, every channel, divided equally — what each partner's share
+    // of the business taking is before any cost comes off it.
+    $revenue      = (float)$business['revenue'];
+    $revenueShare = round($revenue / $n, 2);
+
     // Who owes whom, indexed so each partner's box can state their own
     // side of it rather than making them read a list of everyone's.
     $owes = []; $owed = [];
@@ -282,10 +297,19 @@ function partner_detail_api(array $rows, array $business, array $settleInvest,
             'id'   => $r['id'],
             'name' => $name,
 
-            // Out of their own pocket, and their equal share of the total.
+            // Out of their own pocket, against an equal share of what
+            // everyone paid.
             'paid'            => $r['paid'],
-            'fair_paid'       => $r['fair_share'],
+            'fair_paid'       => $fairPaid,
+            'paid_gap'        => round($r['paid'] - $fairPaid, 2),
+
+            // Their equal share of everything the business took in.
+            'revenue_share'   => $revenueShare,
+
+            // Net invested and its gap stay because the settle-up plan is
+            // built on them, and the website shows the same basis.
             'invested_net'    => $r['contribution'],
+            'fair_invested'   => $r['fair_share'],
             'investment_gap'  => $r['gap'],
 
             // Their quarter of what the business earned.
@@ -313,7 +337,10 @@ function partner_detail_api(array $rows, array $business, array $settleInvest,
         'share_pct'     => round(100 / $n, 1),
         'profit'        => round($profit, 2),
         'profit_share'  => $profitShare,
-        'total_paid'    => round(array_sum(array_column($rows, 'paid')), 2),
+        'revenue'       => round($revenue, 2),
+        'revenue_share' => $revenueShare,
+        'fair_paid'     => $fairPaid,
+        'total_paid'    => round($totalPaid, 2),
         'total_credited'=> round(array_sum(array_column($rows, 'credited')), 2),
         'total_balance' => round(array_sum(array_column($rows, 'balance')), 2),
     ];
@@ -388,7 +415,8 @@ api_dispatch([
         $offset = max(0, api_int('offset', 0));
 
         $sql = 'SELECT m.id, m.mov_date, m.direction, m.kind, m.amount, m.invest_adjust,
-                       m.source, m.note, m.event_id, p.name partner, e.name event_name
+                       m.source, m.note, m.event_id, m.partner_id, m.transfer_id,
+                       p.name partner, e.name event_name
                   FROM account_movements m
                   JOIN partners p ON p.id = m.partner_id
                   LEFT JOIN events e ON e.id = m.event_id'
@@ -402,13 +430,19 @@ api_dispatch([
 
         $out = [];
         while ($r = $res->fetch_assoc()) {
-            $out[] = ['id' => (int)$r['id'], 'date' => $r['mov_date'], 'partner' => $r['partner'],
+            $out[] = ['id' => (int)$r['id'], 'date' => $r['mov_date'],
+                      'partner' => $r['partner'], 'partner_id' => (int)$r['partner_id'],
                       'direction' => $r['direction'], 'kind' => $r['kind'],
                       'amount' => round((float)$r['amount'], 2),
                       'invest_adjust' => round((float)$r['invest_adjust'], 2),
                       'source' => $r['source'], 'note' => $r['note'],
                       'event_id' => $r['event_id'] !== null ? (int)$r['event_id'] : null,
-                      'event_name' => $r['event_name']];
+                      'event_name' => $r['event_name'],
+                      // The app greys out Edit on these: a settlement is a
+                      // pair, and a credit with orders stamped on it has an
+                      // amount that must match them.
+                      'editable' => empty($r['transfer_id'])
+                                    && !in_array($r['kind'], ['transfer', 'invest'], true)];
         }
         $s->close();
 
@@ -441,6 +475,91 @@ api_dispatch([
             'totals'    => ['credits' => $credits, 'debits' => $debits,
                             'net' => round($credits - $debits, 2), 'count' => (int)$sum['n']],
         ]);
+    },
+
+    /**
+     * POST update_movement {id, mov_date, partner_id, direction, amount,
+     *                       source, note}
+     *
+     * Corrects a movement that was entered wrong. Deliberately refuses
+     * the rows that are not free-standing, because editing one half of
+     * them silently breaks the other:
+     *
+     *   a settlement (kind 'transfer' or 'invest') is a PAIR sharing a
+     *   transfer_id, and changing one side's amount leaves the two no
+     *   longer cancelling — one partner's net investment moves with
+     *   nothing moving back. Delete it and record it again instead.
+     *
+     *   a credit raised from offline sales has orders stamped against it.
+     *   Its amount is the sum of those orders, so editing it would make
+     *   the credit disagree with the sales it represents.
+     *
+     * An event credit stays editable: credit_event caps the amount at the
+     * event's own order revenue, and nothing is stamped, so a correction
+     * there is just a correction.
+     */
+    'update_movement' => function () use ($conn) {
+        $id = api_int('id');
+        if ($id < 1) throw new ApiInputError('Invalid movement.');
+
+        $g = $conn->prepare('SELECT kind, transfer_id FROM account_movements WHERE id = ?');
+        $g->bind_param('i', $id);
+        $g->execute();
+        $cur = $g->get_result()->fetch_assoc();
+        $g->close();
+        if (!$cur) api_fail(404, 'not_found', 'That movement no longer exists.');
+
+        if (!empty($cur['transfer_id']) || in_array($cur['kind'], ['transfer', 'invest'], true)) {
+            throw new ApiInputError(
+                'This is one side of a settlement between partners. Editing one side would leave '
+                . 'the other standing — delete it and record it again.'
+            );
+        }
+
+        $stamped = $conn->prepare('SELECT COUNT(*) n FROM orders WHERE credited_mov_id = ?');
+        $stamped->bind_param('i', $id);
+        $stamped->execute();
+        $n = (int)$stamped->get_result()->fetch_assoc()['n'];
+        $stamped->close();
+        if ($n > 0) {
+            throw new ApiInputError(
+                'This credit covers ' . $n . ' offline order' . ($n === 1 ? '' : 's')
+                . ', so its amount has to match them. Delete it to release those orders, then '
+                . 'credit them again.'
+            );
+        }
+
+        $pid    = api_int('partner_id');
+        $dir    = api_str('direction');
+        $amount = api_float('amount', 0);
+        $date   = api_date('mov_date', date('Y-m-d'));
+
+        if ($pid < 1)                                   throw new ApiInputError('Choose a partner.');
+        if (!in_array($dir, ['credit', 'debit'], true)) throw new ApiInputError('Choose credit or debit.');
+        if ($amount <= 0)                               throw new ApiInputError('Enter an amount greater than zero.');
+
+        $chk = $conn->prepare('SELECT name FROM partners WHERE id = ?');
+        $chk->bind_param('i', $pid);
+        $chk->execute();
+        $partner = $chk->get_result()->fetch_assoc();
+        $chk->close();
+        if (!$partner) throw new ApiInputError('That partner no longer exists.');
+
+        // Same NOT NULL DEFAULT '' columns as add_movement: never NULL.
+        $source = mb_substr(api_str('source', $dir === 'credit' ? 'Manual credit' : 'Manual debit'), 0, 120);
+        $note   = mb_substr(api_str('note'), 0, 500);
+
+        $s = $conn->prepare(
+            'UPDATE account_movements
+                SET mov_date = ?, partner_id = ?, direction = ?, amount = ?, source = ?, note = ?
+              WHERE id = ?'
+        );
+        $s->bind_param('sisdssi', $date, $pid, $dir, $amount, $source, $note, $id);
+        $s->execute();
+        $s->close();
+
+        api_ok(['message' => 'Movement updated — ' . money($amount) . ' ' . $dir
+                             . ' for ' . $partner['name'] . '.']);
     },
 
     /**

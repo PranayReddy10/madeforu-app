@@ -488,8 +488,15 @@ data class PartnerBox(
     val id: Int = 0,
     val name: String = "",
     val paid: Double = 0.0,
+    // An equal share of what everyone paid from pocket — not of net
+    // invested, which subtracts what has been credited back and is a
+    // different question from "did I pay my quarter".
     @SerialName("fair_paid") val fairPaid: Double = 0.0,
+    @SerialName("paid_gap") val paidGap: Double = 0.0,
+    // An equal share of everything the business took in, all channels.
+    @SerialName("revenue_share") val revenueShare: Double = 0.0,
     @SerialName("invested_net") val investedNet: Double = 0.0,
+    @SerialName("fair_invested") val fairInvested: Double = 0.0,
     @SerialName("investment_gap") val investmentGap: Double = 0.0,
     @SerialName("profit_share") val profitShare: Double = 0.0,
     @SerialName("profit_distributed") val profitDistributed: Double = 0.0,
@@ -510,6 +517,9 @@ data class PartnerDetail(
     @SerialName("share_pct") val sharePct: Double = 0.0,
     val profit: Double = 0.0,
     @SerialName("profit_share") val profitShare: Double = 0.0,
+    val revenue: Double = 0.0,
+    @SerialName("revenue_share") val revenueShare: Double = 0.0,
+    @SerialName("fair_paid") val fairPaid: Double = 0.0,
     @SerialName("total_paid") val totalPaid: Double = 0.0,
     @SerialName("total_credited") val totalCredited: Double = 0.0,
     @SerialName("total_balance") val totalBalance: Double = 0.0,
@@ -625,6 +635,7 @@ data class Movement(
     val id: Int = 0,
     val date: String = "",
     val partner: String = "",
+    @SerialName("partner_id") val partnerId: Int = 0,
     val direction: String = "credit",
     val kind: String = "normal",
     val amount: Double = 0.0,
@@ -633,12 +644,27 @@ data class Movement(
     val note: String? = null,
     @SerialName("event_id") val eventId: Int? = null,
     @SerialName("event_name") val eventName: String? = null,
+    // False for a settlement (it is one of a pair) and for a credit with
+    // offline orders stamped on it (its amount has to match them). The
+    // server refuses these too; this is so the app can say so first.
+    val editable: Boolean = true,
+)
+
+@Serializable
+data class MovementTotals(
+    val credits: Double = 0.0,
+    val debits: Double = 0.0,
+    val net: Double = 0.0,
+    val count: Int = 0,
 )
 
 @Serializable
 data class MovementsResponse(
     val movements: List<Movement> = emptyList(),
     @SerialName("has_more") val hasMore: Boolean = false,
+    // For the whole filtered set, not the page — the same basis
+    // movements.php uses for its "Credits shown / Debits shown / Net".
+    val totals: MovementTotals = MovementTotals(),
 )
 
 // ── Expenses ───────────────────────────────────────────────────────

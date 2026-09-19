@@ -336,6 +336,42 @@ class Repository(private val api: ApiClient, private val prefs: Prefs) {
             },
         ).map { api.decode<SimpleMessage>(it).message }
 
+    /** Correct a movement that was entered wrong. */
+    suspend fun updateMovement(
+        id: Int,
+        partnerId: Int,
+        direction: String,
+        amount: Double,
+        date: String,
+        source: String,
+        note: String,
+    ): ApiResult<String> =
+        api.post(
+            "finance.php", "update_movement",
+            ApiClient.body {
+                put("id", JsonPrimitive(id))
+                put("partner_id", JsonPrimitive(partnerId))
+                put("direction", JsonPrimitive(direction))
+                put("amount", JsonPrimitive(amount))
+                put("mov_date", JsonPrimitive(date))
+                put("source", JsonPrimitive(source))
+                put("note", JsonPrimitive(note))
+            },
+        ).map { api.decode<SimpleMessage>(it).message }
+
+    /**
+     * Remove a movement.
+     *
+     * The server handles the two cases that matter: a settlement loses
+     * both its sides, and a credit raised from offline sales releases the
+     * orders it stamped so they can be credited again.
+     */
+    suspend fun deleteMovement(id: Int): ApiResult<String> =
+        api.post(
+            "finance.php", "delete_movement",
+            ApiClient.body { put("id", JsonPrimitive(id)) },
+        ).map { api.decode<SimpleMessage>(it).message }
+
     suspend fun creditOffline(partnerId: Int, from: String, to: String): ApiResult<String> =
         api.post(
             "finance.php", "credit_offline",

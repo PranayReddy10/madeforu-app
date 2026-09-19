@@ -127,68 +127,6 @@ fun InvestmentHeadline(data: FinanceOverview) {
     }
 }
 
-/**
- * The per-partner table. Seven money columns cannot wrap on a phone, so it
- * scrolls sideways — a swipe keeps the rows readable in a way a wrapped
- * cell does not.
- */
-@Composable
-fun PartnerBreakdown(data: FinanceOverview) {
-    val scroll = rememberScrollState()
-    Card(shape = RoundedCornerShape(20.dp), colors = softCardColors()) {
-        Column(Modifier.fillMaxWidth().padding(16.dp)) {
-            Text("Per-partner breakdown", style = MaterialTheme.typography.titleMedium)
-            Text(
-                "Remaining = Paid − Credited (money put in that has not come back yet).  " +
-                    "Net invested = Remaining + settle-up adjustments.  " +
-                    "Account balance = Credited − Debited.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.height(12.dp))
-
-            Column(Modifier.fillMaxWidth().horizontalScroll(scroll)) {
-                Row(Modifier.padding(bottom = 6.dp)) {
-                    Head("Partner", 116.dp)
-                    Head("Paid", 104.dp)
-                    Head("Credited", 104.dp)
-                    Head("Debited", 100.dp)
-                    Head("Remaining", 108.dp)
-                    Head("Net invested", 112.dp)
-                    Head("Balance", 100.dp)
-                }
-                ThinDivider()
-                data.partners.forEach { p ->
-                    Row(Modifier.padding(vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Body(p.name, 116.dp, bold = true)
-                        Body(Money.full(p.paid), 104.dp)
-                        Body(Money.full(p.credited), 104.dp)
-                        Body(Money.full(p.debited), 100.dp)
-                        Body(Money.full(p.remaining), 108.dp)
-                        Body(Money.full(p.contribution), 112.dp, bold = true)
-                        Body(
-                            Money.full(p.balance), 100.dp,
-                            tint = if (p.balance >= 0) positiveColor() else negativeColor(),
-                        )
-                    }
-                    ThinDivider()
-                }
-                Row(Modifier.padding(top = 9.dp)) {
-                    Body("Total", 116.dp, bold = true)
-                    Body(Money.full(data.totals.paid), 104.dp, bold = true)
-                    Body(Money.full(data.totals.credited), 104.dp, bold = true)
-                    Body(Money.full(data.totals.debited), 100.dp, bold = true)
-                    Body(Money.full(data.totals.remaining), 108.dp, bold = true)
-                    Body(Money.full(data.totals.contribution), 112.dp, bold = true)
-                    Body(
-                        Money.full(data.totals.balance), 100.dp, bold = true,
-                        tint = if (data.totals.balance >= 0) positiveColor() else negativeColor(),
-                    )
-                }
-            }
-        }
-    }
-}
 
 /**
  * Account balance, split equally — the website's fourth card.
@@ -541,8 +479,11 @@ fun PartnerBoxes(detail: PartnerDetail) {
     Column(Modifier.fillMaxWidth()) {
         Text(
             detail.count.toString() + " partners, " + sharePctText(detail.sharePct) +
-                " each. Every total below divides " + detail.count +
-                " ways — what was put in, and what was earned.",
+                " each. Two totals divide " + detail.count + " ways: " +
+                Money.full(detail.totalPaid) + " paid from pocket (" +
+                Money.full(detail.fairPaid) + " each) and " +
+                Money.full(detail.revenue) + " of revenue across every channel (" +
+                Money.full(detail.revenueShare) + " each).",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -570,10 +511,23 @@ fun PartnerBoxes(detail: PartnerDetail) {
 
                     BoxHeading("Paid from own pocket")
                     StatLine("They paid", Money.full(p.paid))
-                    StatLine("An equal share would be", Money.full(p.fairPaid))
                     StatLine(
-                        "Investment gap", signedMoney(p.investmentGap), bold = true,
-                        tint = if (p.investmentGap >= 0) positiveColor() else negativeColor(),
+                        "Equal share of " + Money.full(detail.totalPaid),
+                        Money.full(p.fairPaid),
+                    )
+                    StatLine(
+                        "Over or under", signedMoney(p.paidGap), bold = true,
+                        tint = if (p.paidGap >= 0) positiveColor() else negativeColor(),
+                    )
+
+                    BoxHeading("Share of revenue")
+                    StatLine(
+                        "All sales, every channel",
+                        Money.full(detail.revenue),
+                    )
+                    StatLine(
+                        "Their " + sharePctText(detail.sharePct) + " of it",
+                        Money.full(p.revenueShare), bold = true,
                     )
 
                     BoxHeading("Share of profit")
@@ -596,6 +550,12 @@ fun PartnerBoxes(detail: PartnerDetail) {
                     )
 
                     BoxHeading("Settlement")
+                    StatLine("Net invested", Money.full(p.investedNet))
+                    StatLine(
+                        "Against an equal " + Money.full(p.fairInvested),
+                        signedMoney(p.investmentGap),
+                        tint = if (p.investmentGap >= 0) positiveColor() else negativeColor(),
+                    )
                     if (kotlin.math.abs(p.settledAdjust) > 0.005) {
                         StatLine("Already settled", signedMoney(p.settledAdjust))
                     }
@@ -796,29 +756,6 @@ private fun StatLine(label: String, value: String, tint: Color? = null, bold: Bo
             color = tint ?: MaterialTheme.colorScheme.onSurface,
         )
     }
-}
-
-@Composable
-private fun Head(text: String, width: Dp) {
-    Text(
-        text.uppercase(),
-        style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.width(width),
-        maxLines = 2,
-    )
-}
-
-@Composable
-private fun Body(text: String, width: Dp, bold: Boolean = false, tint: Color? = null) {
-    Text(
-        text,
-        style = MaterialTheme.typography.bodySmall,
-        fontWeight = if (bold) FontWeight.SemiBold else FontWeight.Normal,
-        color = tint ?: MaterialTheme.colorScheme.onSurface,
-        modifier = Modifier.width(width),
-        maxLines = 1,
-    )
 }
 
 /**

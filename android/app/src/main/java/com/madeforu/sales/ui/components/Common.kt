@@ -302,6 +302,17 @@ fun SoldLine(
     }
 }
 
+/**
+ * A Double as a plain editable string: "60" not "60.0", "60.5" kept.
+ *
+ * Was private to CatalogScreen; the movement sheet wants the same thing,
+ * and a private declaration is invisible to the rest of its package, so
+ * it lives here rather than being copied.
+ */
+fun numberText(value: Double): String =
+    if (value == value.toLong().toDouble()) value.toLong().toString()
+    else String.format(java.util.Locale.US, "%.2f", value)
+
 /** A label/value row — the workhorse of every detail screen. */
 @Composable
 fun DetailRow(
