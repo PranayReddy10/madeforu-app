@@ -70,6 +70,7 @@ import com.madeforu.sales.ui.components.LoadingBox
 import com.madeforu.sales.ui.components.PayStatusPill
 import com.madeforu.sales.ui.components.Pill
 import com.madeforu.sales.ui.components.SectionHeader
+import com.madeforu.sales.ui.components.SoldLine
 import com.madeforu.sales.ui.components.ThinDivider
 import com.madeforu.sales.ui.theme.negativeColor
 import com.madeforu.sales.ui.theme.positiveColor
