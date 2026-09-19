@@ -24,11 +24,11 @@ const DEFAULT_API = new URL('../api/', location.href).href;
  * browser, the server or the app is the stale one. It must match the
  * CACHE name in sw.js.
  */
-const BUILD = '2026-09-19.3';
+const BUILD = '2026-09-19.4';
 
 /** What this build of the app expects the server to be able to do. */
 const NEEDS_FEATURES = ['revenue_breakdown', 'expense_create', 'price_history',
-                        'all_channel_revenue'];
+                        'all_channel_revenue', 'reprice_open'];
 
 const store = {
   get token() { return localStorage.getItem('mfu.token') || ''; },
@@ -1298,9 +1298,19 @@ function partnerBoxes(pd) {
           <div class="amt ${x.balance >= 0 ? 'pos' : 'neg'}">${money(x.balance)}</div></div>
 
         <div class="s" style="margin-top:10px;font-weight:600;color:var(--rose)">SETTLEMENT</div>
-        ${detailRow('Net invested', money(x.invested_net))}
-        <div class="row"><div class="grow s">Against an equal ${money(x.fair_invested)}</div>
+        ${detailRow('Paid from pocket', money(x.paid))}
+        ${detailRow('Less credited back', '-' + money(x.credited))}
+        ${Math.abs(x.settled_adjust) > 0.005
+          ? detailRow('Plus settle-up so far', signed(x.settled_adjust)) : ''}
+        <div class="row"><div class="grow t">Net invested</div>
+          <div class="amt">${money(x.invested_net)}</div></div>
+        ${detailRow('An equal share would be', money(x.fair_invested))}
+        <div class="row"><div class="grow t">${x.investment_gap >= 0 ? 'Ahead by' : 'Behind by'}</div>
           <div class="amt ${x.investment_gap >= 0 ? 'pos' : 'neg'}">${signed(x.investment_gap)}</div></div>
+        <p class="muted">${money(x.paid)} - ${money(x.credited)}${
+          Math.abs(x.settled_adjust) > 0.005
+            ? (x.settled_adjust >= 0 ? ' + ' : ' - ') + money(Math.abs(x.settled_adjust)) : ''
+        } = ${money(x.invested_net)}, against ${money(x.fair_invested)} each.</p>
         ${Math.abs(x.settled_adjust) > 0.005
           ? detailRow('Already settled', signed(x.settled_adjust)) : ''}
         ${x.owes.length ? x.owes.map((o) =>
@@ -1316,6 +1326,87 @@ function partnerBoxes(pd) {
       balance is what has actually been taken in and not drawn out — three different things,
       which is why they are listed separately.</p>
   </section>`;
+}
+
+/**
+ * Offer to carry a new price onto orders that are still open.
+ *
+ * Completed sales are never touched: an order that has been delivered,
+ * or paid in full, was agreed at its own price, and moving its total
+ * afterwards invents a balance the customer never agreed to. What is
+ * left — not delivered AND not fully paid — is still being negotiated,
+ * so it is the only thing a price rise can fairly reach, and even then
+ * only per order and only on request.
+ *
+ * Nothing happens unless the partner ticks a box and confirms.
+ */
+async function offerReprice(item) {
+  let d;
+  try {
+    d = await api('catalog.php', 'reprice_preview', { params: { item } });
+  } catch (e) { return; }                 // older server: nothing to offer
+  if (!d.orders || !d.orders.length) return;
+
+  const sheet = openSheet('Apply to open orders?', `
+    <div class="card">
+      <div class="t">${d.count} open order${d.count === 1 ? '' : 's'} still
+        ${d.count === 1 ? 'holds' : 'hold'} the old price</div>
+      <p class="muted">${d.count === 1 ? 'This has' : 'These have'} not been delivered and
+        ${d.count === 1 ? 'is' : 'are'} not paid in full. Delivered and fully-paid orders are
+        never changed — they keep the price the customer agreed to.</p>
+    </div>
+    <section><h2 class="section">Choose which to update</h2><div class="card" id="repList">
+      ${d.orders.map((o) => `
+        <label class="row" style="cursor:pointer">
+          <input type="checkbox" data-rep="${o.id}" ${o.blocked ? 'disabled' : 'checked'}
+                 style="width:auto;margin-right:10px">
+          <div class="grow"><div class="t">${esc(o.order_no)}</div>
+            <div class="s">${esc(o.customer || 'Walk-in')} · ${esc(prettyDate(o.created_at))}${
+              o.paid_amount > 0.005 ? ' · ' + money(o.paid_amount) + ' paid' : ''}</div>
+            ${o.blocked ? `<div class="s neg">cannot: the new total is below what is already paid</div>` : ''}
+          </div>
+          <div class="amt">${money(o.new_total)}
+            <div class="s ${o.change >= 0 ? 'pos' : 'neg'}">${signed(o.change)}</div></div>
+        </label>`).join('')}
+    </div></section>
+    <div class="card" style="margin-top:10px">
+      <div class="row" style="border:none;padding:0">
+        <div class="grow t">Total change</div>
+        <div class="amt ${d.net_change >= 0 ? 'pos' : 'neg'}" id="repNet">${signed(d.net_change)}</div>
+      </div>
+    </div>
+    <button class="btn" id="repGo" style="margin-top:12px">Update the ticked orders</button>
+    <button class="btn ghost" id="repSkip" style="margin-top:8px">Leave them as they are</button>`);
+
+  const picked = () => [...sheet.panel.querySelectorAll('[data-rep]')]
+    .filter((c) => c.checked && !c.disabled).map((c) => Number(c.dataset.rep));
+
+  function paintNet() {
+    const ids = picked();
+    const net = d.orders.filter((o) => ids.includes(o.id))
+                        .reduce((t, o) => t + o.change, 0);
+    const el = sheet.panel.querySelector('#repNet');
+    el.textContent = signed(net);
+    el.className = 'amt ' + (net >= 0 ? 'pos' : 'neg');
+    sheet.panel.querySelector('#repGo').disabled = ids.length === 0;
+  }
+  sheet.panel.querySelectorAll('[data-rep]').forEach((c) => c.onchange = paintNet);
+  paintNet();
+
+  await new Promise((done) => {
+    sheet.panel.querySelector('#repSkip').onclick = () => { sheet.close(); done(); };
+    sheet.panel.querySelector('#repGo').onclick = async () => {
+      const button = sheet.panel.querySelector('#repGo');
+      button.disabled = true; button.textContent = 'Updating…';
+      try {
+        const r = await api('catalog.php', 'reprice_apply', {
+          body: { item, order_ids: picked() },
+        });
+        toast(r.message || 'Orders updated.');
+      } catch (e) { toast(e.message); }
+      sheet.close(); done();
+    };
+  });
 }
 
 /* ── Movements — the account ledger, mirroring movements.php ──── */
@@ -1815,6 +1906,10 @@ async function priceSheet(product) {
       });
       sheet.close();
       toast(r.message || 'Price updated.');
+      // A price change reaches new sales by itself. Orders still open —
+      // not delivered and not paid in full — are the only ones that can
+      // reasonably follow it, and only if someone says so.
+      await offerReprice(product.name);
       routes.catalog();
     } catch (e) {
       toast(e.message);

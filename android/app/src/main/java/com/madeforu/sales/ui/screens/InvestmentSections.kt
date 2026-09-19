@@ -43,12 +43,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.madeforu.sales.core.Dates
 import com.madeforu.sales.core.Money
 import com.madeforu.sales.data.FinanceOverview
 import com.madeforu.sales.data.PartnerDetail
-import com.madeforu.sales.ui.components.ThinDivider
 import com.madeforu.sales.ui.components.IconTile
+import com.madeforu.sales.ui.components.Pill
+import com.madeforu.sales.ui.components.ThinDivider
 import com.madeforu.sales.ui.components.softCardColors
 import com.madeforu.sales.ui.theme.BrandGradient
 import com.madeforu.sales.ui.theme.negativeColor
@@ -477,37 +479,58 @@ fun PartnerBoxes(detail: PartnerDetail) {
     if (detail.partners.isEmpty()) return
 
     Column(Modifier.fillMaxWidth()) {
-        Text(
-            detail.count.toString() + " partners, " + sharePctText(detail.sharePct) +
-                " each. Two totals divide " + detail.count + " ways: " +
-                Money.full(detail.totalPaid) + " paid from pocket (" +
-                Money.full(detail.fairPaid) + " each) and " +
-                Money.full(detail.revenue) + " of revenue across every channel (" +
-                Money.full(detail.revenueShare) + " each).",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        Card(shape = RoundedCornerShape(20.dp), colors = softCardColors()) {
+            Column(Modifier.fillMaxWidth().padding(16.dp)) {
+                Text(
+                    detail.count.toString() + " partners, " + sharePctText(detail.sharePct) +
+                        " each — two totals divide " + detail.count + " ways.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Spacer(Modifier.height(12.dp))
+                Row(Modifier.fillMaxWidth()) {
+                    SplitBasis("Paid from pocket", detail.totalPaid, detail.fairPaid,
+                               Modifier.weight(1f))
+                    Spacer(Modifier.width(12.dp))
+                    SplitBasis("Revenue, all channels", detail.revenue, detail.revenueShare,
+                               Modifier.weight(1f))
+                }
+            }
+        }
         Spacer(Modifier.height(10.dp))
 
         detail.partners.forEach { p ->
             Card(shape = RoundedCornerShape(20.dp), colors = softCardColors()) {
                 Column(Modifier.fillMaxWidth().padding(16.dp)) {
+                    // The header carries the one figure that decides
+                    // whether this partner has to do anything, so the
+                    // four sections below can be read at leisure.
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconTile(label = p.name, size = 40.dp)
+                        IconTile(label = p.name, size = 44.dp)
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
                             Text(p.name, style = MaterialTheme.typography.titleMedium)
                             Text(
                                 when (p.position) {
                                     "even" -> "square with the others"
-                                    "owed" -> "owed " + Money.full(p.investmentGap)
-                                    else   -> "owes " + Money.full(-p.investmentGap)
+                                    "owed" -> "is owed"
+                                    else   -> "still owes"
                                 },
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
+                        if (p.position != "even") {
+                            Text(
+                                Money.full(kotlin.math.abs(p.investmentGap)),
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = if (p.investmentGap >= 0) positiveColor() else negativeColor(),
+                            )
+                        } else {
+                            Pill("even")
+                        }
                     }
+                    ThinDivider(Modifier.padding(top = 12.dp))
 
                     BoxHeading("Paid from own pocket")
                     StatLine("They paid", Money.full(p.paid))
@@ -550,12 +573,33 @@ fun PartnerBoxes(detail: PartnerDetail) {
                     )
 
                     BoxHeading("Settlement")
-                    StatLine("Net invested", Money.full(p.investedNet))
+                    // The working, not just the answer. A partner being
+                    // asked to hand over money is entitled to see the
+                    // four numbers it came from, in the order they apply.
+                    StatLine("Paid from pocket", Money.full(p.paid))
+                    StatLine("Less credited back", "-" + Money.full(p.credited))
+                    if (kotlin.math.abs(p.settledAdjust) > 0.005) {
+                        StatLine("Plus settle-up so far", signedMoney(p.settledAdjust))
+                    }
+                    ThinDivider(Modifier.padding(vertical = 6.dp))
+                    StatLine("Net invested", Money.full(p.investedNet), bold = true)
+                    StatLine("An equal share would be", Money.full(p.fairInvested))
                     StatLine(
-                        "Against an equal " + Money.full(p.fairInvested),
-                        signedMoney(p.investmentGap),
+                        if (p.investmentGap >= 0) "Ahead by" else "Behind by",
+                        signedMoney(p.investmentGap), bold = true,
                         tint = if (p.investmentGap >= 0) positiveColor() else negativeColor(),
                     )
+                    Text(
+                        Money.full(p.paid) + " - " + Money.full(p.credited) +
+                            (if (kotlin.math.abs(p.settledAdjust) > 0.005)
+                                " " + (if (p.settledAdjust >= 0) "+ " else "- ") +
+                                Money.full(kotlin.math.abs(p.settledAdjust)) else "") +
+                            " = " + Money.full(p.investedNet) + ", against " +
+                            Money.full(p.fairInvested) + " each.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(6.dp))
                     if (kotlin.math.abs(p.settledAdjust) > 0.005) {
                         StatLine("Already settled", signedMoney(p.settledAdjust))
                     }
@@ -589,6 +633,25 @@ fun PartnerBoxes(detail: PartnerDetail) {
     }
 }
 
+/** A total and one partner's slice of it, stacked. */
+@Composable
+private fun SplitBasis(label: String, total: Double, each: Double, modifier: Modifier = Modifier) {
+    Column(modifier) {
+        Text(
+            label.uppercase(),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(Money.full(total), style = MaterialTheme.typography.titleMedium,
+             fontWeight = FontWeight.Bold)
+        Text(
+            Money.full(each) + " each",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.primary,
+        )
+    }
+}
+
 /** "25%" — a share, so no leading sign. */
 private fun sharePctText(pct: Double): String {
     val rounded = kotlin.math.round(pct * 10) / 10.0
@@ -599,14 +662,25 @@ private fun sharePctText(pct: Double): String {
 /** The small rose heading that separates the four parts of a partner box. */
 @Composable
 private fun BoxHeading(text: String) {
-    Spacer(Modifier.height(12.dp))
-    Text(
-        text.uppercase(),
-        style = MaterialTheme.typography.labelSmall,
-        fontWeight = FontWeight.Bold,
-        color = MaterialTheme.colorScheme.primary,
-    )
-    Spacer(Modifier.height(2.dp))
+    Spacer(Modifier.height(16.dp))
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            Modifier
+                .height(14.dp)
+                .width(3.dp)
+                .clip(RoundedCornerShape(2.dp))
+                .background(MaterialTheme.colorScheme.primary)
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(
+            text.uppercase(),
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 0.8.sp,
+            color = MaterialTheme.colorScheme.primary,
+        )
+    }
+    Spacer(Modifier.height(4.dp))
 }
 
 /** Expenses by category, with the website's share bars. */

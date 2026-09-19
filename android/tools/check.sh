@@ -13,6 +13,10 @@
 #               silently moves it onto whatever follows)
 #   importlint  a symbol used in one package, declared in another, never
 #               imported -- "Unresolved reference"
+#   symbollint  a capitalised name used but never imported -- the same
+#               failure as importlint, for framework symbols it cannot
+#               see (nine androidx imports missed in one edit, and an
+#               OutlinedTextField import deleted while still in use)
 #   arglint     a named argument that the function does not have, or a
 #               required parameter left out
 #   orphanlint  a composable defined and never called anywhere
@@ -24,7 +28,7 @@ src="$tools/../app/src/main/java"
 cd "$src" || { echo "cannot find $src" >&2; exit 2; }
 
 fail=0
-for check in annlint importlint arglint; do
+for check in annlint importlint symbollint arglint; do
   python3 "$tools/$check.py" || fail=1
 done
 python3 "$tools/orphanlint.py" | grep -v '@Preview' || true

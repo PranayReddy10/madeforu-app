@@ -102,6 +102,63 @@ function catalog_events(mysqli $conn, bool $activeOnly = false): array {
     return $out;
 }
 
+/**
+ * Open orders whose lines are not at today's catalogue price.
+ *
+ * One definition, used by both the preview and the write, so what is
+ * shown and what happens cannot drift apart.
+ */
+function reprice_candidates(mysqli $conn, string $item = ''): array {
+    $sql =
+        'SELECT o.id, o.order_no, o.name customer, o.created_at,
+                o.total, o.paid_amount, o.discount, o.extra_charge,
+                SUM(oi.quantity * oi.unit_price)                    old_lines,
+                SUM(ROUND(p.price * oi.quantity, 2))                new_lines,
+                GROUP_CONCAT(CONCAT(oi.item, " ", oi.quantity, " x ",
+                             oi.unit_price, " -> ", p.price) SEPARATOR ", ") lines_text
+           FROM orders o
+           JOIN order_items oi ON oi.order_id = o.id
+           JOIN products p ON p.name = oi.item COLLATE utf8mb4_unicode_ci
+          WHERE o.is_delivered = 0
+            AND o.paid_amount < o.total - 0.001
+            AND ABS(p.price - oi.unit_price) > 0.001'
+        . ($item !== '' ? ' AND oi.item = ?' : '')
+        . ' GROUP BY o.id ORDER BY o.created_at DESC';
+
+    $s = $conn->prepare($sql);
+    if ($item !== '') $s->bind_param('s', $item);
+    $s->execute();
+    $res = $s->get_result();
+
+    $rows = []; $net = 0.0;
+    while ($r = $res->fetch_assoc()) {
+        // The order total is its lines less discount plus extras, so the
+        // change to the total is exactly the change to the lines.
+        $delta    = round((float)$r['new_lines'] - (float)$r['old_lines'], 2);
+        $newTotal = round((float)$r['total'] + $delta, 2);
+        $rows[] = [
+            'id'          => (int)$r['id'],
+            'order_no'    => $r['order_no'],
+            'customer'    => $r['customer'],
+            'created_at'  => $r['created_at'],
+            'total'       => round((float)$r['total'], 2),
+            'new_total'   => $newTotal,
+            'change'      => $delta,
+            'paid_amount' => round((float)$r['paid_amount'], 2),
+            'lines'       => $r['lines_text'],
+            // A cut that would take the total under what has been paid
+            // cannot be applied; the preview says so rather than the
+            // write failing later.
+            'blocked'     => $newTotal < (float)$r['paid_amount'] - 0.001,
+        ];
+        $net += $delta;
+    }
+    $s->close();
+
+    return ['orders' => $rows, 'count' => count($rows), 'net_change' => round($net, 2),
+            'item' => $item];
+}
+
 /** Today's selling price and unit cost for one product. */
 function product_current_figures(mysqli $conn, int $id, string $name): array {
     $s = $conn->prepare('SELECT price FROM products WHERE id = ?');
@@ -320,6 +377,103 @@ api_dispatch([
             'now_price'     => round($nowPrice, 2),
             'past_orders'   => ($priceMoved || $costMoved) ? past_sales_count($conn, $name) : 0,
             'message'       => $message,
+        ]);
+    },
+
+    /**
+     * GET reprice_preview&item= — which OPEN orders a price change would
+     * move, and by how much. Writes nothing.
+     *
+     * "Open" means not yet delivered AND not yet paid in full. Both have
+     * to be true. A delivered order is goods the customer has, at the
+     * price that was agreed; a fully-paid one is money already taken at
+     * that price. Either way the sale is done, and changing its total
+     * afterwards invents a balance nobody agreed to — which is exactly
+     * what used to happen by accident and is now deliberate and narrow.
+     *
+     * Omit `item` to see every product whose catalogue price has moved
+     * away from what open orders are holding.
+     */
+    'reprice_preview' => function () use ($conn) {
+        api_ok(reprice_candidates($conn, api_str('item')));
+    },
+
+    /**
+     * POST reprice_apply {order_ids:[...], item}
+     *
+     * Applies today's catalogue price to the lines named, and only to
+     * orders that are still open when the write happens — re-checked
+     * here rather than trusted from the preview, because the preview may
+     * have been on screen while someone else delivered or took payment.
+     *
+     * A price CUT that would drop a total below what has already been
+     * collected is skipped, not clamped: the alternative is an order
+     * that quietly disagrees with its own payments.
+     */
+    'reprice_apply' => function () use ($conn) {
+        $ids = api_in('order_ids', []);
+        if (!is_array($ids) || !$ids) throw new ApiInputError('Choose at least one order.');
+        $ids = array_values(array_unique(array_filter(array_map('intval', $ids), fn($v) => $v > 0)));
+        if (!$ids) throw new ApiInputError('Choose at least one order.');
+        if (count($ids) > 500) throw new ApiInputError('Too many orders at once — do it in batches.');
+
+        $item = api_str('item');
+
+        // Re-derive the candidates instead of taking amounts from the
+        // request: the client says WHICH orders, never what they are worth.
+        $fresh = reprice_candidates($conn, $item);
+        $allowed = [];
+        foreach ($fresh['orders'] as $o) $allowed[$o['id']] = $o;
+
+        $done = []; $skipped = []; $moved = 0.0;
+
+        $conn->begin_transaction();
+        try {
+            foreach ($ids as $id) {
+                if (!isset($allowed[$id])) {
+                    $skipped[] = ['id' => $id, 'why' => 'no longer open, or already at the current price'];
+                    continue;
+                }
+                $o = $allowed[$id];
+                if ($o['new_total'] < $o['paid_amount'] - 0.001) {
+                    $skipped[] = ['id' => $id, 'order_no' => $o['order_no'],
+                                  'why' => 'the new total ' . money($o['new_total'])
+                                           . ' is below the ' . money($o['paid_amount']) . ' already collected'];
+                    continue;
+                }
+
+                $u = $conn->prepare(
+                    'UPDATE order_items oi
+                       JOIN products p ON p.name = oi.item COLLATE utf8mb4_unicode_ci
+                        SET oi.unit_price = p.price,
+                            oi.line_total = ROUND(p.price * oi.quantity, 2)
+                      WHERE oi.order_id = ?'
+                    . ($item !== '' ? ' AND oi.item = ?' : '')
+                );
+                if ($item !== '') $u->bind_param('is', $id, $item);
+                else              $u->bind_param('i', $id);
+                $u->execute();
+                $u->close();
+
+                recalc_total($conn, $id);
+
+                $done[] = ['id' => $id, 'order_no' => $o['order_no'],
+                           'was' => $o['total'], 'now' => $o['new_total'],
+                           'change' => $o['change']];
+                $moved += $o['change'];
+            }
+            $conn->commit();
+        } catch (Exception $ex) {
+            $conn->rollback();
+            throw $ex;
+        }
+
+        api_ok([
+            'updated' => $done,
+            'skipped' => $skipped,
+            'message' => count($done) . ' order' . (count($done) === 1 ? '' : 's') . ' repriced'
+                . ($moved != 0.0 ? ', ' . ($moved > 0 ? 'up ' : 'down ') . money(abs($moved)) : '')
+                . (count($skipped) ? '. ' . count($skipped) . ' skipped.' : '.'),
         ]);
     },
 

@@ -46,6 +46,7 @@ import com.madeforu.sales.ui.screens.ExpensesScreen
 import com.madeforu.sales.ui.screens.HomeScreen
 import com.madeforu.sales.ui.screens.LoginScreen
 import com.madeforu.sales.ui.screens.MoneyScreen
+import com.madeforu.sales.ui.screens.MovementsScreen
 import com.madeforu.sales.ui.screens.NewOrderScreen
 import com.madeforu.sales.ui.screens.OrderDetailScreen
 import com.madeforu.sales.ui.screens.OrdersScreen
@@ -280,7 +281,19 @@ fun AppRoot(signedIn: Boolean) {
                 }
 
                 composable(Routes.MONEY) {
-                    MoneyScreen(repository = repository, onSessionExpired = signOut)
+                    MoneyScreen(
+                        repository = repository,
+                        onOpenMovements = { navController.navigate(Routes.MOVEMENTS) },
+                        onSessionExpired = signOut,
+                    )
+                }
+
+                composable(Routes.MOVEMENTS) {
+                    MovementsScreen(
+                        repository = repository,
+                        onBack = { navController.popBackStack() },
+                        onSessionExpired = signOut,
+                    )
                 }
 
                 composable(Routes.EXPENSES) {

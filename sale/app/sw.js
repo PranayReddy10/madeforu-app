@@ -19,7 +19,7 @@
  * Bump CACHE whenever the shell changes; keep it in step with BUILD in
  * app.js, which is what Settings prints.
  */
-const VERSION = '2026-09-19.3';
+const VERSION = '2026-09-19.4';
 const CACHE = 'madeforu-shell-' + VERSION;
 const SHELL = [
   './',

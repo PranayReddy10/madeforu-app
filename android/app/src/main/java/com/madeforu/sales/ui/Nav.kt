@@ -14,6 +14,7 @@ object Routes {
     const val NEW_ORDER = "new_order"
     const val STATS = "stats"
     const val MONEY = "money"
+    const val MOVEMENTS = "movements"
 
     const val ORDER_DETAIL = "order/{id}"
     fun orderDetail(id: Int) = "order/$id"
