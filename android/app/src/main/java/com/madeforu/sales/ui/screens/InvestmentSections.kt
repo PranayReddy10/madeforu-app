@@ -527,7 +527,7 @@ fun PartnerBoxes(detail: PartnerDetail) {
                                 color = if (p.investmentGap >= 0) positiveColor() else negativeColor(),
                             )
                         } else {
-                            Pill("even")
+                            Pill("even", tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                     ThinDivider(Modifier.padding(top = 12.dp))

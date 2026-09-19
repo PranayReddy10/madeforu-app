@@ -58,14 +58,18 @@ for p, src in files.items():
                 if depth == 0: break
             j += 1
         raw = src[i+1:j]
-        params, required = [], []
+        params, required, vararg = [], [], False
         for part in split_params(raw):
             pm = re.match(r'\s*(?:@\w+\s*)*(?:vararg\s+)?(\w+)\s*:', part)
             if not pm: continue
             params.append(pm.group(1))
+            if 'vararg ' in part:
+                vararg = True
             if '=' not in part.split(':', 1)[1]:
                 required.append(pm.group(1))
-        if name in sigs and sigs[name][0] != params:
+        if vararg:
+            sigs[name] = None          # a vararg eats any number of slots
+        elif name in sigs and sigs[name] and sigs[name][0] != params:
             sigs[name] = None          # overloaded: skip, cannot tell which
         elif name not in sigs:
             sigs[name] = (params, required, p)
@@ -87,20 +91,31 @@ for p, src in files.items():
                 if depth == 0: break
             j += 1
         if j >= len(src): continue
-        args = split_params(src[i+1:j])
+        args = [a for a in split_params(src[i+1:j]) if a.strip()]
         named = [re.match(r'\s*(\w+)\s*=(?!=)', a) for a in args]
         named = [n.group(1) for n in named if n]
-        if not named: continue                      # positional: not checked
         line = src[:m.start()].count('\n') + 1
+
         for n in named:
             if n not in params:
                 bad.append((p, line, '%s has no parameter "%s" (it takes: %s)'
                             % (name, n, ', '.join(params))))
-        if len(named) == len(args):                 # fully named call
-            trailing = src[j+1:j+3].strip().startswith('{')
-            for r in required:
-                if r not in named and not trailing:
-                    bad.append((p, line, '%s: required parameter "%s" not supplied' % (name, r)))
+
+        # Positional calls used to be skipped entirely, which is how
+        # Pill("even") reached a build with its required `tint` missing.
+        # Kotlin fills parameters left to right, so argument k without a
+        # name lands on parameter k; a trailing lambda supplies the last.
+        positional = len(args) - len(named)
+        trailing = src[j+1:j+3].strip().startswith('{')
+        for idx, param in enumerate(params):
+            if param not in required:
+                continue
+            if idx < positional or param in named:
+                continue
+            if trailing and idx == len(params) - 1:
+                continue
+            bad.append((p, line, '%s: required parameter "%s" not supplied (it takes: %s)'
+                        % (name, param, ', '.join(params))))
 
 print('argument lint:', ('%d problem(s)' % len(bad)) if bad else 'clean')
 for p, line, why in bad:

@@ -44,6 +44,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -432,7 +433,7 @@ private fun MovementRow(movement: Movement, onEdit: () -> Unit, onDelete: () -> 
                     Text(movement.partner, style = MaterialTheme.typography.titleSmall)
                     movementKindLabel(movement.kind)?.let {
                         Spacer(Modifier.width(6.dp))
-                        Pill(it)
+                        Pill(it, tint = movementKindTint(movement.kind))
                     }
                 }
                 Text(
@@ -464,6 +465,19 @@ private fun MovementRow(movement: Movement, onEdit: () -> Unit, onDelete: () -> 
             }
         }
     }
+}
+
+/**
+ * The pill's colour, matching the ones movements.php uses: personal in
+ * red, a settlement in blue, profit in green, a settle-up in purple.
+ */
+@Composable
+private fun movementKindTint(kind: String): Color = when (kind) {
+    "personal" -> negativeColor()
+    "transfer" -> MaterialTheme.colorScheme.primary
+    "profit" -> positiveColor()
+    "invest" -> MaterialTheme.colorScheme.tertiary
+    else -> MaterialTheme.colorScheme.onSurfaceVariant
 }
 
 /** The pill movements.php puts against each kind; null for a plain one. */
