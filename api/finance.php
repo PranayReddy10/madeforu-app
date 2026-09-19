@@ -317,7 +317,98 @@ api_dispatch([
                       'event_name' => $r['event_name']];
         }
         $s->close();
-        api_ok(['movements' => $out, 'has_more' => count($out) === $limit]);
+
+        // Totals for the whole filtered set, not the page — movements.php
+        // shows "Credits shown / Debits shown / Net" and a header that
+        // only counted the rows currently scrolled into view would be a
+        // lie in exactly the place people are adding money up.
+        $sumSql = 'SELECT
+              COALESCE(SUM(CASE WHEN m.direction = "credit" THEN m.amount ELSE 0 END),0) credits,
+              COALESCE(SUM(CASE WHEN m.direction = "debit"  THEN m.amount ELSE 0 END),0) debits,
+              COUNT(*) n
+            FROM account_movements m'
+            . ($where ? ' WHERE ' . implode(' AND ', $where) : '');
+        if ($types !== '') {
+            $s2 = $conn->prepare($sumSql);
+            $s2->bind_param($types, ...$params);
+        } else {
+            $s2 = $conn->prepare($sumSql);
+        }
+        $s2->execute();
+        $sum = $s2->get_result()->fetch_assoc();
+        $s2->close();
+
+        $credits = round((float)$sum['credits'], 2);
+        $debits  = round((float)$sum['debits'], 2);
+
+        api_ok([
+            'movements' => $out,
+            'has_more'  => count($out) === $limit,
+            'totals'    => ['credits' => $credits, 'debits' => $debits,
+                            'net' => round($credits - $debits, 2), 'count' => (int)$sum['n']],
+        ]);
+    },
+
+    /**
+     * POST delete_movement {id}
+     *
+     * Mirrors movements.php exactly, including the two things that are
+     * easy to miss and expensive to get wrong:
+     *
+     *   a settlement is TWO rows sharing a transfer_id, and deleting one
+     *   half would leave the other standing, silently moving one
+     *   partner's net investment without the matching opposite;
+     *
+     *   a credit raised from offline sales stamped credited_mov_id onto
+     *   those orders. Deleting it without clearing the stamp leaves the
+     *   orders pointing at a movement that no longer exists, and they can
+     *   never be credited again.
+     */
+    'delete_movement' => function () use ($conn) {
+        $id = api_int('id');
+        if ($id < 1) throw new ApiInputError('Invalid movement.');
+
+        $g = $conn->prepare('SELECT transfer_id FROM account_movements WHERE id = ?');
+        $g->bind_param('i', $id);
+        $g->execute();
+        $row = $g->get_result()->fetch_assoc();
+        $g->close();
+        if (!$row) api_fail(404, 'not_found', 'That movement no longer exists.');
+
+        $tid = $row['transfer_id'] ?? null;
+
+        $conn->begin_transaction();
+        try {
+            if (!empty($tid)) {
+                $s = $conn->prepare('DELETE FROM account_movements WHERE transfer_id = ?');
+                $s->bind_param('i', $tid);
+                $s->execute();
+                $s->close();
+                $message = 'Settlement deleted — both sides.';
+            } else {
+                $u = $conn->prepare('UPDATE orders SET credited_mov_id = NULL WHERE credited_mov_id = ?');
+                $u->bind_param('i', $id);
+                $u->execute();
+                $freed = $u->affected_rows;
+                $u->close();
+
+                $s = $conn->prepare('DELETE FROM account_movements WHERE id = ?');
+                $s->bind_param('i', $id);
+                $s->execute();
+                $s->close();
+
+                $message = $freed > 0
+                    ? 'Movement deleted. ' . $freed . ' order' . ($freed === 1 ? '' : 's')
+                      . ' can be credited again.'
+                    : 'Movement deleted.';
+            }
+            $conn->commit();
+        } catch (Exception $ex) {
+            $conn->rollback();
+            throw $ex;
+        }
+
+        api_ok(['message' => $message]);
     },
 
     // ── POST add_movement ──────────────────────────────────────────

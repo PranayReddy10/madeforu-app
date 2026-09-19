@@ -19,12 +19,13 @@
  * Bump CACHE whenever the shell changes; keep it in step with BUILD in
  * app.js, which is what Settings prints.
  */
-const CACHE = 'madeforu-shell-2026-09-18.3';
+const VERSION = '2026-09-19.1';
+const CACHE = 'madeforu-shell-' + VERSION;
 const SHELL = [
   './',
   './index.html',
-  './app.css',
-  './app.js',
+  './app.css?v=' + VERSION,
+  './app.js?v=' + VERSION,
   './manifest.webmanifest',
   './icons/icon-192.png',
   './icons/apple-touch-icon.png',

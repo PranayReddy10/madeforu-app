@@ -1,10 +1,11 @@
 # Making a change actually appear
 
-Four things update separately, and none of them tells you when it is the
+Five things update separately, and none of them tells you when it is the
 one that is behind. This is the whole checklist.
 
 | Thing | Lives where | How it updates |
 |---|---|---|
+| **The website** (`sale/*.php`) | `sale.madeforu.co.in/` | You upload the files |
 | **The API** (`api/*.php`) | `sale.madeforu.co.in/api/` | You upload the files |
 | **The database** | the MySQL database | You run `api/migrations/*.sql` in phpMyAdmin |
 | **The web app** (`pwa/*`) | `sale.madeforu.co.in/app/` | You upload the files |
@@ -56,6 +57,20 @@ has and adapts — so the upload order does not matter. Until
 `2026-09-price-history.sql` is run, price history is empty and Stats falls
 back to live costs, which is what it did before.
 
+## 1c. Upload the website
+
+`sale/` is the website itself — the same PHP that runs
+`sale.madeforu.co.in` today, with the price fix applied. Upload its
+contents to `public_html/`.
+
+**Do not upload `config.php`** — it is not in this repository (it holds
+the database password, and this repository is public). The copy already on
+the server is the right one. `sale/config.example.php` shows its shape if
+you ever need to recreate it.
+
+`sale/uploads/` is not in the repository either: it holds receipts and
+photos people have uploaded, and the server's copy is the real one.
+
 ## 2. Upload the web app
 
 Upload this repo's `pwa/` folder to `public_html/app/` (the folder on the
@@ -66,6 +81,18 @@ A web app saves its own files for offline use, so a phone can keep showing
 the old screen for days after a good upload. That button clears the saved
 copy and reloads. It is the first thing to try whenever an update does not
 show up.
+
+### If an update still does not show
+
+The web app is versioned: `index.html` asks for `app.js?v=2026-09-19.1`,
+and a new version is a new URL that no cache can answer from. If you edit
+these files yourself, bump the version in all four places and run
+`pwa/check-versions.sh` — it fails if they disagree. `pwa/.htaccess` also
+tells the server never to cache `index.html` or `sw.js`; upload it with
+the rest.
+
+Settings → Version shows which build the phone is actually running, and
+**Force a fresh copy** clears everything and reloads.
 
 ## 3. Rebuild the Android app
 

@@ -268,8 +268,6 @@ fun <T> ChipRow(
     }
 }
 
-/** A label/value row — the workhorse of every detail screen. */
-@Composable
 /**
  * An order line, showing what it was sold at.
  *
@@ -304,6 +302,8 @@ fun SoldLine(
     }
 }
 
+/** A label/value row — the workhorse of every detail screen. */
+@Composable
 fun DetailRow(
     label: String,
     value: String,

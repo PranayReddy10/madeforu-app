@@ -1,0 +1,54 @@
+# ── Cache rules for the web app ──────────────────────────────────
+#
+# The app is four files on shared hosting, and the default rules there
+# cache .js and .css for days. That is why an upload can land and the
+# phone still shows the old screen: the browser never asks for the new
+# file, and neither does the service worker.
+#
+# The fix is two-part, and both parts matter:
+#
+#   index.html and sw.js are NEVER cached. They are tiny, and they are
+#   what tells the browser everything else changed.
+#
+#   app.js and app.css are requested with a ?v= that changes every
+#   release (see index.html), so their URL is new when their contents
+#   are. A new URL cannot be answered from any cache -- not the
+#   browser's, and not a service worker still holding the old build.
+#
+# If your host ignores .htaccess, the ?v= alone still does the job.
+
+<IfModule mod_headers.c>
+  # The entry points: always re-checked.
+  <FilesMatch "^(index\.html|sw\.js|manifest\.webmanifest)$">
+    Header set Cache-Control "no-cache, no-store, must-revalidate"
+    Header set Pragma "no-cache"
+    Header set Expires "0"
+  </FilesMatch>
+
+  # Versioned assets: safe to keep for a year, because a change to them
+  # changes their URL.
+  <FilesMatch "\.(js|css|png|webp|svg|woff2?)$">
+    Header set Cache-Control "public, max-age=31536000, immutable"
+  </FilesMatch>
+
+  # ...except the two entry points above, which the first block already
+  # set; FilesMatch blocks both apply, so re-assert it for sw.js, which
+  # is a .js file and would otherwise be cached for a year. A stale
+  # sw.js is the one thing that cannot be recovered from remotely.
+  <FilesMatch "^sw\.js$">
+    Header set Cache-Control "no-cache, no-store, must-revalidate"
+  </FilesMatch>
+</IfModule>
+
+<IfModule mod_expires.c>
+  ExpiresActive On
+  ExpiresByType text/html "access plus 0 seconds"
+</IfModule>
+
+# A service worker may only control pages at or below its own path, and
+# this one sits at the app root, which is what we want.
+<IfModule mod_headers.c>
+  <FilesMatch "^sw\.js$">
+    Header set Service-Worker-Allowed "/"
+  </FilesMatch>
+</IfModule>

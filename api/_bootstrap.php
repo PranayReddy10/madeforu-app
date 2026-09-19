@@ -32,7 +32,7 @@ set_exception_handler(function (Throwable $t) {
 });
 
 // ── API-wide constants ─────────────────────────────────────────────
-define('API_VERSION',      '1.2.0');
+define('API_VERSION',      '1.3.0');
 
 /**
  * What this build of the API can do, for the apps to check against.
@@ -51,6 +51,7 @@ define('API_FEATURES', [
     'bills',               // bills.php: issue/get/list/html
     'app_version',         // auth.php: the Android release channel
     'price_history',       // catalog.php: price history, and prices frozen onto sold lines
+    'movements_ledger',    // finance.php: filtered totals and delete_movement
 ]);
 define('TOKEN_TTL_DAYS',   90);     // a partner phone stays signed in for a quarter
 define('MAX_PAGE_SIZE',    200);

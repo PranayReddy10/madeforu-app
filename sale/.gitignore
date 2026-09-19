@@ -1,0 +1,6 @@
+# The real credentials. Never committed: this repository is public, and
+# the copy already on the server is the authoritative one.
+config.php
+
+# Customer receipts and product photos uploaded through the site.
+uploads/

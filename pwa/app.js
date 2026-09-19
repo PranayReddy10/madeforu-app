@@ -24,7 +24,7 @@ const DEFAULT_API = new URL('../api/', location.href).href;
  * browser, the server or the app is the stale one. It must match the
  * CACHE name in sw.js.
  */
-const BUILD = '2026-09-18.3';
+const BUILD = '2026-09-19.1';
 
 /** What this build of the app expects the server to be able to do. */
 const NEEDS_FEATURES = ['revenue_breakdown', 'expense_create', 'price_history'];
@@ -1095,6 +1095,9 @@ route('money', async () => {
       <p class="muted">${money(d.uncredited_offline.amount)} across ${d.uncredited_offline.orders}
         walk-up orders is sitting outside anyone's account. Credit it on the website.</p></div>` : ''}
 
+    <button class="btn ghost" data-go="movements" style="margin-top:10px">
+      Movements — the account ledger</button>
+
     <section><h2 class="section">Per-partner breakdown</h2>
       <div class="card"><p class="muted" style="margin-bottom:8px">
         Remaining = Paid − Credited. Net invested = Remaining + settle-up. Account balance = Credited − Debited.</p>
@@ -1223,6 +1226,158 @@ function revenueWorking(r, business) {
 
   return `<div style="margin-top:10px">${fold('Where this number comes from',
     money(r.total) + ' across ' + r.orders + ' orders', body)}</div>`;
+}
+
+/* ── Movements — the account ledger, mirroring movements.php ──── */
+
+let movFilter = { partner_id: '', direction: '' };
+
+/** The pill movements.php puts against each kind. */
+function movKind(kind) {
+  const styles = {
+    personal: ['personal', '#fdeceb', '#c0392b'],
+    transfer: ['settlement', '#e7f0fd', '#1451a8'],
+    profit:   ['profit', '#e3f5eb', '#1a7f4b'],
+    invest:   ['settle-up', '#efe7fb', '#5b3ba0'],
+  };
+  const hit = styles[kind];
+  if (!hit) return '';
+  return `<span class="pill" style="background:${hit[1]};color:${hit[2]}">${hit[0]}</span>`;
+}
+
+route('movements', async () => {
+  setHtml(`<div class="screen"><div class="head">
+    <button class="back" data-go="money">‹</button><h1 class="grow">Movements</h1></div>
+    <div id="body">${spinner()}</div></div>`);
+
+  const [d, boot] = await Promise.all([
+    api('finance.php', 'movements', { params: { limit: 100, ...movFilter } }),
+    api('catalog.php', 'bootstrap'),
+  ]);
+  const partners = (boot.partners || []).filter((p) => p.is_active);
+  const t = d.totals || { credits: 0, debits: 0, net: 0, count: 0 };
+
+  document.getElementById('body').innerHTML = `
+    <div class="grid2" style="margin-top:8px">
+      ${statCard('Credits shown', moneyShort(t.credits), 'money in', 'pos')}
+      ${statCard('Debits shown', moneyShort(t.debits), 'money out', 'neg')}
+    </div>
+    <div class="card" style="margin-top:10px">
+      <div class="row" style="border:none;padding:0">
+        <div class="grow t">Net (credit − debit)</div>
+        <div class="amt ${t.net >= 0 ? 'pos' : 'neg'}">${money(t.net)}</div></div>
+      <p class="muted">across ${t.count} movement${t.count === 1 ? '' : 's'} matching the filter</p>
+    </div>
+
+    <section><h2 class="section">Filter</h2><div class="card">
+      <div class="chips" id="movPartner"></div>
+      <div class="chips" style="margin-top:8px" id="movDir"></div>
+    </div></section>
+
+    <div id="movList"></div>
+
+    <button class="btn" id="addMov" style="margin-top:14px">Add a movement</button>`;
+
+  chipRow('movPartner',
+    [['', 'All partners']].concat(partners.map((p) => [String(p.id), p.name])),
+    movFilter.partner_id, (v) => { movFilter.partner_id = v; routes.movements(); });
+  chipRow('movDir',
+    [['', 'Both'], ['credit', 'Credits'], ['debit', 'Debits']],
+    movFilter.direction, (v) => { movFilter.direction = v; routes.movements(); });
+
+  document.getElementById('movList').innerHTML = d.movements.length
+    ? `<section><h2 class="section">${d.movements.length} movement${d.movements.length === 1 ? '' : 's'}</h2>
+       <div class="card">${d.movements.map((m) => {
+      // A settle-up moves net investment without moving the account
+      // balance, so it shows its invest_adjust rather than its amount —
+      // the amount on those rows is zero by design.
+      const isInvest = m.kind === 'invest';
+      const value = isInvest
+        ? (m.invest_adjust >= 0 ? '+' : '−') + money(Math.abs(m.invest_adjust))
+        : (m.direction === 'credit' ? '+' : '−') + money(m.amount);
+      const tone = isInvest ? '' : (m.direction === 'credit' ? 'pos' : 'neg');
+      return `<div class="row">${tile(m.partner)}
+        <div class="grow">
+          <div class="t">${esc(m.partner)} ${movKind(m.kind)}</div>
+          <div class="s">${esc(prettyDate(m.date))}${m.source ? ' · ' + esc(m.source) : ''}${
+            m.event_name ? ' · ' + esc(m.event_name) : ''}</div>
+          ${m.note ? `<div class="s">${esc(m.note)}</div>` : ''}
+          ${isInvest ? '<div class="s">net invested — account balance unchanged</div>' : ''}
+        </div>
+        <div style="text-align:right">
+          <div class="amt ${tone}">${value}</div>
+          <button class="btn small ghost" data-mov-del="${m.id}" style="margin-top:4px">Delete</button>
+        </div></div>`;
+    }).join('')}</div></section>`
+    : '<p class="muted center" style="margin-top:24px">No movements match this filter.</p>';
+
+  document.querySelectorAll('[data-mov-del]').forEach((b) => b.onclick = async () => {
+    const m = d.movements.find((x) => String(x.id) === b.dataset.movDel);
+    const extra = m && m.kind === 'transfer'
+      ? '\n\nThis is one side of a settlement — both sides will be removed.' : '';
+    if (!confirm('Delete this movement?' + extra)) return;
+    try {
+      const r = await api('finance.php', 'delete_movement', { body: { id: Number(b.dataset.movDel) } });
+      toast(r.message || 'Movement deleted.');
+      routes.movements();
+    } catch (e) { toast(e.message); }
+  });
+
+  document.getElementById('addMov').onclick = () => movementSheet(partners);
+});
+
+/**
+ * Add a movement — the form from movements.php.
+ *
+ * Credit is money coming in to a partner's account; debit is money spent
+ * out of it. This is the ledger the whole Money screen is built from, so
+ * the wording matches the website's exactly rather than being reworded
+ * into something that means subtly something else.
+ */
+function movementSheet(partners) {
+  const sheet = openSheet('Add a movement', `
+    <div class="card">
+      <label class="field"><span>Date</span><input id="mdate" type="date" value="${today()}"></label>
+      <label class="field"><span>Partner</span>
+        <select id="mpartner">${partners.map((p) =>
+          `<option value="${p.id}">${esc(p.name)}</option>`).join('')}</select></label>
+      <label class="field"><span>Direction</span>
+        <select id="mdir">
+          <option value="credit">Credit — money in (sales)</option>
+          <option value="debit">Debit — spent from account</option>
+        </select></label>
+      <label class="field"><span>Amount (₹)</span>
+        <input id="mamount" inputmode="decimal" placeholder="0.00"></label>
+      <label class="field"><span>Source / purpose</span>
+        <input id="msource" placeholder="e.g. Meesho payout"></label>
+      <label class="field"><span>Note — optional</span><input id="mnote"></label>
+    </div>
+    <button class="btn" id="msave" style="margin-top:12px">Add movement</button>`);
+
+  document.getElementById('msave').onclick = async () => {
+    const button = document.getElementById('msave');
+    const amount = Number(String(document.getElementById('mamount').value).replace(/[^\d.]/g, '')) || 0;
+    if (!(amount > 0)) { toast('Enter an amount greater than zero.'); return; }
+    button.disabled = true; button.textContent = 'Saving…';
+    try {
+      const r = await api('finance.php', 'add_movement', {
+        body: {
+          mov_date: document.getElementById('mdate').value || today(),
+          partner_id: Number(document.getElementById('mpartner').value),
+          direction: document.getElementById('mdir').value,
+          amount,
+          source: document.getElementById('msource').value.trim(),
+          note: document.getElementById('mnote').value.trim(),
+        },
+      });
+      sheet.close();
+      toast(r.message || 'Movement added.');
+      routes.movements();
+    } catch (e) {
+      toast(e.message);
+      button.disabled = false; button.textContent = 'Add movement';
+    }
+  };
 }
 
 /* ── Expenses ─────────────────────────────────────────────────── */
