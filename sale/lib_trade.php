@@ -35,6 +35,39 @@ if (!function_exists('trade_has_table')) {
     }
 }
 
+if (!function_exists('db_column_exists')) {
+    /**
+     * Does this column exist yet?
+     *
+     * The website is uploaded over FTP a file at a time, so a page that
+     * writes a new column will run for a while against a database that
+     * has not got it. Asking first turns "the sale page is broken until
+     * the SQL is run" into "the sale page works, and records the new
+     * field once the SQL is run".
+     *
+     * Named differently from the API's db_has_column so the two can
+     * coexist when both are loaded.
+     */
+    function db_column_exists(mysqli $conn, string $table, string $column): bool {
+        static $cache = [];
+        $key = $table . '.' . $column;
+        if (isset($cache[$key])) return $cache[$key];
+        try {
+            $s = $conn->prepare(
+                'SELECT 1 FROM information_schema.COLUMNS
+                  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ? LIMIT 1'
+            );
+            $s->bind_param('ss', $table, $column);
+            $s->execute();
+            $found = (bool)$s->get_result()->fetch_row();
+            $s->close();
+        } catch (Throwable $e) {
+            $found = false;
+        }
+        return $cache[$key] = $found;
+    }
+}
+
 if (!function_exists('trade_ready')) {
     /** True once the channels/accounts migration has been applied. */
     function trade_ready(mysqli $conn): bool {
@@ -151,10 +184,12 @@ if (!function_exists('accounts_all')) {
     /**
      * Accounts money can land in, with the partner who holds one if any.
      *
-     * The collation on the join is stated because partners and accounts
-     * were created by different tools years apart; MariaDB refuses to
-     * join utf8mb4_uca1400_ai_ci to utf8mb4_unicode_ci without it, and
-     * the failure is a fatal 500 rather than a wrong answer.
+     * The join is on partner_id rather than on a name, which is what
+     * keeps it out of the collation trouble that name joins hit on this
+     * database (products is utf8mb4_unicode_ci, several older tables are
+     * utf8mb4_uca1400_ai_ci, and MariaDB refuses to compare the two).
+     * An account whose partner has been removed still lists, with an
+     * empty partner name.
      */
     function accounts_all(mysqli $conn, bool $activeOnly = true): array {
         if (!trade_has_table($conn, 'accounts')) return [];
@@ -301,6 +336,27 @@ if (!function_exists('channel_settlement')) {
                 'received'    => $received,
                 'outstanding' => round($sold - $received, 2),
             ];
+        }
+        return $out;
+    }
+}
+
+if (!function_exists('channel_prices_all')) {
+    /**
+     * Every channel's overrides at once: [channel_id => [item => price]].
+     *
+     * The sale form needs this in one go. It prices lines in the browser
+     * as you type, and if it priced them from the catalogue while the
+     * server priced them from the channel, the total on screen would not
+     * be the total charged -- the worst kind of disagreement, because it
+     * only shows up after the sale is saved.
+     */
+    function channel_prices_all(mysqli $conn): array {
+        if (!trade_has_table($conn, 'channel_prices')) return [];
+        $out = [];
+        $res = $conn->query('SELECT channel_id, item, price FROM channel_prices');
+        while ($res && ($r = $res->fetch_assoc())) {
+            $out[(int)$r['channel_id']][$r['item']] = round((float)$r['price'], 2);
         }
         return $out;
     }

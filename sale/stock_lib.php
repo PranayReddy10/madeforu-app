@@ -399,3 +399,38 @@ if (!function_exists('stock_draws_for')) {
         }, $rows);
     }
 }
+
+if (!function_exists('stock_tracked')) {
+    /**
+     * Is this item one whose raw material we actually track?
+     *
+     * True once it has ever been purchased or has a stock row. Anything
+     * else is left alone, and that restraint is the point: consuming
+     * stock for every product on every order would drive a negative
+     * balance for each item that has never been bought in, filling the
+     * audit with invented shortfalls and hiding the real ones.
+     *
+     * Tracking therefore begins when the first purchase is recorded.
+     * Orders written before that are not retrospectively drawn down --
+     * the material for them was bought before any of this was counted.
+     *
+     * The set is read once per request: a sale asks this for every line.
+     */
+    function stock_tracked(mysqli $conn, string $item): bool {
+        static $set = null;
+        if ($set === null) {
+            $set = [];
+            try {
+                $res = $conn->query(
+                    'SELECT item FROM purchases
+                     UNION
+                     SELECT item FROM product_stock'
+                );
+                while ($res && ($r = $res->fetch_assoc())) $set[$r['item']] = true;
+            } catch (Throwable $e) {
+                $set = [];
+            }
+        }
+        return isset($set[$item]);
+    }
+}
