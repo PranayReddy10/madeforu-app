@@ -106,8 +106,6 @@ function nav_item(string $page, string $current, string $href, string $label, st
           '<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>') ?>
       <?= nav_item('expenses', $PAGE, 'expenses.php', 'Expenses',
           '<rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/>') ?>
-      <?= nav_item('accounts', $PAGE, 'accounts.php', 'Accounts',
-            '<rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18M7 15h4"/>') ?>
       <?= nav_item('movements', $PAGE, 'movements.php', 'Account movements',
           '<polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/>') ?>
       <?= nav_item('partners', $PAGE, 'partners.php', 'Partners',
@@ -126,6 +124,8 @@ function nav_item(string $page, string $current, string $href, string $label, st
           '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>') ?>
       <?= nav_item('purchases', $PAGE, 'purchases.php', 'Stock purchases',
           '<circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>') ?>
+      <?= nav_item('wholesale', $PAGE, 'wholesale.php', 'Wholesale buyers',
+            '<path d="M3 7h18l-1.5 12H4.5z"/><path d="M8 7V5a4 4 0 0 1 8 0v2"/>') ?>
       <?= nav_item('material_audit', $PAGE, 'material_audit.php', 'Material audit',
             '<path d="M4 4h12l4 4v12H4z"/><path d="M8 12h8M8 16h5"/>') ?>
       <?= nav_item('stock', $PAGE, 'stock.php', 'Stock on hand',

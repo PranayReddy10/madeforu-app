@@ -25,7 +25,6 @@
  */
 declare(strict_types=1);
 require __DIR__ . '/_bootstrap.php';
-require_once __DIR__ . '/../lib_accounts.php';   // which account money landed in
 
 $me = api_require_auth($conn);
 
@@ -388,9 +387,6 @@ api_dispatch([
             'business'        => $business,
             'partner_detail'  => partner_detail_api($rows, $business, $settleInvest, $settleBalance),
             'revenue_breakdown' => revenue_breakdown_api($conn),
-            // Where the money is sitting. Read-only; revenue and profit
-            // are worked out exactly as before.
-            'accounts'        => account_balances($conn),
             'settle_invest'   => $settleInvest,
             'settle_balance'  => $settleBalance,
             'uncredited_offline' => [
@@ -418,15 +414,12 @@ api_dispatch([
         $limit  = max(1, min(api_int('limit', 60), MAX_PAGE_SIZE));
         $offset = max(0, api_int('offset', 0));
 
-        $hasAcc = movements_have_account($conn);
         $sql = 'SELECT m.id, m.mov_date, m.direction, m.kind, m.amount, m.invest_adjust,
                        m.source, m.note, m.event_id, m.partner_id, m.transfer_id,
-                       p.name partner, e.name event_name'
-             . ($hasAcc ? ', m.account_id, ac.name account_name' : '')
-             . ' FROM account_movements m
+                       p.name partner, e.name event_name
+                  FROM account_movements m
                   JOIN partners p ON p.id = m.partner_id
                   LEFT JOIN events e ON e.id = m.event_id'
-             . ($hasAcc ? ' LEFT JOIN accounts ac ON ac.id = m.account_id' : '')
              . ($where ? ' WHERE ' . implode(' AND ', $where) : '')
              . ' ORDER BY m.mov_date DESC, m.id DESC LIMIT ? OFFSET ?';
 
@@ -445,8 +438,6 @@ api_dispatch([
                       'source' => $r['source'], 'note' => $r['note'],
                       'event_id' => $r['event_id'] !== null ? (int)$r['event_id'] : null,
                       'event_name' => $r['event_name'],
-                      'account_id' => isset($r['account_id']) && $r['account_id'] !== null ? (int)$r['account_id'] : null,
-                      'account_name' => $r['account_name'] ?? null,
                       // The app greys out Edit on these: a settlement is a
                       // pair, and a credit with orders stamped on it has an
                       // amount that must match them.
@@ -558,22 +549,12 @@ api_dispatch([
         $source = mb_substr(api_str('source', $dir === 'credit' ? 'Manual credit' : 'Manual debit'), 0, 120);
         $note   = mb_substr(api_str('note'), 0, 500);
 
-        $accId  = valid_account_id($conn, api_in('account_id', null));
-        $hasAcc = movements_have_account($conn);
         $s = $conn->prepare(
-            $hasAcc
-            ? 'UPDATE account_movements
-                  SET mov_date = ?, partner_id = ?, account_id = ?, direction = ?, amount = ?, source = ?, note = ?
-                WHERE id = ?'
-            : 'UPDATE account_movements
-                  SET mov_date = ?, partner_id = ?, direction = ?, amount = ?, source = ?, note = ?
-                WHERE id = ?'
+            'UPDATE account_movements
+                SET mov_date = ?, partner_id = ?, direction = ?, amount = ?, source = ?, note = ?
+              WHERE id = ?'
         );
-        if ($hasAcc) {
-            $s->bind_param('siisdssi', $date, $pid, $accId, $dir, $amount, $source, $note, $id);
-        } else {
-            $s->bind_param('sisdssi', $date, $pid, $dir, $amount, $source, $note, $id);
-        }
+        $s->bind_param('sisdssi', $date, $pid, $dir, $amount, $source, $note, $id);
         $s->execute();
         $s->close();
 
@@ -670,24 +651,12 @@ api_dispatch([
 
         $eventId = api_in('event_id', null);
         $eventId = ($eventId === null || $eventId === '' || (int)$eventId < 1) ? null : (int)$eventId;
-        $accId   = valid_account_id($conn, api_in('account_id', null));
 
-        // The column is written only if it is there: the API may be
-        // uploaded before the SQL is run, and a movement must not fail
-        // in that window.
-        $hasAcc = movements_have_account($conn);
         $s = $conn->prepare(
-            $hasAcc
-            ? 'INSERT INTO account_movements (mov_date, partner_id, account_id, event_id, direction, kind, amount, source, note)
-               VALUES (?,?,?,?,?,?,?,?,?)'
-            : 'INSERT INTO account_movements (mov_date, partner_id, event_id, direction, kind, amount, source, note)
-               VALUES (?,?,?,?,?,?,?,?)'
+            'INSERT INTO account_movements (mov_date, partner_id, event_id, direction, kind, amount, source, note)
+             VALUES (?,?,?,?,?,?,?,?)'
         );
-        if ($hasAcc) {
-            $s->bind_param('siiissdss', $date, $pid, $accId, $eventId, $dir, $kind, $amount, $source, $note);
-        } else {
-            $s->bind_param('siissdss', $date, $pid, $eventId, $dir, $kind, $amount, $source, $note);
-        }
+        $s->bind_param('siissdss', $date, $pid, $eventId, $dir, $kind, $amount, $source, $note);
         $s->execute();
         $s->close();
 

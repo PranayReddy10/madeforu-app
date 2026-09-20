@@ -628,27 +628,6 @@ data class FinanceOverview(
     @SerialName("uncredited_offline") val uncreditedOffline: Uncredited = Uncredited(),
     val categories: List<CategoryStat> = emptyList(),
     @SerialName("category_total") val categoryTotal: Double = 0.0,
-    // Where the money is sitting. Empty on a server that predates the
-    // accounts migration.
-    val accounts: List<Account> = emptyList(),
-)
-
-/** Somewhere money sits. A partner may hold one, or the business may. */
-@Serializable
-data class Account(
-    // Null on the "not assigned to an account" row, which gathers every
-    // movement recorded before accounts existed.
-    val id: Int? = null,
-    val name: String = "",
-    val kind: String = "bank",
-    @SerialName("partner_id") val partnerId: Int? = null,
-    @SerialName("partner_name") val partnerName: String? = null,
-    @SerialName("is_active") val isActive: Boolean = true,
-    val notes: String? = null,
-    val credit: Double = 0.0,
-    val debit: Double = 0.0,
-    val balance: Double = 0.0,
-    val movements: Int = 0,
 )
 
 @Serializable
@@ -665,11 +644,6 @@ data class Movement(
     val note: String? = null,
     @SerialName("event_id") val eventId: Int? = null,
     @SerialName("event_name") val eventName: String? = null,
-    // Which account the money landed in. Null on everything recorded
-    // before accounts existed, shown as "not recorded" rather than
-    // guessed at.
-    @SerialName("account_id") val accountId: Int? = null,
-    @SerialName("account_name") val accountName: String? = null,
     // False for a settlement (it is one of a pair) and for a credit with
     // offline orders stamped on it (its amount has to match them). The
     // server refuses these too; this is so the app can say so first.

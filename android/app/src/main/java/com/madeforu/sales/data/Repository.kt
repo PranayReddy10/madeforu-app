@@ -323,7 +323,6 @@ class Repository(private val api: ApiClient, private val prefs: Prefs) {
         date: String,
         source: String,
         note: String,
-        accountId: Int? = null,
     ): ApiResult<String> =
         api.post(
             "finance.php", "add_movement",
@@ -334,7 +333,6 @@ class Repository(private val api: ApiClient, private val prefs: Prefs) {
                 put("mov_date", JsonPrimitive(date))
                 put("source", JsonPrimitive(source))
                 put("note", JsonPrimitive(note))
-                if (accountId != null) put("account_id", JsonPrimitive(accountId))
             },
         ).map { api.decode<SimpleMessage>(it).message }
 
@@ -347,7 +345,6 @@ class Repository(private val api: ApiClient, private val prefs: Prefs) {
         date: String,
         source: String,
         note: String,
-        accountId: Int? = null,
     ): ApiResult<String> =
         api.post(
             "finance.php", "update_movement",
@@ -359,7 +356,6 @@ class Repository(private val api: ApiClient, private val prefs: Prefs) {
                 put("mov_date", JsonPrimitive(date))
                 put("source", JsonPrimitive(source))
                 put("note", JsonPrimitive(note))
-                if (accountId != null) put("account_id", JsonPrimitive(accountId))
             },
         ).map { api.decode<SimpleMessage>(it).message }
 

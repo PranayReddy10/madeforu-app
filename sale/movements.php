@@ -1,6 +1,5 @@
 <?php
 require 'config.php';
-require_once __DIR__ . '/lib_accounts.php';   // which account the money landed in
 $me = require_login();
 
 function partner_map(mysqli $conn): array {
@@ -10,22 +9,6 @@ function partner_map(mysqli $conn): array {
     return $m;
 }
 $partners = partner_map($conn);
-// Accounts for the movement forms. An empty list (migration not run yet)
-// simply means the field does not appear.
-$ACCOUNTS = accounts_all($conn, true);
-$ACCMAP   = account_map($conn);
-$HAS_ACC  = movements_have_account($conn);
-
-/** <option> list for the account selects, with the current one marked. */
-function account_options(array $rows, ?int $selected, string $blank): string {
-    $h = '<option value="">' . htmlspecialchars($blank, ENT_QUOTES, 'UTF-8') . '</option>';
-    foreach ($rows as $r) {
-        $sel = ($selected !== null && (int)$r['id'] === $selected) ? ' selected' : '';
-        $h .= '<option value="' . (int)$r['id'] . '"' . $sel . '>'
-            . htmlspecialchars($r['name'], ENT_QUOTES, 'UTF-8') . '</option>';
-    }
-    return $h;
-}
 // Gaps shown inline in the investment-settlement dropdowns so the payer and
 // receiver are obvious at a glance rather than looked up on another page.
 $pageGaps = investment_gaps($conn);
@@ -87,40 +70,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $amount = round((float)($_POST['amount'] ?? 0), 2);
             $src    = trim($_POST['source'] ?? '');
             $note   = trim($_POST['note'] ?? '');
-            $accId  = valid_account_id($conn, $_POST['account_id'] ?? null);
 
             if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) throw new Exception('Pick a valid date.');
             if (!isset($partners[$pid])) throw new Exception('Choose a partner.');
             if ($amount <= 0) throw new Exception('Amount must be greater than zero.');
 
             if ($action === 'add') {
-                // account_id is written only if the column is there: the
-                // site is uploaded a file at a time, so this page can land
-                // before the SQL does and a movement must not fail then.
                 $s = $conn->prepare(
-                    $HAS_ACC
-                    ? 'INSERT INTO account_movements (mov_date, partner_id, account_id, direction, amount, source, note)
-                       VALUES (?,?,?,?,?,?,?)'
-                    : 'INSERT INTO account_movements (mov_date, partner_id, direction, amount, source, note)
-                       VALUES (?,?,?,?,?,?)'
+                    'INSERT INTO account_movements (mov_date, partner_id, direction, amount, source, note)
+                     VALUES (?,?,?,?,?,?)'
                 );
-                if ($HAS_ACC) $s->bind_param('siisdss', $date, $pid, $accId, $dir, $amount, $src, $note);
-                else          $s->bind_param('sisdss', $date, $pid, $dir, $amount, $src, $note);
+                $s->bind_param('sisdss', $date, $pid, $dir, $amount, $src, $note);
                 $s->execute();
                 $s->close();
                 flash('Movement added.');
             } else {
                 $id = (int)($_POST['id'] ?? 0);
                 $s = $conn->prepare(
-                    $HAS_ACC
-                    ? 'UPDATE account_movements
-                          SET mov_date=?, partner_id=?, account_id=?, direction=?, amount=?, source=?, note=?
-                        WHERE id=?'
-                    : 'UPDATE account_movements SET mov_date=?, partner_id=?, direction=?, amount=?, source=?, note=?
-                        WHERE id=?'
+                    'UPDATE account_movements SET mov_date=?, partner_id=?, direction=?, amount=?, source=?, note=?
+                     WHERE id=?'
                 );
-                if ($HAS_ACC) $s->bind_param('siisdssi', $date, $pid, $accId, $dir, $amount, $src, $note, $id);
-                else          $s->bind_param('sisdssi', $date, $pid, $dir, $amount, $src, $note, $id);
+                $s->bind_param('sisdssi', $date, $pid, $dir, $amount, $src, $note, $id);
                 $s->execute();
                 $s->close();
                 flash('Movement updated.');
@@ -457,10 +427,6 @@ $flash = flash();
         </div>
         <div><label>Amount (₹)</label><input type="number" name="amount" step="0.01" min="0.01" required></div>
         <div><label>Source / purpose</label><input name="source" maxlength="200" placeholder="e.g. Meesho payout"></div>
-        <?php if ($ACCOUNTS): ?>
-        <div><label>Into which account</label>
-          <select name="account_id"><?= account_options($ACCOUNTS, null, 'Not recorded') ?></select></div>
-        <?php endif; ?>
       </div>
       <label>Note</label>
       <textarea name="note" maxlength="500" placeholder="optional"></textarea>
@@ -641,13 +607,7 @@ $flash = flash();
         <?php foreach ($rows as $r): $cr = $r['direction']==='credit'; ?>
           <tr>
             <td><?= e(date('d M Y', strtotime($r['mov_date']))) ?></td>
-            <td>
-              <?= e($r['partner_name'] ?? '—') ?>
-              <?php $aid = isset($r['account_id']) && $r['account_id'] !== null ? (int)$r['account_id'] : null; ?>
-              <?php if ($aid !== null && isset($ACCMAP[$aid])): ?>
-                <div class="muted" style="font-size:12px"><?= e($ACCMAP[$aid]['name']) ?></div>
-              <?php endif; ?>
-            </td>
+            <td><?= e($r['partner_name'] ?? '—') ?></td>
             <td>
               <?php $kind = $r['kind'] ?? 'normal'; ?>
               <?php if ($kind === 'invest'): ?>
@@ -704,10 +664,6 @@ $flash = flash();
                     </div>
                     <div><label>Amount (₹)</label><input type="number" name="amount" step="0.01" min="0.01" required value="<?= e(number_format((float)$r['amount'],2,'.','')) ?>"></div>
                     <div><label>Source</label><input name="source" maxlength="200" value="<?= e($r['source']) ?>"></div>
-                    <?php if ($ACCOUNTS): ?>
-                    <div><label>Into which account</label>
-                      <select name="account_id"><?= account_options($ACCOUNTS, isset($r['account_id']) && $r['account_id'] !== null ? (int)$r['account_id'] : null, 'Not recorded') ?></select></div>
-                    <?php endif; ?>
                   </div>
                   <label>Note</label>
                   <textarea name="note" maxlength="500"><?= e($r['note']) ?></textarea>

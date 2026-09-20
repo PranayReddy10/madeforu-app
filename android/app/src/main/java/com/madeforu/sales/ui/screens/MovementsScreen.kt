@@ -52,7 +52,6 @@ import com.madeforu.sales.core.ApiResult
 import com.madeforu.sales.core.Dates
 import com.madeforu.sales.core.Money
 import com.madeforu.sales.core.isAuthFailure
-import com.madeforu.sales.data.Account
 import com.madeforu.sales.data.Movement
 import com.madeforu.sales.data.MovementTotals
 import com.madeforu.sales.data.PartnerFinance
@@ -88,9 +87,6 @@ fun MovementsScreen(
     var movements by remember { mutableStateOf<List<Movement>>(emptyList()) }
     var totals by remember { mutableStateOf(MovementTotals()) }
     var partners by remember { mutableStateOf<List<PartnerFinance>>(emptyList()) }
-    // Empty on a server that has the app but not the accounts migration,
-    // in which case the picker simply does not appear.
-    var accounts by remember { mutableStateOf<List<Account>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -111,10 +107,7 @@ fun MovementsScreen(
                 is ApiResult.Failure ->
                     if (r.isAuthFailure()) onSessionExpired() else error = r.message
             }
-            repository.financeOverview().successOrNull?.let {
-                partners = it.partners
-                accounts = it.accounts.filter { a -> a.id != null && a.isActive }
-            }
+            repository.financeOverview().successOrNull?.let { partners = it.partners }
             loading = false
         }
     }
@@ -239,19 +232,17 @@ fun MovementsScreen(
         MovementSheet(
             existing = if (target.id > 0) target else null,
             partners = partners,
-            accounts = accounts,
             busy = busy,
             onDismiss = { editing = null },
-            onSubmit = { partnerId, direction, amount, date, source, note, accountId ->
+            onSubmit = { partnerId, direction, amount, date, source, note ->
                 editing = null
                 busy = true
                 scope.launch {
                     val r = if (target.id > 0) {
                         repository.updateMovement(target.id, partnerId, direction, amount,
-                                                  date, source, note, accountId)
+                                                  date, source, note)
                     } else {
-                        repository.addMovement(partnerId, direction, amount, date, source, note,
-                                               accountId)
+                        repository.addMovement(partnerId, direction, amount, date, source, note)
                     }
                     when (r) {
                         is ApiResult.Success -> { message = r.value; refresh() }
@@ -313,10 +304,9 @@ fun MovementsScreen(
 private fun MovementSheet(
     existing: Movement?,
     partners: List<PartnerFinance>,
-    accounts: List<Account>,
     busy: Boolean,
     onDismiss: () -> Unit,
-    onSubmit: (Int, String, Double, String, String, String, Int?) -> Unit,
+    onSubmit: (Int, String, Double, String, String, String) -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var partnerId by remember { mutableStateOf(existing?.partnerId ?: partners.firstOrNull()?.id ?: 0) }
@@ -329,7 +319,6 @@ private fun MovementSheet(
     var dateText by remember { mutableStateOf(existing?.date ?: Dates.today()) }
     var source by remember { mutableStateOf(existing?.source ?: "") }
     var note by remember { mutableStateOf(existing?.note ?: "") }
-    var accountId by remember { mutableStateOf(existing?.accountId) }
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
         Column(
@@ -388,21 +377,11 @@ private fun MovementSheet(
                 modifier = Modifier.fillMaxWidth(),
             )
 
-            if (accounts.isNotEmpty()) {
-                Text("Into which account", style = MaterialTheme.typography.bodySmall)
-                ChipRow(
-                    options = listOf<Pair<Int?, String>>(null to "Not recorded") +
-                        accounts.map { it.id to it.name },
-                    selected = accountId,
-                    onSelect = { accountId = it },
-                )
-            }
-
             val amount = amountText.toDoubleOrNull() ?: 0.0
             Button(
                 onClick = {
                     onSubmit(partnerId, direction, amount, dateText.trim(),
-                             source.trim(), note.trim(), accountId)
+                             source.trim(), note.trim())
                 },
                 enabled = !busy && amount > 0 && partnerId > 0,
                 modifier = Modifier.fillMaxWidth().height(50.dp),
@@ -459,8 +438,7 @@ private fun MovementRow(movement: Movement, onEdit: () -> Unit, onDelete: () -> 
                 }
                 Text(
                     Dates.pretty(movement.date) +
-                        (movement.source.takeIf { it.isNotBlank() }?.let { " · $it" } ?: "") +
-                        (movement.accountName?.let { " → $it" } ?: ""),
+                        (movement.source.takeIf { it.isNotBlank() }?.let { " · $it" } ?: ""),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

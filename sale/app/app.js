@@ -24,11 +24,11 @@ const DEFAULT_API = new URL('../api/', location.href).href;
  * browser, the server or the app is the stale one. It must match the
  * CACHE name in sw.js.
  */
-const BUILD = '2026-09-20.1';
+const BUILD = '2026-09-19.4';
 
 /** What this build of the app expects the server to be able to do. */
 const NEEDS_FEATURES = ['revenue_breakdown', 'expense_create', 'price_history',
-                        'all_channel_revenue', 'reprice_open', 'accounts'];
+                        'all_channel_revenue', 'reprice_open'];
 
 const store = {
   get token() { return localStorage.getItem('mfu.token') || ''; },
@@ -1481,8 +1481,7 @@ route('movements', async () => {
         <div class="grow">
           <div class="t">${esc(m.partner)} ${movKind(m.kind)}</div>
           <div class="s">${esc(prettyDate(m.date))}${m.source ? ' · ' + esc(m.source) : ''}${
-            m.event_name ? ' · ' + esc(m.event_name) : ''}${
-            m.account_name ? ' → ' + esc(m.account_name) : ''}</div>
+            m.event_name ? ' · ' + esc(m.event_name) : ''}</div>
           ${m.note ? `<div class="s">${esc(m.note)}</div>` : ''}
           ${isInvest ? '<div class="s">net invested — account balance unchanged</div>' : ''}
         </div>
@@ -1505,28 +1504,8 @@ route('movements', async () => {
     } catch (e) { toast(e.message); }
   });
 
-  const accounts = await accountsList();
-  document.getElementById('addMov').onclick = () => movementSheet(partners, accounts);
+  document.getElementById('addMov').onclick = () => movementSheet(partners);
 });
-
-/**
- * The accounts list, fetched once per session.
- *
- * A server without the migration reports none, and the movement sheet
- * then leaves the field out rather than showing a dropdown that cannot
- * be filled.
- */
-let accountsCache = null;
-async function accountsList() {
-  if (accountsCache) return accountsCache;
-  try {
-    const d = await api('finance.php', 'overview');
-    accountsCache = (d.accounts || []).filter((a) => a.id !== null);
-  } catch (e) {
-    accountsCache = [];
-  }
-  return accountsCache;
-}
 
 /**
  * Add a movement — the form from movements.php.
@@ -1536,7 +1515,7 @@ async function accountsList() {
  * the wording matches the website's exactly rather than being reworded
  * into something that means subtly something else.
  */
-function movementSheet(partners, accounts = []) {
+function movementSheet(partners) {
   const sheet = openSheet('Add a movement', `
     <div class="card">
       <label class="field"><span>Date</span><input id="mdate" type="date" value="${today()}"></label>
@@ -1552,9 +1531,6 @@ function movementSheet(partners, accounts = []) {
         <input id="mamount" inputmode="decimal" placeholder="0.00"></label>
       <label class="field"><span>Source / purpose</span>
         <input id="msource" placeholder="e.g. Meesho payout"></label>
-      ${accounts.length ? `<label class="field"><span>Into which account</span>
-        <select id="maccount"><option value="">Not recorded</option>${accounts.map((a) =>
-          `<option value="${a.id}">${esc(a.name)}</option>`).join('')}</select></label>` : ''}
       <label class="field"><span>Note — optional</span><input id="mnote"></label>
     </div>
     <button class="btn" id="msave" style="margin-top:12px">Add movement</button>`);
@@ -1573,7 +1549,6 @@ function movementSheet(partners, accounts = []) {
           amount,
           source: document.getElementById('msource').value.trim(),
           note: document.getElementById('mnote').value.trim(),
-          account_id: (document.getElementById('maccount') || {}).value || null,
         },
       });
       sheet.close();

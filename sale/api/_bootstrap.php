@@ -33,7 +33,7 @@ set_exception_handler(function (Throwable $t) {
 });
 
 // ── API-wide constants ─────────────────────────────────────────────
-define('API_VERSION',      '1.6.1');
+define('API_VERSION',      '1.6.0');
 
 /**
  * What this build of the API can do, for the apps to check against.
@@ -56,7 +56,6 @@ define('API_FEATURES', [
     'all_channel_revenue', // finance.php: revenue from orders AND other credits, per-partner detail
     'movement_edit',       // finance.php: update_movement, and the pocket/revenue split basis
     'reprice_open',        // catalog.php: carry a new price onto orders that are still open
-    'accounts',            // finance.php: which account a movement landed in, and balances
 ]);
 define('TOKEN_TTL_DAYS',   90);     // a partner phone stays signed in for a quarter
 define('MAX_PAGE_SIZE',    200);
