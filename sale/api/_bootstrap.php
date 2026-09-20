@@ -119,8 +119,25 @@ function api_send(array $payload, ?int $status = null): void {
         $stray .= (string)ob_get_clean();
     }
     $stray = trim($stray);
-    if ($stray !== '') {
-        $payload['notice'] = mb_substr(preg_replace('/\s+/', ' ', $stray), 0, 400);
+
+    // Output that escaped before our buffer even opened cannot be caught
+    // -- text sitting in front of a file's <?php is already on the wire
+    // by the time this file is included. It CAN be named, though:
+    // headers_sent() reports the file and line that printed first, which
+    // is the one thing worth knowing and the one thing the phone could
+    // never work out on its own.
+    $where = '';
+    $f = ''; $l = 0;
+    if (headers_sent($f, $l) && $f !== '') {
+        $where = 'output started at ' . $f . ':' . $l;
+    }
+
+    $parts = array_filter([
+        $where,
+        $stray === '' ? '' : preg_replace('/\s+/', ' ', $stray),
+    ]);
+    if ($parts) {
+        $payload['notice'] = mb_substr(implode(' — ', $parts), 0, 400);
     }
 
     if ($status !== null) http_response_code($status);

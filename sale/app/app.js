@@ -24,7 +24,7 @@ const DEFAULT_API = new URL('../api/', location.href).href;
  * browser, the server or the app is the stale one. It must match the
  * CACHE name in sw.js.
  */
-const BUILD = '2026-09-20.2';
+const BUILD = '2026-09-20.3';
 
 /** What this build of the app expects the server to be able to do. */
 const NEEDS_FEATURES = ['revenue_breakdown', 'expense_create', 'price_history',
@@ -156,18 +156,36 @@ async function api(endpoint, action, { body = null, params = {} } = {}) {
     // console so it is not silently lived with: the real fix is on the
     // server, and api_send() there now makes it impossible.
     const body = text.trim();
-    const open = body[0];
-    if (open === '{' || open === '[') {
-      const end = body.lastIndexOf(open === '{' ? '}' : ']');
-      if (end > 0) {
+    // Junk can land on either side: a warning raised during shutdown goes
+    // after the closing brace, while anything printed before the API's
+    // output buffer opens -- text sitting in front of a file's <?php, say
+    // -- goes in front of it. Look for a JSON document anywhere in the
+    // body rather than assuming which end is dirty.
+    const last = Math.max(body.lastIndexOf('}'), body.lastIndexOf(']'));
+    if (last > 0) {
+      // Try the first few opening braces. Junk in front can contain one
+      // of its own, so the first candidate is not always the real start.
+      let from = -1;
+      for (let tries = 0; tries < 6; tries++) {
+        from = body.indexOf('{', from + 1);
+        if (from < 0 || from > last) break;
         try {
-          data = JSON.parse(body.slice(0, end + 1));
-          console.warn('Server appended junk after the JSON:',
-            body.slice(end + 1).trim().slice(0, 200));
-        } catch (ignored) { /* not salvageable; fall through to the report */ }
+          data = JSON.parse(body.slice(from, last + 1));
+          const before = body.slice(0, from).trim();
+          const after = body.slice(last + 1).trim();
+          console.warn('Server wrapped the JSON in junk.',
+            before ? 'Before: ' + before.slice(0, 200) : '',
+            after ? 'After: ' + after.slice(0, 200) : '');
+          break;
+        } catch (ignored) { /* try the next opening brace */ }
       }
     }
   }
+
+  // The server tells us when it caught stray output. Say so once, in the
+  // console: the screen works, but something on the server is printing
+  // where it should not, and that is worth fixing rather than living with.
+  if (data && data.notice) console.warn('Server notice:', data.notice);
 
   if (data === undefined) {
     // Shared hosting loves to prepend a warning or serve an error page.
@@ -194,11 +212,19 @@ async function api(endpoint, action, { body = null, params = {} } = {}) {
         `${where} returned a web page instead of data (HTTP ${response.status}). ` +
         'Either the address is wrong or that file is not on the server.');
     }
-    // A PHP notice or warning in front of otherwise good JSON. Show it:
-    // it names the file and the line.
-    const firstLine = body.split('\n')[0].slice(0, 220);
+    // Something else entirely. The salvage above already tried to find a
+    // JSON document anywhere in the body and failed, so say which of the
+    // two this is -- a reply with no data in it at all is a different
+    // problem from data with rubbish around it, and the fix differs.
+    const firstLine = body.split('\n')[0].slice(0, 200);
+    const hasBrace = body.indexOf('{') >= 0;
     throw new ApiError('bad_response',
-      `${where} replied with something that is not data (HTTP ${response.status}): ` + firstLine);
+      `${where} replied with no usable data (HTTP ${response.status}, ${body.length} bytes). ` +
+      (hasBrace
+        ? 'There is data in there but it could not be read. '
+        : 'The reply contains no data at all — this looks like a file being served ' +
+          'instead of the API. Check that file on the server. ') +
+      'It begins: ' + firstLine);
   }
 
   if (!data.ok) {
