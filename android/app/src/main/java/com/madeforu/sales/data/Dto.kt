@@ -139,11 +139,6 @@ data class Order(
     @SerialName("is_walk_in") val isWalkIn: Boolean = false,
     @SerialName("event_id") val eventId: Int? = null,
     @SerialName("event_name") val eventName: String? = null,
-    // Where the sale came from. Independent of the event: a WhatsApp sale
-    // at a stall is both. Null on orders written before channels existed,
-    // which the screens show as "not recorded" rather than guessing.
-    @SerialName("channel_id") val channelId: Int? = null,
-    @SerialName("channel_name") val channelName: String? = null,
     val subtotal: Double = 0.0,
     @SerialName("extra_charge") val extraCharge: Double = 0.0,
     @SerialName("extra_charge_reason") val extraChargeReason: String? = null,
@@ -633,11 +628,6 @@ data class FinanceOverview(
     @SerialName("uncredited_offline") val uncreditedOffline: Uncredited = Uncredited(),
     val categories: List<CategoryStat> = emptyList(),
     @SerialName("category_total") val categoryTotal: Double = 0.0,
-    // Where the sales came from, what a marketplace still owes, and where
-    // the money is sitting. Empty on a server that predates channels.
-    @SerialName("by_channel") val byChannel: List<ChannelRevenue> = emptyList(),
-    val settlement: List<ChannelSettlement> = emptyList(),
-    val accounts: List<Account> = emptyList(),
 )
 
 @Serializable
@@ -654,10 +644,6 @@ data class Movement(
     val note: String? = null,
     @SerialName("event_id") val eventId: Int? = null,
     @SerialName("event_name") val eventName: String? = null,
-    @SerialName("account_id") val accountId: Int? = null,
-    @SerialName("account_name") val accountName: String? = null,
-    @SerialName("channel_id") val channelId: Int? = null,
-    @SerialName("channel_name") val channelName: String? = null,
     // False for a settlement (it is one of a pair) and for a credit with
     // offline orders stamped on it (its amount has to match them). The
     // server refuses these too; this is so the app can say so first.
@@ -769,116 +755,3 @@ data class ReleaseResponse(val release: Release = Release())
 
 @Serializable
 data class SettingsResponse(val settings: Settings = Settings(), val message: String = "")
-
-// ── Channels and accounts ──────────────────────────────────────────
-
-/**
- * Where a sale came from, and what it sells for there.
- *
- * `prices` holds only the items this channel charges differently for.
- * An item missing from it sells at the catalogue price, so a catalogue
- * change still reaches every channel that has not deliberately
- * overridden it.
- */
-@Serializable
-data class Channel(
-    val id: Int = 0,
-    val name: String = "",
-    val slug: String = "",
-    // A marketplace that sells today and pays in a lump later. Its
-    // payouts settle orders already counted, so they move an account
-    // balance without being revenue a second time.
-    @SerialName("settles_later") val settlesLater: Boolean = false,
-    @SerialName("is_active") val isActive: Boolean = true,
-    @SerialName("sort_order") val sortOrder: Int = 0,
-    val notes: String? = null,
-    val prices: Map<String, Double> = emptyMap(),
-)
-
-/** Somewhere money sits. A partner may hold one, or the business may. */
-@Serializable
-data class Account(
-    val id: Int = 0,
-    val name: String = "",
-    val kind: String = "bank",
-    @SerialName("partner_id") val partnerId: Int? = null,
-    @SerialName("partner_name") val partnerName: String? = null,
-    @SerialName("is_active") val isActive: Boolean = true,
-    val notes: String? = null,
-    // Present on the finance overview, absent on the plain account list.
-    val credit: Double = 0.0,
-    val debit: Double = 0.0,
-    val balance: Double = 0.0,
-    val movements: Int = 0,
-)
-
-/** What a channel has sold against what it has actually paid. */
-@Serializable
-data class ChannelSettlement(
-    @SerialName("channel_id") val channelId: Int = 0,
-    val channel: String = "",
-    val orders: Int = 0,
-    val sold: Double = 0.0,
-    val payouts: Int = 0,
-    val received: Double = 0.0,
-    // Money still owed, or the marketplace's commission once a payout is in.
-    val outstanding: Double = 0.0,
-)
-
-/** Revenue split by where the sale came from. */
-@Serializable
-data class ChannelRevenue(
-    @SerialName("channel_id") val channelId: Int? = null,
-    val channel: String = "",
-    val orders: Int = 0,
-    @SerialName("order_rev") val orderRev: Double = 0.0,
-    // A sale recorded as a credit with no order behind it: money in, but
-    // no product detail and so no profit for it.
-    @SerialName("credit_rev") val creditRev: Double = 0.0,
-    val total: Double = 0.0,
-)
-
-@Serializable
-data class TradeResponse(
-    // False when the server has the new app but not the new SQL. Named
-    // rather than returned as an empty list, so the app can say why the
-    // pickers are missing instead of silently showing nothing.
-    val ready: Boolean = false,
-    val channels: List<Channel> = emptyList(),
-    val accounts: List<Account> = emptyList(),
-    val settlement: List<ChannelSettlement> = emptyList(),
-    val message: String? = null,
-)
-
-// ── Raw material ───────────────────────────────────────────────────
-
-/** Bought against used, per material. */
-@Serializable
-data class MaterialRow(
-    val item: String = "",
-    @SerialName("bought_qty") val boughtQty: Int = 0,
-    @SerialName("bought_value") val boughtValue: Double = 0.0,
-    @SerialName("used_qty") val usedQty: Int = 0,
-    @SerialName("used_value") val usedValue: Double = 0.0,
-    @SerialName("on_hand") val onHand: Int = 0,
-    // Bought minus used minus on hand. Should be zero; anything else
-    // moved without being written down.
-    val unaccounted: Int = 0,
-    @SerialName("stock_value") val stockValue: Double = 0.0,
-)
-
-@Serializable
-data class MaterialTotals(
-    val bought: Double = 0.0,
-    val used: Double = 0.0,
-    val stock: Double = 0.0,
-)
-
-@Serializable
-data class MaterialAuditResponse(
-    val ready: Boolean = false,
-    val rows: List<MaterialRow> = emptyList(),
-    @SerialName("orders_drawn") val ordersDrawn: Int = 0,
-    val totals: MaterialTotals = MaterialTotals(),
-    val message: String? = null,
-)

@@ -24,12 +24,11 @@ const DEFAULT_API = new URL('../api/', location.href).href;
  * browser, the server or the app is the stale one. It must match the
  * CACHE name in sw.js.
  */
-const BUILD = '2026-09-20.1';
+const BUILD = '2026-09-19.4';
 
 /** What this build of the app expects the server to be able to do. */
 const NEEDS_FEATURES = ['revenue_breakdown', 'expense_create', 'price_history',
-                        'all_channel_revenue', 'reprice_open',
-                        'channels', 'accounts', 'marketplace_payout'];
+                        'all_channel_revenue', 'reprice_open'];
 
 const store = {
   get token() { return localStorage.getItem('mfu.token') || ''; },
@@ -782,7 +781,7 @@ async function takePayment(order) {
 let draft = null;
 
 route('new', async () => {
-  draft = draft && draft.keep ? draft : { lines: {}, name: '', phone: '', notes: '', paid: '', mode: 'cash', eventId: '', channelId: '' };
+  draft = draft && draft.keep ? draft : { lines: {}, name: '', phone: '', notes: '', paid: '', mode: 'cash', eventId: '' };
   draft.keep = false;
 
   setHtml(`<div class="screen"><div class="head"><h1 class="grow">New sale</h1></div>
@@ -792,30 +791,11 @@ route('new', async () => {
   const products = boot.products || [];
   const events = boot.events || [];
 
-  // Channels, with their price overrides attached. A server that has not
-  // run the migration yet simply reports none, and the picker does not
-  // appear -- rather than the screen half-working with no explanation.
-  let channels = [];
-  try {
-    const t = await api('trade.php', 'list');
-    channels = (t.channels || []).filter((c) => c.is_active);
-  } catch (e) { channels = []; }
-
-  /** What a product sells for through the channel now picked. */
-  function rateFor(name) {
-    const c = channels.find((x) => String(x.id) === String(draft.channelId));
-    if (c && c.prices && c.prices[name] !== undefined) return Number(c.prices[name]);
-    const p = products.find((x) => x.name === name);
-    return p ? Number(p.price) : 0;
-  }
-
   // Every section folds, products included. A sale is four decisions and
   // only one of them is on screen at a time, so nobody scrolls past the
   // catalogue to reach the phone number. Products start open because
   // that is the one section every sale needs.
   document.getElementById('body').innerHTML = `
-    ${channels.length ? `<div class="chips" id="channelChips"></div>
-      <div class="s" id="channelHint" style="margin-top:6px"></div>` : ''}
     ${events.length ? `<div class="chips" id="eventChips"></div>` : ''}
     <div id="productFold" style="margin-top:10px"></div>
     <div style="margin-top:10px">${fold('Customer', 'Optional — leave empty for a walk-in', `
@@ -827,32 +807,6 @@ route('new', async () => {
     <div style="margin-top:10px" id="paidFold"></div>
     <div id="summary"></div>
     <button class="btn" id="save" style="margin-top:14px">Save sale</button>`;
-
-  if (channels.length) {
-    // Repainting is enough -- unlike the event chips this does not
-    // re-enter the route, so the basket stays exactly as it is and only
-    // the prices move.
-    chipRow('channelChips', [['', 'No channel']].concat(channels.map((c) => [String(c.id), c.name])),
-      draft.channelId, (v) => {
-        draft.channelId = v;
-        paintChannelHint();
-        paintProducts();
-        paintPaid();
-        paintSummary();
-      });
-    paintChannelHint();
-  }
-
-  /** Says once, with room for it, that this channel prices differently. */
-  function paintChannelHint() {
-    const el = document.getElementById('channelHint');
-    if (!el) return;
-    const c = channels.find((x) => String(x.id) === String(draft.channelId));
-    const n = c && c.prices ? Object.keys(c.prices).length : 0;
-    el.textContent = n
-      ? c.name + ' has its own price for ' + n + ' product' + (n === 1 ? '' : 's') + '.'
-      : '';
-  }
 
   if (events.length) {
     chipRow('eventChips', [['', 'Direct / walk-up']].concat(events.map((e) => [String(e.id), e.name])),
@@ -874,10 +828,10 @@ route('new', async () => {
   function basket() {
     const rows = Object.entries(draft.lines);
     const units = rows.reduce((n, [, q]) => n + q, 0);
-    // Priced through the channel, so the total on screen is the total
-    // the server will charge. Pricing from the catalogue here while the
-    // server prices from the channel would only disagree AFTER saving.
-    const subtotal = rows.reduce((sum, [name, qty]) => sum + rateFor(name) * qty, 0);
+    const subtotal = rows.reduce((sum, [name, qty]) => {
+      const p = products.find((x) => x.name === name);
+      return sum + (p ? p.price * qty : 0);
+    }, 0);
     return { rows, units, subtotal };
   }
 
@@ -917,7 +871,7 @@ route('new', async () => {
       return `<div class="row">
         ${p.image_url ? `<img class="tile" src="${esc(p.image_url)}" alt="" style="object-fit:cover">` : tile(p.name)}
         <div class="grow"><div class="t">${esc(p.name)}</div>
-          <div class="s">${money(rateFor(p.name))}${qty ? ' · ' + money(rateFor(p.name) * qty) : ''}</div></div>
+          <div class="s">${money(p.price)}${qty ? ' · ' + money(p.price * qty) : ''}</div></div>
         <div style="display:flex;align-items:center;gap:8px">
           ${qty ? `<button class="btn small ghost" data-minus="${esc(p.name)}">−</button>
                    <b style="min-width:18px;text-align:center">${qty}</b>` : ''}
@@ -943,7 +897,10 @@ route('new', async () => {
     paintPaid();
     document.getElementById('summary').innerHTML = rows.length ? `
       <section><h2 class="section">This bill</h2><div class="card">
-        ${rows.map(([n, q]) => detailRow(`${esc(n)} × ${q}`, money(rateFor(n) * q))).join('')}
+        ${rows.map(([n, q]) => {
+          const p = products.find((x) => x.name === n);
+          return detailRow(`${esc(n)} × ${q}`, money(p ? p.price * q : 0));
+        }).join('')}
         <div class="row"><div class="grow t">Total</div><div class="amt">${money(subtotal)}</div></div>
       </div></section>` : '';
   }
@@ -980,7 +937,6 @@ route('new', async () => {
           phone: draft.phone,
           notes: draft.notes,
           event_id: draft.eventId || null,
-          channel_id: draft.channelId || null,
           paid_amount: Number(draft.paid || 0),
           payment_mode: draft.mode,
         },
@@ -1215,8 +1171,6 @@ route('money', async () => {
     </div>
     ${revenueWorking(d.revenue_breakdown, d.business)}</section>
 
-    ${channelSection(d.by_channel, d.settlement, d.accounts)}
-
     ${partnerBoxes(d.partner_detail)}
 
     ${d.categories.length ? `<section><h2 class="section">Expenses by category</h2><div class="card">
@@ -1244,63 +1198,6 @@ route('money', async () => {
  * support each time, the screen shows its own arithmetic: what the
  * headline adds up from, and every nearby figure it is NOT.
  */
-/**
- * Where the money came from, what a marketplace still owes, and where it
- * is sitting.
- *
- * Sold and received are two different numbers for a marketplace and the
- * gap between them is real -- either money still owed or the
- * marketplace's commission. Showing only one of them is how a business
- * ends up believing it has been paid for everything it sold.
- */
-function channelSection(byChannel, settlement, accounts) {
-  const rows = (byChannel || []).filter((c) => c.total > 0);
-  const owed = (settlement || []).filter((s) => s.sold > 0 || s.received > 0);
-  const accs = (accounts || []).filter((a) => a.movements > 0);
-  if (!rows.length && !owed.length && !accs.length) return '';
-
-  const total = rows.reduce((n, c) => n + c.total, 0);
-
-  return `
-    ${rows.length ? `<section><h2 class="section">Where the sales came from</h2><div class="card">
-      ${rows.map((c) => {
-        const pct = total > 0 ? (c.total / total * 100) : 0;
-        const colour = tileColour(c.channel);
-        return `<div style="margin-top:12px">
-          <div class="row" style="border:none;padding:0 0 5px">
-            <div class="grow t" style="font-weight:500">${esc(c.channel)}</div>
-            <div class="amt">${money(c.total)}</div></div>
-          <div style="height:8px;border-radius:99px;background:var(--line);overflow:hidden">
-            <div style="height:100%;width:${pct.toFixed(1)}%;background:${colour};border-radius:99px"></div></div>
-          <div class="s">${pct.toFixed(1)}% of sales · ${c.orders} order${c.orders === 1 ? '' : 's'}${
-            c.credit_rev > 0 ? ' · ' + money(c.credit_rev) + ' credited without an order' : ''}</div>
-        </div>`;
-      }).join('')}
-      <p class="muted" style="margin-top:12px">Orders written before channels were recorded
-        are shown as “Not recorded” rather than guessed at.</p>
-    </div></section>` : ''}
-
-    ${owed.length ? `<section><h2 class="section">Marketplace settlement</h2><div class="card">
-      <p class="muted">What these channels sold, against what they have actually paid.
-        A payout is not counted as revenue again — the orders it settles already are.</p>
-      ${owed.map((s) => `<div class="row">
-        <div class="grow"><div class="t">${esc(s.channel)}</div>
-          <div class="s">${s.orders} order${s.orders === 1 ? '' : 's'} sold ${money(s.sold)} ·
-            ${s.payouts} payout${s.payouts === 1 ? '' : 's'} ${money(s.received)}</div></div>
-        <div class="amt ${s.outstanding > 0 ? 'neg' : 'pos'}">${money(s.outstanding)}</div>
-      </div>`).join('')}
-    </div></section>` : ''}
-
-    ${accs.length ? `<section><h2 class="section">Where the money is</h2><div class="card">
-      ${accs.map((a) => `<div class="row">
-        <div class="grow"><div class="t">${esc(a.name)}</div>
-          <div class="s">${a.partner_name ? esc(a.partner_name) : 'The business'} ·
-            in ${money(a.credit)} · out ${money(a.debit)}</div></div>
-        <div class="amt">${money(a.balance)}</div>
-      </div>`).join('')}
-    </div></section>` : ''}`;
-}
-
 function revenueWorking(r, business) {
   // An older api/finance.php has no revenue_breakdown at all. Rendering
   // nothing here is what made a stale upload look like an app that had
@@ -1523,9 +1420,6 @@ function movKind(kind) {
     transfer: ['settlement', '#e7f0fd', '#1451a8'],
     profit:   ['profit', '#e3f5eb', '#1a7f4b'],
     invest:   ['settle-up', '#efe7fb', '#5b3ba0'],
-    // Money in from a marketplace for orders already counted, so it
-    // moves an account balance without being revenue a second time.
-    payout:   ['payout', '#fff3e0', '#b26a00'],
   };
   const hit = styles[kind];
   if (!hit) return '';
@@ -1587,9 +1481,7 @@ route('movements', async () => {
         <div class="grow">
           <div class="t">${esc(m.partner)} ${movKind(m.kind)}</div>
           <div class="s">${esc(prettyDate(m.date))}${m.source ? ' · ' + esc(m.source) : ''}${
-            m.event_name ? ' · ' + esc(m.event_name) : ''}${
-            m.channel_name ? ' · ' + esc(m.channel_name) : ''}${
-            m.account_name ? ' → ' + esc(m.account_name) : ''}</div>
+            m.event_name ? ' · ' + esc(m.event_name) : ''}</div>
           ${m.note ? `<div class="s">${esc(m.note)}</div>` : ''}
           ${isInvest ? '<div class="s">net invested — account balance unchanged</div>' : ''}
         </div>
@@ -1612,32 +1504,8 @@ route('movements', async () => {
     } catch (e) { toast(e.message); }
   });
 
-  const trade = await tradeLists();
-  document.getElementById('addMov').onclick = () => movementSheet(partners, trade);
+  document.getElementById('addMov').onclick = () => movementSheet(partners);
 });
-
-/**
- * Channels and accounts, fetched once per session.
- *
- * A server without the migration reports none, and every caller then
- * simply leaves those fields out rather than showing an empty dropdown
- * that cannot be filled.
- */
-let tradeCache = null;
-async function tradeLists() {
-  if (tradeCache) return tradeCache;
-  try {
-    const t = await api('trade.php', 'list');
-    tradeCache = {
-      channels: (t.channels || []).filter((c) => c.is_active),
-      accounts: (t.accounts || []).filter((a) => a.is_active),
-      settlement: t.settlement || [],
-    };
-  } catch (e) {
-    tradeCache = { channels: [], accounts: [], settlement: [] };
-  }
-  return tradeCache;
-}
 
 /**
  * Add a movement — the form from movements.php.
@@ -1647,9 +1515,7 @@ async function tradeLists() {
  * the wording matches the website's exactly rather than being reworded
  * into something that means subtly something else.
  */
-function movementSheet(partners, trade = { channels: [], accounts: [] }) {
-  const accounts = trade.accounts || [];
-  const channels = trade.channels || [];
+function movementSheet(partners) {
   const sheet = openSheet('Add a movement', `
     <div class="card">
       <label class="field"><span>Date</span><input id="mdate" type="date" value="${today()}"></label>
@@ -1665,38 +1531,14 @@ function movementSheet(partners, trade = { channels: [], accounts: [] }) {
         <input id="mamount" inputmode="decimal" placeholder="0.00"></label>
       <label class="field"><span>Source / purpose</span>
         <input id="msource" placeholder="e.g. Meesho payout"></label>
-      ${accounts.length ? `<label class="field"><span>Into which account</span>
-        <select id="maccount"><option value="">Not recorded</option>${accounts.map((a) =>
-          `<option value="${a.id}">${esc(a.name)}</option>`).join('')}</select></label>` : ''}
-      ${channels.length ? `<label class="field"><span>Channel</span>
-        <select id="mchannel"><option value="">None</option>${channels.map((c) =>
-          `<option value="${c.id}">${esc(c.name)}</option>`).join('')}</select></label>` : ''}
       <label class="field"><span>Note — optional</span><input id="mnote"></label>
     </div>
-    ${channels.length ? `<label class="row" style="margin-top:10px;align-items:flex-start;gap:10px">
-      <input type="checkbox" id="mpayout" style="margin-top:3px">
-      <span class="grow"><div class="t">Marketplace payout</div>
-        <div class="s">Amazon, Meesho or the website settling up for orders already entered.
-          It moves the account balance but is not counted as revenue again, because those
-          orders were counted when they were written. Pick the channel above.</div></span>
-    </label>` : ''}
     <button class="btn" id="msave" style="margin-top:12px">Add movement</button>`);
 
   document.getElementById('msave').onclick = async () => {
     const button = document.getElementById('msave');
     const amount = Number(String(document.getElementById('mamount').value).replace(/[^\d.]/g, '')) || 0;
     if (!(amount > 0)) { toast('Enter an amount greater than zero.'); return; }
-
-    const read = (id) => { const el = document.getElementById(id); return el ? el.value : ''; };
-    const payout = document.getElementById('mpayout') && document.getElementById('mpayout').checked;
-    if (payout && !read('mchannel')) {
-      toast('A payout needs a channel, so it can be matched against that channel\'s orders.');
-      return;
-    }
-    if (payout && document.getElementById('mdir').value !== 'credit') {
-      toast('A payout is money coming in, so it has to be a credit.');
-      return;
-    }
     button.disabled = true; button.textContent = 'Saving…';
     try {
       const r = await api('finance.php', 'add_movement', {
@@ -1707,10 +1549,6 @@ function movementSheet(partners, trade = { channels: [], accounts: [] }) {
           amount,
           source: document.getElementById('msource').value.trim(),
           note: document.getElementById('mnote').value.trim(),
-          account_id: read('maccount') || null,
-          channel_id: read('mchannel') || null,
-          kind: document.getElementById('mpayout') && document.getElementById('mpayout').checked
-                ? 'payout' : 'normal',
         },
       });
       sheet.close();

@@ -1,7 +1,5 @@
 <?php
 require 'config.php';
-require_once __DIR__ . '/lib_trade.php';   // channels, per-channel prices
-require_once __DIR__ . '/stock_lib.php';   // FIFO raw material
 $me = require_login();
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') { header('Location: index.php'); exit; }
@@ -83,70 +81,6 @@ function lines(array $post, array $ITEMS, array $agreed = [], array $costs = [],
         $out[] = ['item'=>$name, 'qty'=>$q, 'unit'=>$unit, 'cost'=>$cost, 'lt'=>$lt];
     }
     return [$out, round($total, 2)];
-}
-
-/**
- * Draw this order's raw material out of stock, FIFO.
- *
- * Called with the order's final lines. Anything the order drew before is
- * given back first, so an edit is a restatement rather than a second
- * helping -- change 3 mugs to 5 and the shelf loses 2, not 5.
- *
- * Only items that are actually tracked are touched (see stock_tracked):
- * a catalogue product nobody has ever bought raw material for is not
- * pushed negative just because it sold.
- *
- * $stockDone says whether this order has ever drawn stock. Orders
- * written before save.php did this have taken nothing, so there is
- * nothing to give back, and consuming now would take material that was
- * physically used months ago -- which is why an old order being edited
- * is left alone entirely rather than being drawn down late.
- *
- * Must run inside the caller's transaction.
- */
-function sync_stock(mysqli $conn, int $orderId, array $rows, bool $stockDone): bool {
-    if (!stock_draws_ready($conn)) return $stockDone;
-
-    if ($stockDone) stock_release($conn, 'order', $orderId);
-
-    $drew = false;
-    foreach ($rows as $r) {
-        if (!stock_tracked($conn, $r['item'])) continue;
-        stock_consume($conn, $r['item'], (int)$r['qty'], 'order', $orderId,
-                      'Sold on order ' . $orderId);
-        $drew = true;
-    }
-    return $drew;
-}
-
-/**
- * Remember whether an order has drawn stock, so a later edit knows
- * whether it has anything to give back.
- */
-function mark_stock_done(mysqli $conn, int $orderId, bool $done): void {
-    try {
-        $s = $conn->prepare('UPDATE orders SET stock_done = ? WHERE id = ?');
-        $flag = $done ? 1 : 0;
-        $s->bind_param('ii', $flag, $orderId);
-        $s->execute();
-        $s->close();
-    } catch (Throwable $e) {
-        // Column not added yet: the SQL lands separately from the PHP.
-    }
-}
-
-/** Has this order already drawn stock? False for everything pre-feature. */
-function order_stock_done(mysqli $conn, int $orderId): bool {
-    try {
-        $s = $conn->prepare('SELECT stock_done FROM orders WHERE id = ?');
-        $s->bind_param('i', $orderId);
-        $s->execute();
-        $r = $s->get_result()->fetch_assoc();
-        $s->close();
-        return $r !== null && (int)$r['stock_done'] === 1;
-    } catch (Throwable $e) {
-        return false;
-    }
 }
 
 /**
@@ -298,15 +232,8 @@ try {
     // ── CREATE ────────────────────────────────────────────
     case 'create': {
         [$name, $phone, $notes]   = customer($_POST);
-        // Where the sale came from. Unrecognised or blank is null --
-        // "not recorded" -- rather than an error: a sale is never
-        // blocked because a dropdown was stale.
-        $channelId = valid_channel_id($conn, $_POST['channel_id'] ?? null);
-        // A new sale: today's prices for THIS channel, and today's costs
-        // frozen on. Amazon's price is not the counter price, and which
-        // one applied is decided here, once, at the moment of sale.
-        [$rows, $subtotal]        = lines($_POST, channel_items($conn, $ITEMS, $channelId),
-                                          [], item_costs($conn));
+        // A new sale: today's prices, and today's costs frozen on.
+        [$rows, $subtotal]        = lines($_POST, $ITEMS, [], item_costs($conn));
         [$extra, $extraReason]    = extra_charge($_POST);
         [$disc, $discReason]      = discount($_POST, $subtotal, $extra);
 
@@ -336,41 +263,21 @@ try {
         try {
             $orderNo = generate_order_no($conn);
 
-            // channel_id is written only if the column is there. The
-            // website is uploaded file by file, so this page can land
-            // before the migration does, and a new sale must not fail
-            // in that window.
-            $hasChannel = db_column_exists($conn, 'orders', 'channel_id');
             $s = $conn->prepare(
-                $hasChannel
-                ? 'INSERT INTO orders (order_no, name, phone, event_id, channel_id, subtotal, discount,
-                                       discount_reason, extra_charge, extra_charge_reason,
-                                       total, paid_amount,
-                                       is_ready, is_delivered, notes, created_by)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,0,?,?,?,?)'
-                : 'INSERT INTO orders (order_no, name, phone, event_id, subtotal, discount,
-                                       discount_reason, extra_charge, extra_charge_reason,
-                                       total, paid_amount,
-                                       is_ready, is_delivered, notes, created_by)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,0,?,?,?,?)'
+                'INSERT INTO orders (order_no, name, phone, event_id, subtotal, discount,
+                                     discount_reason, extra_charge, extra_charge_reason,
+                                     total, paid_amount,
+                                     is_ready, is_delivered, notes, created_by)
+                 VALUES (?,?,?,?,?,?,?,?,?,?,0,?,?,?,?)'
             );
-            if ($hasChannel) {
-                $s->bind_param('sssiiddsdsdiisi', $orderNo, $name, $phone, $eventId, $channelId,
-                               $subtotal, $disc, $discReason, $extra, $extraReason, $total,
-                               $ready, $delivered, $notes, $me['id']);
-            } else {
-                $s->bind_param('sssiddsdsdiisi', $orderNo, $name, $phone, $eventId, $subtotal, $disc,
-                               $discReason, $extra, $extraReason, $total, $ready, $delivered,
-                               $notes, $me['id']);
-            }
+            $s->bind_param('sssiddsdsdiisi', $orderNo, $name, $phone, $eventId, $subtotal, $disc,
+                           $discReason, $extra, $extraReason, $total, $ready, $delivered,
+                           $notes, $me['id']);
             $s->execute();
             $orderId = $conn->insert_id;
             $s->close();
 
             write_lines($conn, $orderId, $rows);
-
-            // Raw material leaves the shelf when the sale is written.
-            mark_stock_done($conn, $orderId, sync_stock($conn, $orderId, $rows, false));
 
             if ($paid > 0) {
                 $m    = mode($_POST);
@@ -405,15 +312,10 @@ try {
         if ($id < 1) throw new Exception('Invalid order id.');
 
         [$name, $phone, $notes] = customer($_POST);
-        $channelId = valid_channel_id($conn, $_POST['channel_id'] ?? null);
         // Read the agreed prices before the rewrite below deletes them.
-        // Changing the channel on an existing order does NOT reprice what
-        // is already on it -- those lines were sold at a price somebody
-        // agreed to. The channel's price list applies to lines genuinely
-        // new to the order, which is the same rule the catalogue follows.
         [$agreedPrices, $agreedCosts] = sold_prices($conn, $id);
-        [$rows, $subtotal]      = lines($_POST, channel_items($conn, $ITEMS, $channelId),
-                                        $agreedPrices, item_costs($conn), $agreedCosts);
+        [$rows, $subtotal]      = lines($_POST, $ITEMS, $agreedPrices,
+                                        item_costs($conn), $agreedCosts);
         [$extra, $extraReason]  = extra_charge($_POST);
         [$disc, $discReason]    = discount($_POST, $subtotal, $extra);
         [$awb, $dispatchDate]   = dispatch($_POST);
@@ -447,25 +349,14 @@ try {
 
         $conn->begin_transaction();
         try {
-            $hasChannel = db_column_exists($conn, 'orders', 'channel_id');
             $s = $conn->prepare(
-                $hasChannel
-                ? 'UPDATE orders SET name=?, phone=?, notes=?, channel_id=?, discount=?, discount_reason=?,
-                                     extra_charge=?, extra_charge_reason=?,
-                                     is_ready=?, is_delivered=?, awb=?, dispatch_date=? WHERE id=?'
-                : 'UPDATE orders SET name=?, phone=?, notes=?, discount=?, discount_reason=?,
-                                     extra_charge=?, extra_charge_reason=?,
-                                     is_ready=?, is_delivered=?, awb=?, dispatch_date=? WHERE id=?'
+                'UPDATE orders SET name=?, phone=?, notes=?, discount=?, discount_reason=?,
+                                   extra_charge=?, extra_charge_reason=?,
+                                   is_ready=?, is_delivered=?, awb=?, dispatch_date=? WHERE id=?'
             );
-            if ($hasChannel) {
-                $s->bind_param('sssidsdsiissi', $name, $phone, $notes, $channelId, $disc, $discReason,
-                               $extra, $extraReason, $ready, $delivered,
-                               $awb, $dispatchDate, $id);
-            } else {
-                $s->bind_param('sssdsdsiissi', $name, $phone, $notes, $disc, $discReason,
-                               $extra, $extraReason, $ready, $delivered,
-                               $awb, $dispatchDate, $id);
-            }
+            $s->bind_param('sssdsdsiissi', $name, $phone, $notes, $disc, $discReason,
+                           $extra, $extraReason, $ready, $delivered,
+                           $awb, $dispatchDate, $id);
             $s->execute();
             $s->close();
 
@@ -475,15 +366,6 @@ try {
             $s->close();
 
             write_lines($conn, $id, $rows);
-
-            // Restate what this order took from the shelf. An order
-            // written before save.php drew stock has taken nothing, so
-            // there is nothing to give back and nothing to take now --
-            // its material left the building months ago.
-            $wasDone = order_stock_done($conn, $id);
-            if ($wasDone) {
-                mark_stock_done($conn, $id, sync_stock($conn, $id, $rows, true));
-            }
 
             recalc_total($conn, $id);
             $conn->commit();
@@ -614,19 +496,10 @@ try {
         $ev->close();
         $backEvent = ($evRow && $evRow['event_id'] !== null) ? (string)(int)$evRow['event_id'] : '0';
 
-        // A deleted order never happened, so its raw material goes back
-        // to the batches it came from. Without this the shelf keeps
-        // losing units to orders that no longer exist, and the audit's
-        // "unaccounted" column fills up with deletions.
-        $conn->begin_transaction();
-        try {
-            if (order_stock_done($conn, $id)) stock_release($conn, 'order', $id);
-            $s = $conn->prepare('DELETE FROM orders WHERE id = ?');
-            $s->bind_param('i', $id);
-            $s->execute();
-            $s->close();
-            $conn->commit();
-        } catch (Exception $ex) { $conn->rollback(); throw $ex; }
+        $s = $conn->prepare('DELETE FROM orders WHERE id = ?');
+        $s->bind_param('i', $id);
+        $s->execute();
+        $s->close();
         flash('Order deleted.');
         header('Location: index.php?event=' . urlencode($backEvent));
         exit;

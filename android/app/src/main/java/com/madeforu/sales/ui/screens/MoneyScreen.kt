@@ -224,30 +224,6 @@ fun MoneyScreen(
                     }
                 }
 
-                // ── Where the sales came from ──────────────────────
-                val channelRows = data.byChannel.filter { it.total > 0 }
-                if (channelRows.isNotEmpty()) {
-                    item { SectionHeader("Where the sales came from") }
-                    item { ChannelRevenueCard(channelRows) }
-                }
-
-                // Sold and received are two different numbers for a
-                // marketplace, and the gap between them is real -- money
-                // still owed, or their commission. Showing only one of
-                // them is how a business comes to believe it has been
-                // paid for everything it sold.
-                val owed = data.settlement.filter { it.sold > 0.0 || it.received > 0.0 }
-                if (owed.isNotEmpty()) {
-                    item { SectionHeader("Marketplace settlement") }
-                    item { SettlementCard(owed) }
-                }
-
-                val heldAccounts = data.accounts.filter { it.movements > 0 }
-                if (heldAccounts.isNotEmpty()) {
-                    item { SectionHeader("Where the money is") }
-                    item { AccountsCard(heldAccounts) }
-                }
-
                 item { SectionHeader("Each partner in detail") }
                 item { PartnerBoxes(data.partnerDetail) }
 

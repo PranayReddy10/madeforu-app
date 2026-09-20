@@ -232,13 +232,7 @@ fun OrderDetailScreen(
                     Column(Modifier.padding(16.dp)) {
                         DetailRow("Customer", if (current.isWalkIn) "Walk-in (no details)" else current.name)
                         if (current.phone.isNotBlank()) DetailRow("Phone", current.phone)
-                        // This row used to be labelled "Channel" when the
-                        // event was the only thing resembling one. Now that
-                        // a sale carries a real channel, two rows called
-                        // Channel showing different things would be worse
-                        // than either -- so the event is called what it is.
-                        DetailRow("Where", current.eventName ?: "Direct / walk-up")
-                        current.channelName?.let { DetailRow("Channel", it) }
+                        DetailRow("Channel", current.eventName ?: "Direct / walk-up")
                         DetailRow("Taken", Dates.pretty(current.createdAt, withTime = true))
                         current.createdBy?.let { DetailRow("By", it) }
                         if (!current.notes.isNullOrBlank()) DetailRow("Notes", current.notes)

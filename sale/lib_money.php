@@ -74,18 +74,7 @@ if (!function_exists('money')) {
  *
  *   profit distributions, settlements and settle-ups are credits that
  *   move money that already exists between partners. Counting them as
- *   revenue would inflate it every time profit is shared out;
- *
- *   payouts (kind 'payout') are a marketplace settling up for orders
- *   that are already on the books. Amazon sells on Monday and pays in a
- *   lump on Friday: the sale was revenue on Monday, and counting the
- *   Friday money again would book it twice. The kind = 'normal' filters
- *   exclude them on their own; the per-event query has to say so
- *   explicitly, because it does not filter on kind at all.
- *
- * This is what makes it safe to enter marketplace orders properly
- * rather than only recording the payout. Credits already in the table
- * keep the kind they have, so no past total moves.
+ *   revenue would inflate it every time profit is shared out.
  *
  * What is left — a credit with no event, not stamped on an order, of
  * kind 'normal' — is a sale that happened somewhere the order book does
@@ -108,8 +97,7 @@ function revenue_sources(mysqli $conn): array {
         "SELECT e.id,
                 COALESCE((SELECT SUM(o.total) FROM orders o WHERE o.event_id = e.id),0) ord_rev,
                 COALESCE((SELECT SUM(m.amount) FROM account_movements m
-                           WHERE m.event_id = e.id AND m.direction = 'credit'
-                             AND m.kind <> 'payout'),0) credited
+                           WHERE m.event_id = e.id AND m.direction = 'credit'),0) credited
            FROM events e"
     );
     while ($res && ($r = $res->fetch_assoc())) {
@@ -166,93 +154,3 @@ function revenue_sources(mysqli $conn): array {
     ];
 }
 
-
-/**
- * Revenue split by where the sale came from.
- *
- * Two kinds of row, which are not the same thing and are not merged:
- *
- *   orders carrying a channel — a real sale, with products and a cost,
- *   counted the day it was written;
- *
- *   credits tagged with a channel but backed by no order — a sale that
- *   happened somewhere the order book does not reach. Money in, but no
- *   product detail and therefore no profit for it.
- *
- * Orders written before channels existed have no channel to report, and
- * are gathered under "Not recorded" rather than being quietly assigned
- * to Direct. Guessing would put a number on the screen that nobody
- * measured.
- *
- * Payouts are absent by construction: kind = 'normal' excludes them,
- * which is the whole point — the orders they settle are already the
- * first kind of row above.
- */
-function revenue_by_channel(mysqli $conn): array {
-    $rows = [];
-
-    // The website is uploaded file by file, so this function will exist
-    // for a while on a database that has no channels table yet. An
-    // empty breakdown is a screen with one section missing; an
-    // unguarded query there is the Money page replaced by a 500.
-    try {
-        $conn->query('SELECT 1 FROM channels LIMIT 1');
-    } catch (Throwable $e) {
-        return [];
-    }
-
-    $res = $conn->query(
-        'SELECT c.id, c.name, COUNT(o.id) n, COALESCE(SUM(o.total),0) v
-           FROM orders o
-           LEFT JOIN channels c ON c.id = o.channel_id
-          GROUP BY c.id, c.name
-          ORDER BY v DESC'
-    );
-    while ($res && ($r = $res->fetch_assoc())) {
-        $rows[] = [
-            'channel_id' => $r['id'] === null ? null : (int)$r['id'],
-            'channel'    => $r['name'] ?? 'Not recorded',
-            'orders'     => (int)$r['n'],
-            'order_rev'  => round((float)$r['v'], 2),
-            'credit_rev' => 0.0,
-        ];
-    }
-
-    // Channel-tagged credits that are genuinely new money, using the same
-    // exclusions revenue_sources() applies, so the two always agree.
-    $res = $conn->query(
-        "SELECT m.channel_id, c.name, COALESCE(SUM(m.amount),0) v
-           FROM account_movements m
-           LEFT JOIN channels c ON c.id = m.channel_id
-          WHERE m.direction = 'credit' AND m.kind = 'normal'
-            AND m.event_id IS NULL AND m.channel_id IS NOT NULL
-            AND m.id NOT IN (SELECT credited_mov_id FROM orders WHERE credited_mov_id IS NOT NULL)
-          GROUP BY m.channel_id, c.name"
-    );
-    while ($res && ($r = $res->fetch_assoc())) {
-        $cid = (int)$r['channel_id'];
-        $found = false;
-        foreach ($rows as $i => $row) {
-            if ($row['channel_id'] === $cid) {
-                $rows[$i]['credit_rev'] = round((float)$r['v'], 2);
-                $found = true;
-                break;
-            }
-        }
-        if (!$found) {
-            $rows[] = [
-                'channel_id' => $cid,
-                'channel'    => $r['name'] ?? 'Not recorded',
-                'orders'     => 0,
-                'order_rev'  => 0.0,
-                'credit_rev' => round((float)$r['v'], 2),
-            ];
-        }
-    }
-
-    foreach ($rows as $i => $r) {
-        $rows[$i]['total'] = round($r['order_rev'] + $r['credit_rev'], 2);
-    }
-    usort($rows, fn($a, $b) => $b['total'] <=> $a['total']);
-    return $rows;
-}

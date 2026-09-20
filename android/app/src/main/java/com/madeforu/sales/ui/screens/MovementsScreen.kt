@@ -23,7 +23,6 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -53,8 +52,6 @@ import com.madeforu.sales.core.ApiResult
 import com.madeforu.sales.core.Dates
 import com.madeforu.sales.core.Money
 import com.madeforu.sales.core.isAuthFailure
-import com.madeforu.sales.data.Account
-import com.madeforu.sales.data.Channel
 import com.madeforu.sales.data.Movement
 import com.madeforu.sales.data.MovementTotals
 import com.madeforu.sales.data.PartnerFinance
@@ -90,10 +87,6 @@ fun MovementsScreen(
     var movements by remember { mutableStateOf<List<Movement>>(emptyList()) }
     var totals by remember { mutableStateOf(MovementTotals()) }
     var partners by remember { mutableStateOf<List<PartnerFinance>>(emptyList()) }
-    // Empty on a server that has the app but not the migration, in which
-    // case those pickers simply do not appear.
-    var accounts by remember { mutableStateOf<List<Account>>(emptyList()) }
-    var channels by remember { mutableStateOf<List<Channel>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -115,10 +108,6 @@ fun MovementsScreen(
                     if (r.isAuthFailure()) onSessionExpired() else error = r.message
             }
             repository.financeOverview().successOrNull?.let { partners = it.partners }
-            repository.trade().successOrNull?.let {
-                accounts = it.accounts.filter { a -> a.isActive }
-                channels = it.channels.filter { c -> c.isActive }
-            }
             loading = false
         }
     }
@@ -243,26 +232,17 @@ fun MovementsScreen(
         MovementSheet(
             existing = if (target.id > 0) target else null,
             partners = partners,
-            accounts = accounts,
-            channels = channels,
             busy = busy,
             onDismiss = { editing = null },
-            onSubmit = { form ->
+            onSubmit = { partnerId, direction, amount, date, source, note ->
                 editing = null
                 busy = true
                 scope.launch {
                     val r = if (target.id > 0) {
-                        repository.updateMovement(
-                            target.id, form.partnerId, form.direction, form.amount,
-                            form.date, form.source, form.note,
-                            form.accountId, form.channelId, form.kind,
-                        )
+                        repository.updateMovement(target.id, partnerId, direction, amount,
+                                                  date, source, note)
                     } else {
-                        repository.addMovement(
-                            form.partnerId, form.direction, form.amount, form.date,
-                            form.source, form.note,
-                            form.accountId, form.channelId, form.kind,
-                        )
+                        repository.addMovement(partnerId, direction, amount, date, source, note)
                     }
                     when (r) {
                         is ApiResult.Success -> { message = r.value; refresh() }
@@ -320,35 +300,13 @@ fun MovementsScreen(
  * else — this ledger is what every figure on the Money screen is built
  * from.
  */
-/**
- * What the movement sheet hands back.
- *
- * A data class rather than more lambda parameters: this started at six
- * positional arguments and the account, the channel and the kind would
- * have made it nine, all of them Int/String, where transposing two is a
- * silent bug that type-checks.
- */
-internal data class MovementInput(
-    val partnerId: Int,
-    val direction: String,
-    val amount: Double,
-    val date: String,
-    val source: String,
-    val note: String,
-    val accountId: Int?,
-    val channelId: Int?,
-    val kind: String,
-)
-
 @Composable
 private fun MovementSheet(
     existing: Movement?,
     partners: List<PartnerFinance>,
-    accounts: List<Account>,
-    channels: List<Channel>,
     busy: Boolean,
     onDismiss: () -> Unit,
-    onSubmit: (MovementInput) -> Unit,
+    onSubmit: (Int, String, Double, String, String, String) -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var partnerId by remember { mutableStateOf(existing?.partnerId ?: partners.firstOrNull()?.id ?: 0) }
@@ -361,9 +319,6 @@ private fun MovementSheet(
     var dateText by remember { mutableStateOf(existing?.date ?: Dates.today()) }
     var source by remember { mutableStateOf(existing?.source ?: "") }
     var note by remember { mutableStateOf(existing?.note ?: "") }
-    var accountId by remember { mutableStateOf(existing?.accountId) }
-    var channelId by remember { mutableStateOf(existing?.channelId) }
-    var isPayout by remember { mutableStateOf(existing?.kind == "payout") }
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
         Column(
@@ -422,84 +377,13 @@ private fun MovementSheet(
                 modifier = Modifier.fillMaxWidth(),
             )
 
-            if (accounts.isNotEmpty()) {
-                Text("Into which account", style = MaterialTheme.typography.bodySmall)
-                ChipRow(
-                    options = listOf<Pair<Int?, String>>(null to "Not recorded") +
-                        accounts.map { it.id as Int? to it.name },
-                    selected = accountId,
-                    onSelect = { accountId = it },
-                )
-            }
-
-            if (channels.isNotEmpty()) {
-                Text("Channel", style = MaterialTheme.typography.bodySmall)
-                ChipRow(
-                    options = listOf<Pair<Int?, String>>(null to "None") +
-                        channels.map { it.id as Int? to it.name },
-                    selected = channelId,
-                    onSelect = { channelId = it },
-                )
-
-                Row(
-                    Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.Top,
-                ) {
-                    Checkbox(checked = isPayout, onCheckedChange = { isPayout = it })
-                    Spacer(Modifier.width(4.dp))
-                    Column(Modifier.weight(1f).padding(top = 12.dp)) {
-                        Text("Marketplace payout", style = MaterialTheme.typography.bodyMedium)
-                        Text(
-                            "Amazon, Meesho or the website settling up for orders already " +
-                                "entered. It moves the account balance but is not counted as " +
-                                "revenue again, because those orders were counted when they " +
-                                "were written. Pick the channel above.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-            }
-
             val amount = amountText.toDoubleOrNull() ?: 0.0
-            // The two rules the server enforces, checked here so a payout
-            // is not refused after a round trip.
-            val payoutNeedsChannel = isPayout && channelId == null
-            val payoutNeedsCredit = isPayout && direction != "credit"
-            if (payoutNeedsChannel) {
-                Text(
-                    "A payout needs a channel, so it can be matched against that " +
-                        "channel's orders.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                )
-            }
-            if (payoutNeedsCredit) {
-                Text(
-                    "A payout is money coming in, so it has to be a credit.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                )
-            }
-
             Button(
                 onClick = {
-                    onSubmit(
-                        MovementInput(
-                            partnerId = partnerId,
-                            direction = direction,
-                            amount = amount,
-                            date = dateText.trim(),
-                            source = source.trim(),
-                            note = note.trim(),
-                            accountId = accountId,
-                            channelId = channelId,
-                            kind = if (isPayout) "payout" else "normal",
-                        )
-                    )
+                    onSubmit(partnerId, direction, amount, dateText.trim(),
+                             source.trim(), note.trim())
                 },
-                enabled = !busy && amount > 0 && partnerId > 0 &&
-                    !payoutNeedsChannel && !payoutNeedsCredit,
+                enabled = !busy && amount > 0 && partnerId > 0,
                 modifier = Modifier.fillMaxWidth().height(50.dp),
             ) { Text(if (existing == null) "Add movement" else "Save changes") }
             Spacer(Modifier.height(24.dp))
@@ -554,9 +438,7 @@ private fun MovementRow(movement: Movement, onEdit: () -> Unit, onDelete: () -> 
                 }
                 Text(
                     Dates.pretty(movement.date) +
-                        (movement.source.takeIf { it.isNotBlank() }?.let { " · $it" } ?: "") +
-                        (movement.channelName?.let { " · $it" } ?: "") +
-                        (movement.accountName?.let { " → $it" } ?: ""),
+                        (movement.source.takeIf { it.isNotBlank() }?.let { " · $it" } ?: ""),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -595,7 +477,6 @@ private fun movementKindTint(kind: String): Color = when (kind) {
     "transfer" -> MaterialTheme.colorScheme.primary
     "profit" -> positiveColor()
     "invest" -> MaterialTheme.colorScheme.tertiary
-    "payout" -> MaterialTheme.colorScheme.secondary
     else -> MaterialTheme.colorScheme.onSurfaceVariant
 }
 
@@ -605,8 +486,5 @@ private fun movementKindLabel(kind: String): String? = when (kind) {
     "transfer" -> "settlement"
     "profit" -> "profit"
     "invest" -> "settle-up"
-    // Money in from a marketplace for orders already counted, so it moves
-    // an account balance without being revenue a second time.
-    "payout" -> "payout"
     else -> null
 }
