@@ -26,6 +26,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -46,6 +47,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.madeforu.sales.core.Dates
 import com.madeforu.sales.core.Money
+import com.madeforu.sales.data.Account
+import com.madeforu.sales.data.ChannelRevenue
+import com.madeforu.sales.data.ChannelSettlement
 import com.madeforu.sales.data.FinanceOverview
 import com.madeforu.sales.data.PartnerDetail
 import com.madeforu.sales.ui.components.IconTile
@@ -841,3 +845,140 @@ private fun StatLine(label: String, value: String, tint: Color? = null, bold: Bo
  */
 private fun signedMoney(value: Double): String =
     if (value >= 0) "+" + Money.full(value) else "-" + Money.full(-value)
+
+/**
+ * Revenue split by where the sale came from.
+ *
+ * Orders written before channels were recorded appear as "Not recorded"
+ * rather than being assigned to Direct. Guessing would put a number on
+ * the screen that nobody measured.
+ */
+@Composable
+fun ChannelRevenueCard(rows: List<ChannelRevenue>) {
+    val total = rows.sumOf { it.total }
+    Card(shape = RoundedCornerShape(22.dp), colors = softCardColors()) {
+        Column(Modifier.fillMaxWidth().padding(16.dp)) {
+            rows.forEachIndexed { index, row ->
+                if (index > 0) Spacer(Modifier.height(14.dp))
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        row.channel,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Text(
+                        Money.full(row.total),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+                Spacer(Modifier.height(5.dp))
+                val fraction = if (total > 0.0) (row.total / total).toFloat() else 0f
+                LinearProgressIndicator(
+                    progress = { fraction.coerceIn(0f, 1f) },
+                    modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(99.dp)),
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    buildString {
+                        append(row.orders)
+                        append(if (row.orders == 1) " order" else " orders")
+                        if (row.creditRev > 0.0) {
+                            append(" · ")
+                            append(Money.full(row.creditRev))
+                            append(" credited without an order")
+                        }
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+/**
+ * What a marketplace sold against what it has actually paid.
+ *
+ * A payout is deliberately not counted as revenue a second time -- the
+ * orders it settles already are -- so this is where the money arriving
+ * becomes visible at all.
+ */
+@Composable
+fun SettlementCard(rows: List<ChannelSettlement>) {
+    Card(shape = RoundedCornerShape(22.dp), colors = softCardColors()) {
+        Column(Modifier.fillMaxWidth().padding(16.dp)) {
+            Text(
+                "A payout settles orders that are already counted, so it moves an account " +
+                    "balance without being revenue again. What is left is money still owed, " +
+                    "or their commission.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            rows.forEach { row ->
+                Spacer(Modifier.height(12.dp))
+                ThinDivider()
+                Spacer(Modifier.height(12.dp))
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            row.channel,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium,
+                        )
+                        Text(
+                            "${row.orders} sold ${Money.full(row.sold)} · " +
+                                "${row.payouts} paid ${Money.full(row.received)}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Text(
+                        Money.full(row.outstanding),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (row.outstanding > 0.0) negativeColor() else positiveColor(),
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** Where the money is sitting, account by account. */
+@Composable
+fun AccountsCard(rows: List<Account>) {
+    Card(shape = RoundedCornerShape(22.dp), colors = softCardColors()) {
+        Column(Modifier.fillMaxWidth().padding(16.dp)) {
+            rows.forEachIndexed { index, row ->
+                if (index > 0) {
+                    Spacer(Modifier.height(12.dp))
+                    ThinDivider()
+                    Spacer(Modifier.height(12.dp))
+                }
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            row.name,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium,
+                        )
+                        Text(
+                            (row.partnerName ?: "The business") +
+                                " · in ${Money.full(row.credit)} · out ${Money.full(row.debit)}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Text(
+                        Money.full(row.balance),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (row.balance < 0.0) negativeColor() else MaterialTheme.colorScheme.onSurface,
+                    )
+                }
+            }
+        }
+    }
+}

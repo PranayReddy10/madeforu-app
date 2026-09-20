@@ -1,5 +1,6 @@
 <?php
 require 'config.php';
+require_once __DIR__ . '/lib_trade.php';   // sales channels
 $me = require_login();
 
 // Inline SVG reused across the buttons below.
@@ -356,6 +357,22 @@ $flash = flash();
           <input id="phone" name="phone" required pattern="[0-9]{10}" maxlength="20"
                  inputmode="numeric" value="<?= e($o['phone']) ?>">
         </div>
+        <?php $CHANNELS = channels_all($conn, true);
+              $curChan = isset($o['channel_id']) && $o['channel_id'] !== null ? (int)$o['channel_id'] : null;
+              if ($CHANNELS): ?>
+        <div>
+          <label for="channel_id">Channel</label>
+          <select id="channel_id" name="channel_id" onchange="calc()">
+            <option value="">Not recorded</option>
+            <?php foreach ($CHANNELS as $ch): ?>
+              <option value="<?= (int)$ch['id'] ?>" <?= $curChan === (int)$ch['id'] ? 'selected' : '' ?>><?= e($ch['name']) ?></option>
+            <?php endforeach; ?>
+          </select>
+          <div class="muted" style="font-size:12px;margin-top:4px">
+            Changing this does not reprice what is already on the order.
+          </div>
+        </div>
+        <?php endif; ?>
         <div>
           <label for="notes">Notes</label>
           <input id="notes" name="notes" maxlength="255" value="<?= e($o['notes']) ?>">
@@ -516,7 +533,20 @@ function attachPhone(id) {
 }
 
 const ITEMS    = <?= json_encode($ITEMS) ?>;
+/* Per-channel overrides, used ONLY for lines added to this order now. A
+   line already on the order keeps what it sold for -- see subtotal(). */
+const CHANNEL_PRICES = <?= json_encode(channel_prices_all($conn)) ?>;
 const MAXQ     = <?= max($QTY_OPTIONS) ?>;
+
+/* Today's price for a NEW line, through the channel now selected. */
+function rateFor(name) {
+  const sel = document.getElementById('channel_id');
+  const cid = sel ? sel.value : '';
+  if (cid && CHANNEL_PRICES[cid] && CHANNEL_PRICES[cid][name] !== undefined) {
+    return CHANNEL_PRICES[cid][name];
+  }
+  return ITEMS[name] !== undefined ? ITEMS[name] : 0;
+}
 // Each existing line carries the price it was SOLD at. Without it the
 // form priced every line from today's catalogue, so raising a product
 // from 50 to 52 made every old order on this screen read 52 -- while the
@@ -657,8 +687,7 @@ function subtotal() {
   let sub = 0;
   document.querySelectorAll('.line').forEach(l => {
     const sel  = l.querySelector('select[name="item[]"]');
-    const opt  = sel.options[sel.selectedIndex];
-    const list = opt ? parseFloat(opt.dataset.price || 0) : 0;
+    const list = sel.value ? parseFloat(rateFor(sel.value)) || 0 : 0;
     // A line already on this order keeps what it sold for; only a new
     // or swapped line takes the catalogue price. This mirrors save.php
     // exactly, so what is shown is what will be stored.

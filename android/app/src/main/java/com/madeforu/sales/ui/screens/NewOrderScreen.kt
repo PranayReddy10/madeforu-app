@@ -58,6 +58,7 @@ import com.madeforu.sales.core.ApiResult
 import com.madeforu.sales.core.Money
 import com.madeforu.sales.core.isAuthFailure
 import com.madeforu.sales.data.DraftLine
+import com.madeforu.sales.data.Channel
 import com.madeforu.sales.data.Event
 import com.madeforu.sales.data.OrderDraft
 import com.madeforu.sales.data.Product
@@ -94,6 +95,7 @@ fun NewOrderScreen(
 
     var products by remember { mutableStateOf<List<Product>>(emptyList()) }
     var events by remember { mutableStateOf<List<Event>>(emptyList()) }
+    var channels by remember { mutableStateOf<List<Channel>>(emptyList()) }
     var draft by remember { mutableStateOf(OrderDraft()) }
     var loading by remember { mutableStateOf(true) }
     var saving by remember { mutableStateOf(false) }
@@ -119,6 +121,12 @@ fun NewOrderScreen(
                 if (result.isAuthFailure()) onSessionExpired() else error = result.message
             }
         }
+        when (val t = repository.trade()) {
+            is ApiResult.Success -> channels = t.value.channels.filter { it.isActive }
+            // Not an error worth showing: an older server simply has no
+            // channels, and the sale can still be taken without one.
+            is ApiResult.Failure -> channels = emptyList()
+        }
         if (editOrderId != null) {
             when (val result = repository.order(editOrderId)) {
                 is ApiResult.Success -> {
@@ -128,6 +136,7 @@ fun NewOrderScreen(
                         phone = order.phone,
                         notes = order.notes.orEmpty(),
                         eventId = order.eventId,
+                        channelId = order.channelId,
                         lines = order.items.map { DraftLine(it.item, it.unitPrice, it.quantity) },
                         extraCharge = order.extraCharge,
                         extraChargeReason = order.extraChargeReason.orEmpty(),
@@ -153,15 +162,49 @@ fun NewOrderScreen(
         loading = false
     }
 
+    /**
+     * What a product sells for through the channel now picked.
+     *
+     * The screen has to agree with the server here. If it priced from the
+     * catalogue while the server priced from the channel, the total shown
+     * at the counter would only turn out wrong after the sale was saved.
+     */
+    fun rateFor(product: Product): Double {
+        val channel = channels.firstOrNull { it.id == draft.channelId }
+        return channel?.prices?.get(product.name) ?: product.price
+    }
+
     fun setQuantity(product: Product, quantity: Int) {
         val existing = draft.lines.toMutableList()
         val index = existing.indexOfFirst { it.item == product.name }
         when {
             quantity <= 0 && index >= 0 -> existing.removeAt(index)
             index >= 0 -> existing[index] = existing[index].copy(quantity = quantity)
-            quantity > 0 -> existing.add(DraftLine(product.name, product.price, quantity))
+            quantity > 0 -> existing.add(DraftLine(product.name, rateFor(product), quantity))
         }
         draft = draft.copy(lines = existing)
+    }
+
+    /**
+     * Re-price the basket when the channel changes.
+     *
+     * Only on a NEW sale. On an edit the lines carry what they were
+     * already sold at, and a sale is a thing that happened at a price --
+     * changing the channel must not quietly restate it. That is the same
+     * rule save.php applies on the server.
+     */
+    fun repriceForChannel(channelId: Int?) {
+        draft = if (editOrderId == null) {
+            val repriced = draft.lines.map { line ->
+                val product = products.firstOrNull { it.name == line.item }
+                val channel = channels.firstOrNull { it.id == channelId }
+                val rate = channel?.prices?.get(line.item) ?: product?.price ?: line.price
+                line.copy(price = rate)
+            }
+            draft.copy(channelId = channelId, lines = repriced)
+        } else {
+            draft.copy(channelId = channelId)
+        }
     }
 
     val save: () -> Unit = save@{
@@ -282,6 +325,45 @@ fun NewOrderScreen(
             // visible cause.
             errorBannerItem(error)
 
+            if (channels.isNotEmpty()) {
+                item {
+                    Column {
+                        Text(
+                            "Sales channel",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        ChipRow(
+                            options = listOf<Pair<Int?, String>>(null to "Not recorded") +
+                                channels.map { it.id as Int? to it.name },
+                            selected = draft.channelId,
+                            onSelect = { repriceForChannel(it) },
+                            contentPadding = PaddingValues(0.dp),
+                        )
+                        val picked = channels.firstOrNull { it.id == draft.channelId }
+                        val own = picked?.prices?.size ?: 0
+                        if (own > 0) {
+                            Spacer(Modifier.height(6.dp))
+                            Text(
+                                "${picked?.name} has its own price for $own " +
+                                    if (own == 1) "product." else "products.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        if (editOrderId != null) {
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                "Changing this does not reprice what is already on the order.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+            }
+
             if (events.isNotEmpty()) {
                 item {
                     Column {
@@ -330,6 +412,7 @@ fun NewOrderScreen(
                     ProductPickerRow(
                         product = product,
                         quantity = quantity,
+                        rate = rateFor(product),
                         onChange = { setQuantity(product, it) },
                     )
                 }
@@ -343,6 +426,9 @@ fun NewOrderScreen(
                     ProductPickerRow(
                         product = product,
                         quantity = line.quantity,
+                        // What this line is actually on the bill at, which
+                        // on an edit is what it sold for, not today's price.
+                        rate = line.price,
                         onChange = { setQuantity(product, it) },
                     )
                 }
@@ -546,8 +632,22 @@ fun NewOrderScreen(
     }
 }
 
+/**
+ * One catalogue row.
+ *
+ * `rate` is what this product sells for here and now, which is not always
+ * the catalogue price: a channel can have its own, and a line already on
+ * an order keeps what it was sold at. Defaulting to the catalogue price
+ * keeps every existing caller, and the previews, unchanged.
+ */
 @Composable
-internal fun ProductPickerRow(product: Product, quantity: Int, onChange: (Int) -> Unit) {
+internal fun ProductPickerRow(
+    product: Product,
+    quantity: Int,
+    rate: Double? = null,
+    onChange: (Int) -> Unit,
+) {
+    val price = rate ?: product.price
     val selected = quantity > 0
     Card(
         shape = RoundedCornerShape(16.dp),
@@ -572,7 +672,7 @@ internal fun ProductPickerRow(product: Product, quantity: Int, onChange: (Int) -
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    Money.full(product.price) + if (selected) "  ·  " + Money.full(product.price * quantity) else "",
+                    Money.full(price) + if (selected) "  ·  " + Money.full(price * quantity) else "",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

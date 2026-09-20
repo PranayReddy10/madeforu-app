@@ -1,5 +1,6 @@
 <?php
 require 'config.php';
+require_once __DIR__ . '/lib_trade.php';   // sales channels
 $me = require_login();
 
 $search     = trim($_GET['search'] ?? '');
@@ -78,6 +79,16 @@ $sql = 'SELECT o.*, a.name AS admin_name, ev.name AS event_name,
         FROM orders o
         LEFT JOIN admins a  ON a.id = o.created_by
         LEFT JOIN events ev ON ev.id = o.event_id';
+// The channel column arrives with a migration, so the join is added only
+// once it exists -- this page must keep working in the window between
+// uploading it and running the SQL.
+if (db_column_exists($conn, 'orders', 'channel_id') && trade_has_table($conn, 'channels')) {
+    $sql = str_replace(
+        'SELECT o.*, a.name AS admin_name, ev.name AS event_name,',
+        'SELECT o.*, a.name AS admin_name, ev.name AS event_name, ch.name AS channel_name,',
+        $sql
+    ) . ' LEFT JOIN channels ch ON ch.id = o.channel_id';
+}
 if ($where) $sql .= ' WHERE ' . implode(' AND ', $where);
 $sql .= ' ORDER BY o.id DESC';
 
@@ -354,6 +365,18 @@ $flash = flash();
             <?php endforeach; ?>
           </select>
         </div>
+        <?php $CHANNELS = channels_all($conn, true); if ($CHANNELS): ?>
+        <div>
+          <label for="channel_id">Channel</label>
+          <select id="channel_id" name="channel_id" onchange="channelChanged()">
+            <option value="">Not recorded</option>
+            <?php foreach ($CHANNELS as $ch): ?>
+              <option value="<?= (int)$ch['id'] ?>"><?= e($ch['name']) ?></option>
+            <?php endforeach; ?>
+          </select>
+          <div id="chan-hint" class="muted" style="font-size:12px;margin-top:4px"></div>
+        </div>
+        <?php endif; ?>
       </div>
 
       <label style="margin-bottom:8px">Products</label>
@@ -533,6 +556,9 @@ $flash = flash();
             <td style="font-family:monospace;font-size:12px"><?= e($o['order_no']) ?></td>
             <td>
               <?= e($o['name']) ?>
+              <?php if (!empty($o['channel_name'])): ?>
+                <div style="font-size:11px;color:#7a5800;background:#fff3e0;display:inline-block;padding:1px 6px;border-radius:10px;margin-top:2px"><?= e($o['channel_name']) ?></div>
+              <?php endif; ?>
               <?php if (!empty($o['event_name'])): ?>
                 <div style="font-size:11px;color:#1451a8;background:#e7f0fd;display:inline-block;padding:1px 6px;border-radius:10px;margin-top:2px"><?= e($o['event_name']) ?></div>
               <?php endif; ?>
@@ -688,8 +714,47 @@ function attachPhone(id) {
 }
 
 const ITEMS = <?= json_encode($ITEMS) ?>;
+/* Per-channel price overrides, so the running total in this form is the
+   total save.php will actually charge. Pricing the lines from the
+   catalogue here while the server prices them from the channel would
+   disagree only AFTER the sale was saved, which is the worst moment to
+   find out. */
+const CHANNEL_PRICES = <?= json_encode(channel_prices_all($conn)) ?>;
 const MAXQ  = <?= max($QTY_OPTIONS) ?>;
 let seq = 0;
+
+/* What this product sells for through the channel now selected. */
+function rateFor(name) {
+  const sel = document.getElementById('channel_id');
+  const cid = sel ? sel.value : '';
+  if (cid && CHANNEL_PRICES[cid] && CHANNEL_PRICES[cid][name] !== undefined) {
+    return CHANNEL_PRICES[cid][name];
+  }
+  return ITEMS[name] !== undefined ? ITEMS[name] : 0;
+}
+
+/* The channel changed, so every line is worth something different. */
+function channelChanged() {
+  document.querySelectorAll('.line select[name="item[]"]').forEach(sel => {
+    [...sel.options].forEach(o => {
+      if (!o.value) return;
+      const r = rateFor(o.value);
+      o.dataset.price = r;
+      o.textContent = o.value + ' — ₹' + r;
+    });
+  });
+  const hint = document.getElementById('chan-hint');
+  if (hint) {
+    const sel = document.getElementById('channel_id');
+    const cid = sel ? sel.value : '';
+    const n   = (cid && CHANNEL_PRICES[cid]) ? Object.keys(CHANNEL_PRICES[cid]).length : 0;
+    hint.textContent = n
+      ? sel.options[sel.selectedIndex].text + ' has its own price for ' + n
+        + ' product' + (n === 1 ? '' : 's') + '.'
+      : '';
+  }
+  calc();
+}
 
 /* Delivered implies ready. The server enforces this too. */
 function syncStatus(changed) {
@@ -702,8 +767,10 @@ function syncStatus(changed) {
 
 function addLine(item = '', qty = 1) {
   const id = 'ln' + (seq++);
-  const opts = Object.entries(ITEMS).map(([n, p]) =>
-    `<option value="${escAttr(n)}" data-price="${p}" ${n === item ? 'selected' : ''}>${esc(n)} — ₹${p}</option>`).join('');
+  const opts = Object.keys(ITEMS).map(n => {
+    const p = rateFor(n);
+    return `<option value="${escAttr(n)}" data-price="${p}" ${n === item ? 'selected' : ''}>${esc(n)} — ₹${p}</option>`;
+  }).join('');
 
   const div = document.createElement('div');
   div.className = 'line';
@@ -747,8 +814,8 @@ function initCbx(cbx){
   function render(q){
     const hits = items.filter(([n]) => cbxMatch(q, n));
     list.innerHTML = hits.length
-      ? hits.map(([n,p]) =>
-          `<div class="cbx-opt" data-val="${escAttr(n)}">${esc(n)}<small>₹${p}</small></div>`).join('')
+      ? hits.map(([n]) =>
+          `<div class="cbx-opt" data-val="${escAttr(n)}">${esc(n)}<small>₹${rateFor(n)}</small></div>`).join('')
       : `<div class="cbx-empty">No product matches “${esc(q)}”</div>`;
   }
   function open(){ render(inp.value); cbx.classList.add('open'); }
@@ -800,8 +867,7 @@ function lineTotals() {
   let total = 0;
   document.querySelectorAll('.line').forEach(l => {
     const sel  = l.querySelector('select[name="item[]"]');
-    const opt  = sel.options[sel.selectedIndex];
-    const rate = opt ? parseFloat(opt.dataset.price || 0) : 0;
+    const rate = sel.value ? parseFloat(rateFor(sel.value)) || 0 : 0;
     const q    = parseInt(l.querySelector('[name="quantity[]"]').value) || 0;
     const lt   = rate * q;
     l.querySelector('.lt').textContent = '₹' + lt.toFixed(2);

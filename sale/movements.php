@@ -1,5 +1,6 @@
 <?php
 require 'config.php';
+require_once __DIR__ . '/lib_trade.php';   // accounts, channels
 $me = require_login();
 
 function partner_map(mysqli $conn): array {
@@ -9,6 +10,23 @@ function partner_map(mysqli $conn): array {
     return $m;
 }
 $partners = partner_map($conn);
+// Accounts and channels for the movement forms. Empty lists (migration
+// not run yet) simply mean the fields do not appear.
+$ACCOUNTS = accounts_all($conn, true);
+$CHANNELS = channels_all($conn, true);
+$ACCMAP   = account_map($conn);
+$CHANMAP  = channel_map($conn);
+
+/** <option> list for a select, with the current value marked. */
+function opt_rows(array $rows, ?int $selected, string $blank): string {
+    $h = '<option value="">' . htmlspecialchars($blank, ENT_QUOTES, 'UTF-8') . '</option>';
+    foreach ($rows as $r) {
+        $sel = ($selected !== null && (int)$r['id'] === $selected) ? ' selected' : '';
+        $h .= '<option value="' . (int)$r['id'] . '"' . $sel . '>'
+            . htmlspecialchars($r['name'], ENT_QUOTES, 'UTF-8') . '</option>';
+    }
+    return $h;
+}
 // Gaps shown inline in the investment-settlement dropdowns so the payer and
 // receiver are obvious at a glance rather than looked up on another page.
 $pageGaps = investment_gaps($conn);
@@ -70,27 +88,83 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $amount = round((float)($_POST['amount'] ?? 0), 2);
             $src    = trim($_POST['source'] ?? '');
             $note   = trim($_POST['note'] ?? '');
+            $accId  = valid_account_id($conn, $_POST['account_id'] ?? null);
+            $chanId = valid_channel_id($conn, $_POST['channel_id'] ?? null);
+
+            // A marketplace settling up for orders already on the books.
+            // It moves an account balance without being revenue -- the
+            // orders it pays for were counted when they were written.
+            // Only a credit can be one: a payout is money arriving.
+            $isPayout = isset($_POST['is_payout']) && $dir === 'credit';
+            $kind     = $isPayout ? 'payout' : 'normal';
 
             if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) throw new Exception('Pick a valid date.');
             if (!isset($partners[$pid])) throw new Exception('Choose a partner.');
             if ($amount <= 0) throw new Exception('Amount must be greater than zero.');
+            if ($isPayout && $chanId === null) {
+                throw new Exception('A marketplace payout needs a channel, so it can be '
+                    . 'matched against that channel\'s orders.');
+            }
+
+            $hasTrade = db_column_exists($conn, 'account_movements', 'account_id');
 
             if ($action === 'add') {
-                $s = $conn->prepare(
-                    'INSERT INTO account_movements (mov_date, partner_id, direction, amount, source, note)
-                     VALUES (?,?,?,?,?,?)'
-                );
-                $s->bind_param('sisdss', $date, $pid, $dir, $amount, $src, $note);
+                if ($hasTrade) {
+                    $s = $conn->prepare(
+                        'INSERT INTO account_movements
+                           (mov_date, partner_id, account_id, channel_id, direction, kind, amount, source, note)
+                         VALUES (?,?,?,?,?,?,?,?,?)'
+                    );
+                    $s->bind_param('siiissdss', $date, $pid, $accId, $chanId, $dir, $kind,
+                                   $amount, $src, $note);
+                } else {
+                    $s = $conn->prepare(
+                        'INSERT INTO account_movements (mov_date, partner_id, direction, amount, source, note)
+                         VALUES (?,?,?,?,?,?)'
+                    );
+                    $s->bind_param('sisdss', $date, $pid, $dir, $amount, $src, $note);
+                }
                 $s->execute();
                 $s->close();
-                flash('Movement added.');
+                flash($isPayout
+                    ? 'Payout recorded. It moves the account balance without being '
+                      . 'counted as revenue again — the orders it pays for already are.'
+                    : 'Movement added.');
             } else {
                 $id = (int)($_POST['id'] ?? 0);
-                $s = $conn->prepare(
-                    'UPDATE account_movements SET mov_date=?, partner_id=?, direction=?, amount=?, source=?, note=?
-                     WHERE id=?'
-                );
-                $s->bind_param('sisdssi', $date, $pid, $dir, $amount, $src, $note, $id);
+
+                // Settlement pairs and profit shares are written as two
+                // matched rows. Editing one half here would leave the other
+                // pointing at a number that no longer exists, so only the
+                // plain kinds are editable -- the same rule the API applies.
+                $cur = $conn->prepare('SELECT kind, transfer_id FROM account_movements WHERE id = ?');
+                $cur->bind_param('i', $id);
+                $cur->execute();
+                $curRow = $cur->get_result()->fetch_assoc();
+                $cur->close();
+                if (!$curRow) throw new Exception('Movement not found.');
+                if ($curRow['transfer_id'] !== null
+                    || in_array($curRow['kind'], ['transfer', 'invest', 'profit', 'personal'], true)) {
+                    throw new Exception('This movement is part of a settlement or profit share. '
+                        . 'Delete it from the settlement that created it rather than editing it here.');
+                }
+
+                if ($hasTrade) {
+                    $s = $conn->prepare(
+                        'UPDATE account_movements
+                            SET mov_date=?, partner_id=?, account_id=?, channel_id=?,
+                                direction=?, kind=?, amount=?, source=?, note=?
+                          WHERE id=?'
+                    );
+                    $s->bind_param('siiissdssi', $date, $pid, $accId, $chanId, $dir, $kind,
+                                   $amount, $src, $note, $id);
+                } else {
+                    $s = $conn->prepare(
+                        'UPDATE account_movements SET mov_date=?, partner_id=?, direction=?, amount=?, source=?, note=?
+                         WHERE id=?'
+                    );
+                    $s->bind_param('sisdssi', $date, $pid, $dir, $amount, $src, $note, $id);
+                }
                 $s->execute();
                 $s->close();
                 flash('Movement updated.');
@@ -307,9 +381,15 @@ $fPartner = (int)($_GET['partner'] ?? 0);
 $fDir     = ($_GET['direction'] ?? '');
 if ($fDir !== 'credit' && $fDir !== 'debit') $fDir = '';
 
+$fAccount = (int)($_GET['account'] ?? 0);
+$fChannel = (int)($_GET['channel'] ?? 0);
+$hasTradeCols = db_column_exists($conn, 'account_movements', 'account_id');
+
 $where = []; $params = []; $types = '';
 if ($fPartner > 0) { $where[]='m.partner_id = ?'; $params[]=$fPartner; $types.='i'; }
 if ($fDir !== '')  { $where[]='m.direction = ?';  $params[]=$fDir;     $types.='s'; }
+if ($hasTradeCols && $fAccount > 0) { $where[]='m.account_id = ?'; $params[]=$fAccount; $types.='i'; }
+if ($hasTradeCols && $fChannel > 0) { $where[]='m.channel_id = ?'; $params[]=$fChannel; $types.='i'; }
 
 $sql = 'SELECT m.*, p.name AS partner_name
         FROM account_movements m LEFT JOIN partners p ON p.id = m.partner_id';
@@ -427,7 +507,29 @@ $flash = flash();
         </div>
         <div><label>Amount (₹)</label><input type="number" name="amount" step="0.01" min="0.01" required></div>
         <div><label>Source / purpose</label><input name="source" maxlength="200" placeholder="e.g. Meesho payout"></div>
+        <?php if ($ACCOUNTS): ?>
+        <div><label>Into which account</label>
+          <select name="account_id"><?= opt_rows($ACCOUNTS, null, 'Not recorded') ?></select>
+        </div>
+        <?php endif; ?>
+        <?php if ($CHANNELS): ?>
+        <div><label>Channel</label>
+          <select name="channel_id"><?= opt_rows($CHANNELS, null, 'None') ?></select>
+        </div>
+        <?php endif; ?>
       </div>
+      <?php if ($CHANNELS): ?>
+      <label style="display:flex;align-items:flex-start;gap:8px;margin-top:10px;font-weight:400">
+        <input type="checkbox" name="is_payout" value="1" style="margin-top:3px">
+        <span>This is a <strong>marketplace payout</strong> — Amazon, Meesho or the website
+          settling up for orders already entered.
+          <span class="muted" style="display:block;font-size:12px">
+            It moves the account balance but is not counted as revenue again, because those
+            orders were counted when they were written. Pick the channel above so it can be
+            matched against them. Leave this unticked for a sale that has no order.
+          </span></span>
+      </label>
+      <?php endif; ?>
       <label>Note</label>
       <textarea name="note" maxlength="500" placeholder="optional"></textarea>
       <button type="submit" class="primary" style="margin-top:12px">Add movement</button>
@@ -585,6 +687,16 @@ $flash = flash();
             <option value="debit"  <?= $fDir==='debit'?'selected':'' ?>>Debits</option>
           </select>
         </div>
+        <?php if ($ACCOUNTS): ?>
+        <div><label>Account</label>
+          <select name="account"><?= opt_rows($ACCOUNTS, $fAccount ?: null, 'All') ?></select>
+        </div>
+        <?php endif; ?>
+        <?php if ($CHANNELS): ?>
+        <div><label>Channel</label>
+          <select name="channel"><?= opt_rows($CHANNELS, $fChannel ?: null, 'All') ?></select>
+        </div>
+        <?php endif; ?>
         <div style="flex:0">
           <button class="primary" type="submit">Apply</button>
           <a class="btn" href="movements.php">Clear</a>
@@ -607,7 +719,19 @@ $flash = flash();
         <?php foreach ($rows as $r): $cr = $r['direction']==='credit'; ?>
           <tr>
             <td><?= e(date('d M Y', strtotime($r['mov_date']))) ?></td>
-            <td><?= e($r['partner_name'] ?? '—') ?></td>
+            <td>
+              <?= e($r['partner_name'] ?? '—') ?>
+              <?php
+                $aid = isset($r['account_id']) && $r['account_id'] !== null ? (int)$r['account_id'] : null;
+                $cid = isset($r['channel_id']) && $r['channel_id'] !== null ? (int)$r['channel_id'] : null;
+                $bits = [];
+                if ($aid !== null && isset($ACCMAP[$aid]))  $bits[] = $ACCMAP[$aid]['name'];
+                if ($cid !== null && isset($CHANMAP[$cid])) $bits[] = $CHANMAP[$cid]['name'];
+              ?>
+              <?php if ($bits): ?>
+                <div class="muted" style="font-size:12px"><?= e(implode(' · ', $bits)) ?></div>
+              <?php endif; ?>
+            </td>
             <td>
               <?php $kind = $r['kind'] ?? 'normal'; ?>
               <?php if ($kind === 'invest'): ?>
@@ -618,7 +742,8 @@ $flash = flash();
               <?php if ($kind === 'personal'): ?><span class="pill" style="background:#fdeceb;color:#c0392b">personal</span>
               <?php elseif ($kind === 'transfer'): ?><span class="pill" style="background:#e7f0fd;color:#1451a8">settlement</span>
               <?php elseif ($kind === 'profit'): ?><span class="pill" style="background:#e3f5eb;color:#1a7f4b">profit</span>
-              <?php elseif ($kind === 'invest'): ?><span class="pill" style="background:#efe7fb;color:#5b3ba0">settle-up</span><?php endif; ?>
+              <?php elseif ($kind === 'invest'): ?><span class="pill" style="background:#efe7fb;color:#5b3ba0">settle-up</span>
+              <?php elseif ($kind === 'payout'): ?><span class="pill" style="background:#fff3e0;color:#b26a00" title="Settles orders already counted — not revenue again">payout</span><?php endif; ?>
             </td>
             <td>
               <?= $r['source']!=='' ? e($r['source']) : '<span class="muted">—</span>' ?>
@@ -664,7 +789,23 @@ $flash = flash();
                     </div>
                     <div><label>Amount (₹)</label><input type="number" name="amount" step="0.01" min="0.01" required value="<?= e(number_format((float)$r['amount'],2,'.','')) ?>"></div>
                     <div><label>Source</label><input name="source" maxlength="200" value="<?= e($r['source']) ?>"></div>
+                    <?php if ($ACCOUNTS): ?>
+                    <div><label>Into which account</label>
+                      <select name="account_id"><?= opt_rows($ACCOUNTS, isset($r['account_id']) && $r['account_id'] !== null ? (int)$r['account_id'] : null, 'Not recorded') ?></select>
+                    </div>
+                    <?php endif; ?>
+                    <?php if ($CHANNELS): ?>
+                    <div><label>Channel</label>
+                      <select name="channel_id"><?= opt_rows($CHANNELS, isset($r['channel_id']) && $r['channel_id'] !== null ? (int)$r['channel_id'] : null, 'None') ?></select>
+                    </div>
+                    <?php endif; ?>
                   </div>
+                  <?php if ($CHANNELS && in_array($r['kind'] ?? 'normal', ['normal','payout'], true)): ?>
+                  <label style="display:flex;align-items:center;gap:8px;margin-top:8px;font-weight:400">
+                    <input type="checkbox" name="is_payout" value="1" <?= ($r['kind'] ?? '') === 'payout' ? 'checked' : '' ?>>
+                    <span>Marketplace payout — not counted as revenue again</span>
+                  </label>
+                  <?php endif; ?>
                   <label>Note</label>
                   <textarea name="note" maxlength="500"><?= e($r['note']) ?></textarea>
                   <button class="primary" style="margin-top:10px">Save changes</button>

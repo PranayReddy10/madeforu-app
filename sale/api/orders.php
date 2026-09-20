@@ -22,6 +22,8 @@
  */
 declare(strict_types=1);
 require __DIR__ . '/_bootstrap.php';
+require_once __DIR__ . '/../lib_trade.php';   // channels and per-channel prices
+require_once __DIR__ . '/../stock_lib.php';   // FIFO raw material
 
 $me = api_require_auth($conn);
 
@@ -164,6 +166,56 @@ function api_sold_prices(mysqli $conn, int $orderId): array {
  * shop that uploaded api/ first could not take an order at all, so the
  * statement adapts instead.
  */
+/**
+ * Draw this order's raw material out of stock, FIFO.
+ *
+ * Deliberately the same shape as save.php's sync_stock: a sale taken on
+ * a phone and one taken on the laptop must move the shelf identically,
+ * and two implementations of a stock rule is how they stop agreeing.
+ *
+ * $stockDone says whether this order has ever drawn. Orders written
+ * before this existed have taken nothing, so an edit gives nothing back
+ * and takes nothing now -- drawing them down late would remove material
+ * that was physically used months ago.
+ */
+function api_sync_stock(mysqli $conn, int $orderId, array $rows, bool $stockDone): void {
+    if (!stock_draws_ready($conn)) return;
+
+    if ($stockDone) stock_release($conn, 'order', $orderId);
+
+    $drew = false;
+    foreach ($rows as $r) {
+        if (!stock_tracked($conn, $r['item'])) continue;
+        stock_consume($conn, $r['item'], (int)$r['qty'], 'order', $orderId,
+                      'Sold on order ' . $orderId);
+        $drew = true;
+    }
+
+    try {
+        $s = $conn->prepare('UPDATE orders SET stock_done = ? WHERE id = ?');
+        $flag = $drew ? 1 : 0;
+        $s->bind_param('ii', $flag, $orderId);
+        $s->execute();
+        $s->close();
+    } catch (Throwable $e) {
+        // Column not added yet; the SQL lands separately from the PHP.
+    }
+}
+
+/** Has this order already drawn stock? False for everything pre-feature. */
+function api_stock_done(mysqli $conn, int $orderId): bool {
+    try {
+        $s = $conn->prepare('SELECT stock_done FROM orders WHERE id = ?');
+        $s->bind_param('i', $orderId);
+        $s->execute();
+        $r = $s->get_result()->fetch_assoc();
+        $s->close();
+        return $r !== null && (int)$r['stock_done'] === 1;
+    } catch (Throwable $e) {
+        return false;
+    }
+}
+
 function api_write_lines(mysqli $conn, int $orderId, array $rows): void {
     if (db_has_column($conn, 'order_items', 'unit_cost')) {
         $s = $conn->prepare(
@@ -253,12 +305,21 @@ function api_event_id(mysqli $conn): ?int {
 
 /** Full order + items + payments, the shape the detail screen renders. */
 function load_order(mysqli $conn, int $id): array {
+    $chan = db_has_column($conn, 'orders', 'channel_id')
+         && trade_has_table($conn, 'channels');
     $s = $conn->prepare(
-        'SELECT o.*, e.name event_name, a.name created_by_name
-           FROM orders o
-           LEFT JOIN events e ON e.id = o.event_id
-           LEFT JOIN admins a ON a.id = o.created_by
-          WHERE o.id = ?'
+        $chan
+        ? 'SELECT o.*, e.name event_name, c.name channel_name, a.name created_by_name
+             FROM orders o
+             LEFT JOIN events e   ON e.id = o.event_id
+             LEFT JOIN channels c ON c.id = o.channel_id
+             LEFT JOIN admins a   ON a.id = o.created_by
+            WHERE o.id = ?'
+        : 'SELECT o.*, e.name event_name, a.name created_by_name
+             FROM orders o
+             LEFT JOIN events e ON e.id = o.event_id
+             LEFT JOIN admins a ON a.id = o.created_by
+            WHERE o.id = ?'
     );
     $s->bind_param('i', $id);
     $s->execute();
@@ -397,8 +458,13 @@ api_dispatch([
         $limit  = max(1, min(api_int('limit', 40), MAX_PAGE_SIZE));
         $offset = max(0, api_int('offset', 0));
 
-        $sql = 'SELECT o.*, e.name event_name, ' . ORDER_ITEMS_SUBQUERY . ' items_text
+        $withChannel = db_has_column($conn, 'orders', 'channel_id')
+                    && trade_has_table($conn, 'channels');
+        $sql = 'SELECT o.*, e.name event_name, '
+             . ($withChannel ? 'c.name channel_name, ' : '')
+             . ORDER_ITEMS_SUBQUERY . ' items_text
                   FROM orders o LEFT JOIN events e ON e.id = o.event_id'
+             . ($withChannel ? ' LEFT JOIN channels c ON c.id = o.channel_id' : '')
              . $whereSql . ' ORDER BY o.created_at DESC, o.id DESC LIMIT ? OFFSET ?';
 
         $pTypes  = $types . 'ii';
@@ -445,9 +511,14 @@ api_dispatch([
     // ── POST create ────────────────────────────────────────────────
     'create' => function () use ($conn, $ITEMS, $me) {
         [$name, $phone, $notes] = api_customer();
-        // A new sale: everything at today's price, and today's cost
-        // frozen alongside it so profit on this sale never moves again.
-        [$rows, $subtotal]      = api_lines($ITEMS, [], api_costs($conn));
+        // Where the sale came from. An unrecognised id becomes null --
+        // "not recorded" -- rather than an error, so a phone holding a
+        // stale channel list can still take the money.
+        $channelId = valid_channel_id($conn, api_in('channel_id', null));
+        // A new sale: everything at today's price FOR THIS CHANNEL, and
+        // today's cost frozen alongside it so profit on this sale never
+        // moves again.
+        [$rows, $subtotal]      = api_lines(channel_items($conn, $ITEMS, $channelId), [], api_costs($conn));
         [$extra, $extraReason]  = api_extra_charge();
         [$disc, $discReason]    = api_discount($subtotal, $extra);
         $eventId                = api_event_id($conn);
@@ -472,15 +543,27 @@ api_dispatch([
             for ($attempt = 0; $attempt < 3; $attempt++) {
                 $orderNo = generate_order_no($conn);
                 try {
+                    $hasChannel = db_has_column($conn, 'orders', 'channel_id');
                     $s = $conn->prepare(
-                        'INSERT INTO orders (order_no, name, phone, event_id, subtotal, discount,
-                                             discount_reason, extra_charge, extra_charge_reason,
-                                             total, paid_amount, is_ready, is_delivered, notes, created_by)
-                         VALUES (?,?,?,?,?,?,?,?,?,?,0,?,?,?,?)'
+                        $hasChannel
+                        ? 'INSERT INTO orders (order_no, name, phone, event_id, channel_id, subtotal, discount,
+                                               discount_reason, extra_charge, extra_charge_reason,
+                                               total, paid_amount, is_ready, is_delivered, notes, created_by)
+                           VALUES (?,?,?,?,?,?,?,?,?,?,?,0,?,?,?,?)'
+                        : 'INSERT INTO orders (order_no, name, phone, event_id, subtotal, discount,
+                                               discount_reason, extra_charge, extra_charge_reason,
+                                               total, paid_amount, is_ready, is_delivered, notes, created_by)
+                           VALUES (?,?,?,?,?,?,?,?,?,?,0,?,?,?,?)'
                     );
-                    $s->bind_param('sssiddsdsdiisi', $orderNo, $name, $phone, $eventId, $subtotal,
-                                   $disc, $discReason, $extra, $extraReason, $total,
-                                   $ready, $delivered, $notes, $me['id']);
+                    if ($hasChannel) {
+                        $s->bind_param('sssiiddsdsdiisi', $orderNo, $name, $phone, $eventId, $channelId,
+                                       $subtotal, $disc, $discReason, $extra, $extraReason, $total,
+                                       $ready, $delivered, $notes, $me['id']);
+                    } else {
+                        $s->bind_param('sssiddsdsdiisi', $orderNo, $name, $phone, $eventId, $subtotal,
+                                       $disc, $discReason, $extra, $extraReason, $total,
+                                       $ready, $delivered, $notes, $me['id']);
+                    }
                     $s->execute();
                     $orderId = (int)$conn->insert_id;
                     $s->close();
@@ -491,6 +574,11 @@ api_dispatch([
             }
 
             api_write_lines($conn, $orderId, $rows);
+
+            // Raw material leaves the shelf when the sale is written. The
+            // same helper the website uses, so a sale taken on a phone and
+            // a sale taken on the laptop draw stock identically.
+            api_sync_stock($conn, $orderId, $rows, false);
 
             if ($paid > 0.001) {
                 $mode = api_mode();
@@ -528,7 +616,12 @@ api_dispatch([
         [$soldPrices, $soldCosts] = api_sold_prices($conn, $id);
 
         [$name, $phone, $notes] = api_customer();
-        [$rows, $subtotal, $repriced] = api_lines($ITEMS, $soldPrices, api_costs($conn), $soldCosts);
+        // Changing the channel does not reprice what is already on the
+        // order -- those lines sold at a price somebody agreed to. The
+        // channel's list applies to lines genuinely new to the order.
+        $channelId = valid_channel_id($conn, api_in('channel_id', null));
+        [$rows, $subtotal, $repriced] = api_lines(channel_items($conn, $ITEMS, $channelId),
+                                                  $soldPrices, api_costs($conn), $soldCosts);
         [$extra, $extraReason]  = api_extra_charge();
         [$disc, $discReason]    = api_discount($subtotal, $extra);
         [$awb, $dispatchDate]   = api_dispatch_fields();
@@ -594,12 +687,23 @@ api_dispatch([
                 $s->close();
             }
 
+            if (db_has_column($conn, 'orders', 'channel_id')) {
+                $s = $conn->prepare('UPDATE orders SET channel_id = ? WHERE id = ?');
+                $s->bind_param('ii', $channelId, $id);
+                $s->execute();
+                $s->close();
+            }
+
             $s = $conn->prepare('DELETE FROM order_items WHERE order_id = ?');
             $s->bind_param('i', $id);
             $s->execute();
             $s->close();
 
             api_write_lines($conn, $id, $rows);
+
+            // Restate what this order took from the shelf, rather than
+            // taking a second helping: 3 mugs becoming 5 costs 2 more.
+            if (api_stock_done($conn, $id)) api_sync_stock($conn, $id, $rows, true);
 
             recalc_total($conn, $id);
             $conn->commit();
@@ -777,10 +881,20 @@ api_dispatch([
             throw new ApiInputError('This order was already credited to a partner. Reverse the credit on the website before deleting it.');
         }
 
-        $s = $conn->prepare('DELETE FROM orders WHERE id = ?');
-        $s->bind_param('i', $id);
-        $s->execute();
-        $s->close();
+        // A deleted order never happened, so its raw material goes back
+        // to the batches it came from.
+        $conn->begin_transaction();
+        try {
+            if (api_stock_done($conn, $id)) stock_release($conn, 'order', $id);
+            $s = $conn->prepare('DELETE FROM orders WHERE id = ?');
+            $s->bind_param('i', $id);
+            $s->execute();
+            $s->close();
+            $conn->commit();
+        } catch (Exception $ex) {
+            $conn->rollback();
+            throw $ex;
+        }
         api_ok(['message' => 'Order deleted.']);
     },
 ]);
