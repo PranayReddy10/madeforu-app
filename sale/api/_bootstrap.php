@@ -17,6 +17,17 @@
 
 declare(strict_types=1);
 
+// Warnings are never part of an answer.
+//
+// On shared hosting display_errors is often on, and PHP 8 is generous
+// with deprecation notices. One of those printed anywhere in a request
+// lands in the response body, and the phone then has JSON with prose
+// stuck to it -- which is not JSON, so the whole screen fails with
+// nothing to show for it. Silencing the DISPLAY only: error_reporting
+// is left alone, so the host's error log still receives everything.
+ini_set('display_errors', '0');
+ini_set('html_errors', '0');
+
 // Buffer everything: a stray notice from an included file would otherwise
 // land in front of the JSON and break the parser on the phone.
 ob_start();
@@ -77,10 +88,52 @@ function api_headers(): void {
 
 /** Success envelope. Always {"ok":true, ...payload}. */
 function api_ok(array $payload = []): void {
-    ob_clean();
+    api_send(['ok' => true] + $payload);
+}
+
+/**
+ * Put one JSON document on the wire and nothing else, ever.
+ *
+ * Three ways stray output used to reach the phone, all of which produced
+ * the same useless "the server sent a reply the app could not read":
+ *
+ *   printed BEFORE the response -- ob_clean() already handled that, but
+ *   only the innermost buffer, and a host with output_buffering set in
+ *   php.ini gives us an outer one as well;
+ *
+ *   printed AFTER it -- a notice raised while PHP shuts down lands past
+ *   the closing brace, and no amount of cleaning beforehand helps. The
+ *   throwaway buffer opened below swallows it;
+ *
+ *   printed by something that ALSO sent headers first, so the JSON
+ *   content type never took.
+ *
+ * Whatever was caught is handed back in `notice` rather than binned.
+ * A warning nobody can see is one nobody fixes, and this API is behind a
+ * bearer token, so there is no stranger to leak it to.
+ */
+function api_send(array $payload, ?int $status = null): void {
+    // Collect and close every buffer, innermost first.
+    $stray = '';
+    while (ob_get_level() > 0) {
+        $stray .= (string)ob_get_clean();
+    }
+    $stray = trim($stray);
+    if ($stray !== '') {
+        $payload['notice'] = mb_substr(preg_replace('/\s+/', ' ', $stray), 0, 400);
+    }
+
+    if ($status !== null) http_response_code($status);
     api_headers();
-    echo json_encode(['ok' => true] + $payload,
+    echo json_encode($payload,
         JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE);
+
+    // Anything raised from here on -- a destructor, a shutdown notice --
+    // goes in here and is dropped, instead of landing after the JSON.
+    ob_start();
+    register_shutdown_function(static function (): void {
+        while (ob_get_level() > 0) ob_end_clean();
+    });
     exit;
 }
 
@@ -89,12 +142,7 @@ function api_ok(array $payload = []): void {
  * `message` is what a partner reads on screen, so it must be plain English.
  */
 function api_fail(int $status, string $code, string $message, array $extra = []): void {
-    ob_clean();
-    http_response_code($status);
-    api_headers();
-    echo json_encode(['ok' => false, 'error' => ['code' => $code, 'message' => $message] + $extra,
-        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE);
-    exit;
+    api_send(['ok' => false, 'error' => ['code' => $code, 'message' => $message] + $extra], $status);
 }
 
 /** Thrown by handlers for anything the user can fix by changing their input. */

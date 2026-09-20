@@ -24,7 +24,7 @@ const DEFAULT_API = new URL('../api/', location.href).href;
  * browser, the server or the app is the stale one. It must match the
  * CACHE name in sw.js.
  */
-const BUILD = '2026-09-20.1';
+const BUILD = '2026-09-20.2';
 
 /** What this build of the app expects the server to be able to do. */
 const NEEDS_FEATURES = ['revenue_breakdown', 'expense_create', 'price_history',
@@ -146,7 +146,30 @@ async function api(endpoint, action, { body = null, params = {} } = {}) {
   let data;
   try {
     data = JSON.parse(text);
-  } catch (e) {
+  } catch (first) {
+    // A server that has not been updated yet can put a PHP warning
+    // AFTER the closing brace -- raised while PHP shuts down, so no
+    // amount of buffering beforehand catches it. The document itself is
+    // perfectly good; there is just prose stuck to the end of it.
+    //
+    // Salvage it rather than failing the whole screen, but say so in the
+    // console so it is not silently lived with: the real fix is on the
+    // server, and api_send() there now makes it impossible.
+    const body = text.trim();
+    const open = body[0];
+    if (open === '{' || open === '[') {
+      const end = body.lastIndexOf(open === '{' ? '}' : ']');
+      if (end > 0) {
+        try {
+          data = JSON.parse(body.slice(0, end + 1));
+          console.warn('Server appended junk after the JSON:',
+            body.slice(end + 1).trim().slice(0, 200));
+        } catch (ignored) { /* not salvageable; fall through to the report */ }
+      }
+    }
+  }
+
+  if (data === undefined) {
     // Shared hosting loves to prepend a warning or serve an error page.
     //
     // This used to say only "the server sent a reply the app could not
