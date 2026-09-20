@@ -2,84 +2,137 @@
 /**
  * material_audit.php — raw material bought against raw material used.
  *
- * The question this answers is "where did it go". Purchases have been
- * recorded for a while, but nothing consumed them: save.php never called
- * stock_lib, so bought and used were two unconnected piles and the only
- * way to know whether they agreed was to count the shelf.
+ * A page on its own, and deliberately nothing more than that. It reads
+ * three tables that already exist and writes to none of them:
  *
- * Now every sale draws its material out FIFO and records which batch it
- * came from, so three numbers can be compared for each item:
+ *   purchases      what was bought, from whom, at what it cost;
+ *   order_items    how many of each product have been sold;
+ *   product_stock  the running on-hand count, kept by the Stock page.
  *
- *   bought   — every purchase batch, at what it actually cost;
- *   used     — what sales took, priced at what those particular units
- *              cost rather than at today's catalogue cost;
- *   on hand  — the running count.
+ * Nothing here changes an order, a price, a cost or a profit figure.
+ * Taking stock out of the shelf as sales are written would have been
+ * the "proper" way to do it and would also have meant every sale, on
+ * every screen, behaving differently — so the numbers are worked out
+ * when the page is opened instead. If it is wrong, nothing is damaged;
+ * reload it and it is right again.
  *
- * Bought minus used minus on hand should be zero. When it is not, stock
- * moved without being written down — breakage, a sample, a miscount —
- * and the gap is the size of it. That column is the point of the page:
- * a number that is usually zero is worth far more than one that is
- * always approximately right.
+ * On the name join. order_items and purchases both store a product name,
+ * and they do not always agree: the stock import maps 'Oval Key Chain'
+ * to 'Key Chain' and 'Bottle 650 ML' to 'Bottle'. Rather than quietly
+ * matching what it can, this page lists every name from either side, so
+ * a material that was bought under one name and sold under another
+ * shows up as two rows — visibly odd, which is the point of an audit.
  *
- * Note on cost. The value here is the FIFO cost of the actual units. It
- * is deliberately NOT what profit is calculated from: order_items.unit_cost
- * froze the standard cost at the moment of sale, and that is what Stats
- * and the P&L use. The two answer different questions -- "what did this
- * sale cost us at the price we plan around" and "what did these specific
- * units cost" -- and where they disagree is worth knowing rather than
- * quietly reconciling.
+ * (Both columns are utf8mb4_unicode_ci, so no COLLATE is needed here.
+ * products.name is utf8mb4_uca1400_ai_ci, which is why this page joins
+ * nothing to products.)
  */
 require 'config.php';
-require_once __DIR__ . '/lib_trade.php';
-require_once __DIR__ . '/stock_lib.php';
 $me = require_login();
 
-$ready = stock_draws_ready($conn);
-$usage = $ready ? stock_usage($conn) : [];
-
-// One material can be singled out, for the "which orders ate this" list.
-$only = trim((string)($_GET['item'] ?? ''));
-
-// Which orders consumed what, most recent first. Joined to orders so a
-// draw can be traced to the sale that caused it, and to purchases so it
-// can be traced back to the dealer it came from.
-$draws = [];
-if ($ready) {
-    $sql = 'SELECT sd.item, sd.qty, sd.unit_cost, sd.ref_id, sd.created_at,
-                   sd.purchase_id, p.purchase_date, d.name AS dealer,
-                   o.order_no, o.name AS customer, o.created_at AS order_date
-              FROM stock_draws sd
-              LEFT JOIN purchases p ON p.id = sd.purchase_id
-              LEFT JOIN dealers   d ON d.id = p.dealer_id
-              LEFT JOIN orders    o ON o.id = sd.ref_id AND sd.ref_type = \'order\'';
-    $params = []; $types = '';
-    if ($only !== '') { $sql .= ' WHERE sd.item = ?'; $params[] = $only; $types = 's'; }
-    $sql .= ' ORDER BY sd.id DESC LIMIT 300';
-    $st = $conn->prepare($sql);
-    if ($params) $st->bind_param($types, ...$params);
-    $st->execute();
-    $draws = $st->get_result()->fetch_all(MYSQLI_ASSOC);
-    $st->close();
+/** Has any raw material been recorded at all? */
+$hasPurchases = false;
+try {
+    $hasPurchases = (int)$conn->query('SELECT COUNT(*) c FROM purchases')->fetch_assoc()['c'] > 0;
+} catch (Throwable $e) {
+    $hasPurchases = false;
 }
 
-$totBought = $totUsed = $totStock = 0.0;
-$anyGap = false;
-foreach ($usage as $u) {
-    $totBought += $u['bought_value'];
-    $totUsed   += $u['used_value'];
-    $totStock  += $u['stock_value'];
-    if ($u['unaccounted'] !== 0) $anyGap = true;
+$rows = [];
+$totBought = 0.0;
+$totStock  = 0.0;
+
+try {
+    // Bought, per material.
+    $bought = [];
+    $res = $conn->query(
+        'SELECT item,
+                COALESCE(SUM(qty_bought),0) qty,
+                COALESCE(SUM(qty_bought * unit_cost),0) val,
+                COUNT(*) batches,
+                MIN(purchase_date) first_buy,
+                MAX(purchase_date) last_buy
+           FROM purchases GROUP BY item'
+    );
+    while ($res && ($r = $res->fetch_assoc())) {
+        $bought[$r['item']] = [
+            'qty'     => (int)$r['qty'],
+            'val'     => (float)$r['val'],
+            'batches' => (int)$r['batches'],
+            'first'   => $r['first_buy'],
+            'last'    => $r['last_buy'],
+        ];
+    }
+
+    // Sold, per product. Read from the order lines as they stand; this
+    // does not touch them.
+    $sold = [];
+    $res = $conn->query(
+        'SELECT item, COALESCE(SUM(quantity),0) qty, COUNT(DISTINCT order_id) orders
+           FROM order_items GROUP BY item'
+    );
+    while ($res && ($r = $res->fetch_assoc())) {
+        $sold[$r['item']] = ['qty' => (int)$r['qty'], 'orders' => (int)$r['orders']];
+    }
+
+    // On hand, as the Stock page has it.
+    $onHand = [];
+    try {
+        $res = $conn->query('SELECT item, qty_on_hand FROM product_stock');
+        while ($res && ($r = $res->fetch_assoc())) $onHand[$r['item']] = (int)$r['qty_on_hand'];
+    } catch (Throwable $e) { /* no stock table yet */ }
+
+    $names = array_unique(array_merge(
+        array_keys($bought), array_keys($sold), array_keys($onHand)
+    ));
+    sort($names);
+
+    foreach ($names as $name) {
+        $b = $bought[$name] ?? ['qty' => 0, 'val' => 0.0, 'batches' => 0, 'first' => null, 'last' => null];
+        $s = $sold[$name]   ?? ['qty' => 0, 'orders' => 0];
+        $h = $onHand[$name] ?? 0;
+
+        // Average is only meaningful when something was bought.
+        $avg   = $b['qty'] > 0 ? $b['val'] / $b['qty'] : 0.0;
+        $value = round($h * $avg, 2);
+
+        $totBought += $b['val'];
+        $totStock  += $value;
+
+        $rows[] = [
+            'item'        => $name,
+            'bought_qty'  => $b['qty'],
+            'bought_val'  => round($b['val'], 2),
+            'batches'     => $b['batches'],
+            'first'       => $b['first'],
+            'last'        => $b['last'],
+            'sold_qty'    => $s['qty'],
+            'orders'      => $s['orders'],
+            'on_hand'     => $h,
+            'avg_cost'    => round($avg, 2),
+            'stock_value' => $value,
+            'sold_cost'   => round($s['qty'] * $avg, 2),
+            // Bought minus sold minus on hand. Only meaningful for a
+            // material that has actually been bought in.
+            'gap'         => $b['qty'] > 0 ? $b['qty'] - $s['qty'] - $h : null,
+        ];
+    }
+} catch (Throwable $e) {
+    $rows = [];
 }
 
-// How many orders have actually drawn stock. Until this is non-zero the
-// "used" column is empty for a reason, and the page should say so
-// rather than looking broken.
-$drawnOrders = 0;
-if ($ready) {
-    $drawnOrders = (int)($conn->query(
-        "SELECT COUNT(DISTINCT ref_id) c FROM stock_draws WHERE ref_type = 'order'"
-    )->fetch_assoc()['c'] ?? 0);
-}
+// Recent purchases, so the page answers "what did we buy lately" too.
+$recent = [];
+try {
+    $res = $conn->query(
+        'SELECT p.item, p.qty_bought, p.unit_cost, p.purchase_date, p.notes,
+                d.name AS dealer
+           FROM purchases p
+           LEFT JOIN dealers d ON d.id = p.dealer_id
+          ORDER BY p.purchase_date DESC, p.id DESC LIMIT 40'
+    );
+    while ($res && ($r = $res->fetch_assoc())) $recent[] = $r;
+} catch (Throwable $e) { /* table not there yet */ }
 
 $PAGE  = 'material_audit';
 $TITLE = 'Material audit';
@@ -111,169 +164,127 @@ $flash = flash();
   th{font-size:12px;color:#65676b;text-transform:uppercase;letter-spacing:.03em}
   td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
   tr.total td{font-weight:700;border-top:2px solid #e4e6eb;border-bottom:none}
-  .gap{color:#c0392b;font-weight:600}
-  .ok{color:#1a7f37}
   .muted{color:#65676b}
+  .dim td{opacity:.55}
   .scroll{overflow-x:auto}
-  .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin-bottom:16px}
+  .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:16px}
   .tile{background:#fff;border:1px solid #e4e6eb;border-radius:12px;padding:14px 16px}
   .tile .k{font-size:12px;color:#65676b;text-transform:uppercase;letter-spacing:.03em}
   .tile .v{font-size:22px;font-weight:700;margin-top:3px;font-variant-numeric:tabular-nums}
   .warn{background:#fff8e1;border:1px solid #ffe0a3;color:#7a5800;padding:12px 14px;
     border-radius:10px;font-size:13px;margin-bottom:16px}
-  .chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
-  .chips a{text-decoration:none;font-size:13px;padding:6px 13px;border-radius:999px;
-    border:1px solid #ccd0d5;color:#1c1e21;background:#fff}
-  .chips a.on{background:#1877f2;color:#fff;border-color:#1877f2}
+  .note{background:#f7f8fa;border:1px solid #e9ebee;color:#454749;padding:11px 14px;
+    border-radius:10px;font-size:13px;margin-bottom:16px}
 </style>
 
-<?php if (!$ready): ?>
-  <div class="warn">
-    <strong>Not set up yet.</strong> Run
-    <code>sale/api/migrations/2026-09-channels-accounts-stock.sql</code> against the
-    database to start recording which purchase batch each sale draws from.
-  </div>
-<?php else: ?>
+<div class="note">
+  This page only reads. It does not change an order, a price, a cost or any
+  profit figure anywhere else on the site — the numbers are worked out fresh
+  each time you open it.
+</div>
 
-<?php if (!$usage): ?>
+<?php if (!$hasPurchases): ?>
   <div class="warn">
-    <strong>Nothing bought in yet.</strong> Record raw material on the
-    <a href="purchases.php">Stock purchases</a> page and it will appear here.
-    A product only starts being drawn down once it has been purchased at
-    least once — that is what stops every catalogue item that has never
-    been bought from showing a made-up shortfall.
-  </div>
-<?php elseif ($drawnOrders === 0): ?>
-  <div class="warn">
-    <strong>Bought, but nothing used yet.</strong> Sales draw material from
-    the moment this was switched on, so the <em>used</em> column fills up as
-    new orders are taken. Orders written before then are not drawn down —
-    their material left the building before any of this was counted.
+    <strong>No raw material recorded yet.</strong> Add what you buy on the
+    <a href="purchases.php">Stock purchases</a> page — the dealer, the item, how
+    many and what they cost — and it will show up here.
   </div>
 <?php endif; ?>
 
 <div class="tiles">
-  <div class="tile"><div class="k">Bought</div><div class="v"><?= e(money($totBought)) ?></div></div>
-  <div class="tile"><div class="k">Used in sales</div><div class="v"><?= e(money($totUsed)) ?></div></div>
+  <div class="tile"><div class="k">Spent on material</div><div class="v"><?= e(money($totBought)) ?></div></div>
   <div class="tile"><div class="k">Still on the shelf</div><div class="v"><?= e(money($totStock)) ?></div></div>
-  <div class="tile">
-    <div class="k">Orders drawn</div>
-    <div class="v"><?= $drawnOrders ?></div>
-  </div>
+  <div class="tile"><div class="k">Materials tracked</div><div class="v"><?= count(array_filter($rows, fn($r) => $r['bought_qty'] > 0)) ?></div></div>
 </div>
 
 <div class="card">
-  <h2>Bought against used</h2>
+  <h2>Bought against sold</h2>
   <p class="desc">
-    Money figures are what the units actually cost, batch by batch — not
-    today's catalogue cost.
-    <strong>Unaccounted</strong> is bought minus used minus on hand, and
-    should be zero; anything else moved without being written down.
+    What was bought in, how many have gone out in orders, and what is left.
+    <strong>Difference</strong> is bought − sold − on hand; it is blank for a
+    product that has never been bought as raw material, because there is
+    nothing to compare it against.
   </p>
   <div class="scroll">
   <table>
     <thead><tr>
       <th>Material</th>
-      <th class="num">Bought</th><th class="num">Cost</th>
-      <th class="num">Used</th><th class="num">Cost of use</th>
+      <th class="num">Bought</th><th class="num">Spent</th><th class="num">Avg cost</th>
+      <th class="num">Sold</th><th class="num">Cost of sales</th>
       <th class="num">On hand</th><th class="num">Value</th>
-      <th class="num">Unaccounted</th>
+      <th class="num">Difference</th>
     </tr></thead>
     <tbody>
-    <?php foreach ($usage as $u): ?>
-      <tr>
-        <td><a href="material_audit.php?item=<?= e(urlencode($u['item'])) ?>"><?= e($u['item']) ?></a></td>
-        <td class="num"><?= (int)$u['bought_qty'] ?></td>
-        <td class="num"><?= e(money($u['bought_value'])) ?></td>
-        <td class="num"><?= (int)$u['used_qty'] ?></td>
-        <td class="num"><?= e(money($u['used_value'])) ?></td>
-        <td class="num"><?= (int)$u['on_hand'] ?></td>
-        <td class="num"><?= e(money($u['stock_value'])) ?></td>
-        <td class="num <?= $u['unaccounted'] === 0 ? 'ok' : 'gap' ?>">
-          <?= $u['unaccounted'] === 0 ? '0' : e((string)$u['unaccounted']) ?>
+    <?php if (!$rows): ?>
+      <tr><td colspan="9" class="muted" style="padding:18px 8px">Nothing to show yet.</td></tr>
+    <?php endif; ?>
+    <?php foreach ($rows as $r): ?>
+      <tr class="<?= $r['bought_qty'] === 0 ? 'dim' : '' ?>">
+        <td>
+          <?= e($r['item']) ?>
+          <?php if ($r['bought_qty'] === 0): ?>
+            <div class="muted" style="font-size:12px">never bought as raw material</div>
+          <?php elseif ($r['batches'] > 0): ?>
+            <div class="muted" style="font-size:12px">
+              <?= (int)$r['batches'] ?> purchase<?= $r['batches'] === 1 ? '' : 's' ?><?php
+                if ($r['last']) echo ', last ' . e(date('d M Y', strtotime($r['last']))); ?>
+            </div>
+          <?php endif; ?>
         </td>
+        <td class="num"><?= $r['bought_qty'] ?: '—' ?></td>
+        <td class="num"><?= $r['bought_qty'] ? e(money($r['bought_val'])) : '—' ?></td>
+        <td class="num"><?= $r['bought_qty'] ? e(money($r['avg_cost'])) : '—' ?></td>
+        <td class="num"><?= $r['sold_qty'] ?: '—' ?></td>
+        <td class="num"><?= $r['bought_qty'] && $r['sold_qty'] ? e(money($r['sold_cost'])) : '—' ?></td>
+        <td class="num"><?= $r['on_hand'] !== 0 ? (int)$r['on_hand'] : '—' ?></td>
+        <td class="num"><?= $r['stock_value'] > 0 ? e(money($r['stock_value'])) : '—' ?></td>
+        <td class="num"><?= $r['gap'] === null ? '' : (int)$r['gap'] ?></td>
       </tr>
     <?php endforeach; ?>
       <tr class="total">
-        <td>Total</td><td class="num"></td>
-        <td class="num"><?= e(money($totBought)) ?></td>
-        <td class="num"></td>
-        <td class="num"><?= e(money($totUsed)) ?></td>
-        <td class="num"></td>
-        <td class="num"><?= e(money($totStock)) ?></td>
+        <td>Total</td>
+        <td class="num"></td><td class="num"><?= e(money($totBought)) ?></td>
+        <td class="num"></td><td class="num"></td><td class="num"></td>
+        <td class="num"></td><td class="num"><?= e(money($totStock)) ?></td>
         <td class="num"></td>
       </tr>
     </tbody>
   </table>
   </div>
-  <?php if ($anyGap): ?>
-    <p class="desc" style="margin-top:12px;margin-bottom:0">
-      A non-zero figure is not necessarily an error — an adjustment made on the
-      <a href="stock.php">Stock on hand</a> page shows up here until the
-      purchase behind it is recorded.
-    </p>
-  <?php endif; ?>
+  <p class="desc" style="margin-top:12px;margin-bottom:0">
+    A material bought under one name and sold under another appears as two
+    rows rather than being quietly matched up — on this database the stock
+    import maps names like “Oval Key Chain” to “Key Chain”, so a mismatch is
+    worth seeing rather than hiding.
+  </p>
 </div>
 
+<?php if ($recent): ?>
 <div class="card">
-  <h2>Which sale used which batch</h2>
-  <p class="desc">
-    Every draw, newest first. This is the trace: a sale, the batch it came
-    out of, the dealer it was bought from and what those units cost.
-  </p>
-
-  <div class="chips">
-    <a href="material_audit.php" class="<?= $only === '' ? 'on' : '' ?>">All materials</a>
-    <?php foreach ($usage as $u): ?>
-      <a href="material_audit.php?item=<?= e(urlencode($u['item'])) ?>"
-         class="<?= $only === $u['item'] ? 'on' : '' ?>"><?= e($u['item']) ?></a>
-    <?php endforeach; ?>
-  </div>
-
-  <?php if (!$draws): ?>
-    <p class="desc" style="margin-bottom:0">
-      No sale has drawn <?= $only === '' ? 'any material' : e($only) ?> yet.
-    </p>
-  <?php else: ?>
+  <h2>What was bought, most recent first</h2>
+  <p class="desc">The last <?= count($recent) ?> purchases, straight from the
+    <a href="purchases.php">Stock purchases</a> page.</p>
   <div class="scroll">
   <table>
-    <thead><tr>
-      <th>Order</th><th>Customer</th><th>Material</th>
-      <th class="num">Units</th><th class="num">Unit cost</th><th class="num">Cost</th>
-      <th>From batch</th>
-    </tr></thead>
+    <thead><tr><th>Date</th><th>Material</th><th>Dealer</th>
+      <th class="num">Qty</th><th class="num">Unit cost</th><th class="num">Spent</th><th>Note</th></tr></thead>
     <tbody>
-    <?php foreach ($draws as $d): ?>
+    <?php foreach ($recent as $p): ?>
       <tr>
-        <td>
-          <?php if ($d['order_no']): ?>
-            <a href="edit.php?id=<?= (int)$d['ref_id'] ?>"><?= e($d['order_no']) ?></a>
-          <?php else: ?>
-            <span class="muted">order <?= (int)$d['ref_id'] ?> (deleted)</span>
-          <?php endif; ?>
-          <div class="muted" style="font-size:12px"><?= e(date('d M Y', strtotime($d['created_at']))) ?></div>
-        </td>
-        <td><?= e((string)($d['customer'] ?? '—')) ?></td>
-        <td><?= e($d['item']) ?></td>
-        <td class="num"><?= (int)$d['qty'] ?></td>
-        <td class="num"><?= e(money($d['unit_cost'])) ?></td>
-        <td class="num"><?= e(money((int)$d['qty'] * (float)$d['unit_cost'])) ?></td>
-        <td>
-          <?php if ($d['purchase_id'] === null): ?>
-            <span class="gap">no batch — sold beyond stock</span>
-          <?php else: ?>
-            <?= e((string)($d['dealer'] ?? 'No dealer')) ?>
-            <div class="muted" style="font-size:12px">bought <?= e(date('d M Y', strtotime($d['purchase_date']))) ?></div>
-          <?php endif; ?>
-        </td>
+        <td><?= e(date('d M Y', strtotime($p['purchase_date']))) ?></td>
+        <td><?= e($p['item']) ?></td>
+        <td><?= e($p['dealer'] ?? '—') ?></td>
+        <td class="num"><?= (int)$p['qty_bought'] ?></td>
+        <td class="num"><?= e(money((float)$p['unit_cost'])) ?></td>
+        <td class="num"><?= e(money((int)$p['qty_bought'] * (float)$p['unit_cost'])) ?></td>
+        <td class="muted"><?= e((string)($p['notes'] ?? '')) ?></td>
       </tr>
     <?php endforeach; ?>
     </tbody>
   </table>
   </div>
-  <?php endif; ?>
 </div>
-
 <?php endif; ?>
+
 </body>
 </html>

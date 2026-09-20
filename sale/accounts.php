@@ -1,25 +1,16 @@
 <?php
 /**
- * accounts.php — the places money actually sits.
+ * accounts.php — the places money sits, and what is in each.
  *
  * Account movements have always recorded which PARTNER a credit belonged
- * to, plus a free-text source saying things like "Meesho payout". What
- * was never recorded is which account the money landed in, so there was
- * no way to answer "how much is in the current account" without opening
- * the bank app.
+ * to, plus a free-text source saying things like "Meesho payout". Which
+ * account the money actually landed in was recorded nowhere, so no
+ * balance could be worked out without opening the bank app.
  *
- * An account may belong to a partner (a personal UPI that business money
- * sometimes lands in) or to nobody in particular (the shared current
- * account). Both are real, and the settlement maths has to tell them
- * apart, which is why partner_id is optional rather than required.
- *
- * Balances here count every kind of movement, unlike revenue. A transfer
- * between partners is not revenue, but it genuinely moves money out of
- * one account and into another — a balance that ignored it would not
- * match the bank.
+ * A page on its own. It changes nothing about orders, revenue or profit.
  */
 require 'config.php';
-require_once __DIR__ . '/lib_trade.php';
+require_once __DIR__ . '/lib_accounts.php';
 $me = require_login();
 
 $KINDS = ['bank' => 'Bank account', 'upi' => 'UPI', 'cash' => 'Cash',
@@ -28,20 +19,20 @@ $KINDS = ['bank' => 'Bank account', 'upi' => 'UPI', 'cash' => 'Cash',
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
     try {
-        if (!trade_ready($conn)) {
-            throw new Exception('The accounts tables are not in the database yet. '
-                . 'Run sale/api/migrations/2026-09-channels-accounts-stock.sql first.');
+        if (!accounts_ready($conn)) {
+            throw new Exception('The accounts table is not in the database yet. '
+                . 'Run sale/api/migrations/2026-09-accounts.sql first.');
         }
         $action = $_POST['action'] ?? '';
 
         if ($action === 'add' || $action === 'edit') {
-            $id    = (int)($_POST['id'] ?? 0);
-            $name  = trim($_POST['name'] ?? '');
-            $kind  = (string)($_POST['kind'] ?? 'bank');
-            $notes = trim($_POST['notes'] ?? '');
+            $id     = (int)($_POST['id'] ?? 0);
+            $name   = trim($_POST['name'] ?? '');
+            $kind   = (string)($_POST['kind'] ?? 'bank');
+            $notes  = trim($_POST['notes'] ?? '');
             $pidRaw = trim((string)($_POST['partner_id'] ?? ''));
             // Blank means the business holds it, not "partner zero".
-            $pid   = ($pidRaw === '' || $pidRaw === '0') ? null : (int)$pidRaw;
+            $pid    = ($pidRaw === '' || $pidRaw === '0') ? null : (int)$pidRaw;
 
             if ($name === '') throw new Exception('Account name is required.');
             if (!isset($KINDS[$kind])) $kind = 'other';
@@ -60,9 +51,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     throw new Exception('An account with that name already exists.');
                 }
                 $chk->close();
-                $s = $conn->prepare(
-                    'INSERT INTO accounts (name, kind, partner_id, notes) VALUES (?, ?, ?, ?)'
-                );
+                $s = $conn->prepare('INSERT INTO accounts (name, kind, partner_id, notes) VALUES (?, ?, ?, ?)');
                 $s->bind_param('ssis', $name, $kind, $pid, $notes);
                 $s->execute(); $s->close();
                 flash('Account added.');
@@ -73,9 +62,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     throw new Exception('Another account already has that name.');
                 }
                 $chk->close();
-                $s = $conn->prepare(
-                    'UPDATE accounts SET name = ?, kind = ?, partner_id = ?, notes = ? WHERE id = ?'
-                );
+                $s = $conn->prepare('UPDATE accounts SET name = ?, kind = ?, partner_id = ?, notes = ? WHERE id = ?');
                 $s->bind_param('ssisi', $name, $kind, $pid, $notes, $id);
                 $s->execute(); $s->close();
                 flash('Account updated.');
@@ -94,7 +81,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     exit;
 }
 
-$ready    = trade_ready($conn);
+$ready    = accounts_ready($conn);
 $accounts = $ready ? accounts_all($conn, false) : [];
 $balances = $ready ? account_balances($conn) : [];
 
@@ -102,15 +89,12 @@ $partners = [];
 $res = $conn->query('SELECT id, name FROM partners WHERE is_active = 1 ORDER BY name');
 while ($res && ($r = $res->fetch_assoc())) $partners[] = $r;
 
-// Index the balances by id so each account row can show its own.
-$balById = [];
-$unassigned = null;
+$balById = []; $unassigned = null; $totalHeld = 0.0;
 foreach ($balances as $b) {
+    $totalHeld += $b['balance'];
     if ($b['id'] === null) { $unassigned = $b; continue; }
     $balById[$b['id']] = $b;
 }
-$totalHeld = 0.0;
-foreach ($balances as $b) $totalHeld += $b['balance'];
 
 $PAGE  = 'accounts';
 $TITLE = 'Accounts';
@@ -163,9 +147,9 @@ $flash = flash();
 
 <?php if (!$ready): ?>
   <div class="warn">
-    <strong>Not set up yet.</strong> The accounts table is missing. Run
-    <code>sale/api/migrations/2026-09-channels-accounts-stock.sql</code> against the
-    database, then reload this page.
+    <strong>Not set up yet.</strong> Run
+    <code>sale/api/migrations/2026-09-accounts.sql</code> against the database,
+    then reload. Nothing else on the site is affected until you do.
   </div>
 <?php else: ?>
 
@@ -197,7 +181,8 @@ $flash = flash();
   <p class="desc">
     Credits in, debits out, from every account movement — transfers and
     profit shares included, because those move real money even though they
-    are not revenue.
+    are not revenue. Say where a movement landed on the
+    <a href="movements.php">Account movements</a> page.
   </p>
   <table>
     <thead><tr>

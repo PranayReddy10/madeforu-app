@@ -33,7 +33,7 @@ set_exception_handler(function (Throwable $t) {
 });
 
 // ── API-wide constants ─────────────────────────────────────────────
-define('API_VERSION',      '1.7.0');
+define('API_VERSION',      '1.6.1');
 
 /**
  * What this build of the API can do, for the apps to check against.
@@ -56,10 +56,7 @@ define('API_FEATURES', [
     'all_channel_revenue', // finance.php: revenue from orders AND other credits, per-partner detail
     'movement_edit',       // finance.php: update_movement, and the pocket/revenue split basis
     'reprice_open',        // catalog.php: carry a new price onto orders that are still open
-    'channels',            // trade.php: sales channels, per-channel prices, channel on an order
-    'accounts',            // trade.php + finance.php: which account money landed in
-    'marketplace_payout',  // finance.php: a payout settles orders already counted, not new revenue
-    'material_audit',      // trade.php: raw material bought against used, FIFO, per order
+    'accounts',            // finance.php: which account a movement landed in, and balances
 ]);
 define('TOKEN_TTL_DAYS',   90);     // a partner phone stays signed in for a quarter
 define('MAX_PAGE_SIZE',    200);
@@ -332,12 +329,6 @@ function api_order_row(array $o): array {
         'is_walk_in'    => trim((string)($o['phone'] ?? '')) === '',
         'event_id'      => isset($o['event_id']) && $o['event_id'] !== null ? (int)$o['event_id'] : null,
         'event_name'    => $o['event_name'] ?? null,
-        // Where the sale came from. Independent of the event: a WhatsApp
-        // sale at a stall is both. Null on every order written before
-        // channels existed, which the apps show as "not recorded" rather
-        // than guessing.
-        'channel_id'    => isset($o['channel_id']) && $o['channel_id'] !== null ? (int)$o['channel_id'] : null,
-        'channel_name'  => $o['channel_name'] ?? null,
         'subtotal'      => (float)$o['subtotal'],
         'extra_charge'  => (float)($o['extra_charge'] ?? 0),
         'extra_charge_reason' => $o['extra_charge_reason'] ?? null,

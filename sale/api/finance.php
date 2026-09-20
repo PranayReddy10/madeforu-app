@@ -25,7 +25,7 @@
  */
 declare(strict_types=1);
 require __DIR__ . '/_bootstrap.php';
-require_once __DIR__ . '/../lib_trade.php';   // accounts and channels
+require_once __DIR__ . '/../lib_accounts.php';   // which account money landed in
 
 $me = api_require_auth($conn);
 
@@ -388,11 +388,8 @@ api_dispatch([
             'business'        => $business,
             'partner_detail'  => partner_detail_api($rows, $business, $settleInvest, $settleBalance),
             'revenue_breakdown' => revenue_breakdown_api($conn),
-            // Where the money came from, and what a marketplace still
-            // owes. by_channel counts orders; settlement compares those
-            // orders against payouts, which are deliberately not revenue.
-            'by_channel'      => revenue_by_channel($conn),
-            'settlement'      => channel_settlement($conn),
+            // Where the money is sitting. Read-only; revenue and profit
+            // are worked out exactly as before.
             'accounts'        => account_balances($conn),
             'settle_invest'   => $settleInvest,
             'settle_balance'  => $settleBalance,
@@ -421,19 +418,15 @@ api_dispatch([
         $limit  = max(1, min(api_int('limit', 60), MAX_PAGE_SIZE));
         $offset = max(0, api_int('offset', 0));
 
-        // The account and channel columns arrive with a migration, so the
-        // ledger keeps working on a server that has the new API but not
-        // yet the new SQL.
-        $hasTrade = db_has_column($conn, 'account_movements', 'account_id');
+        $hasAcc = movements_have_account($conn);
         $sql = 'SELECT m.id, m.mov_date, m.direction, m.kind, m.amount, m.invest_adjust,
                        m.source, m.note, m.event_id, m.partner_id, m.transfer_id,
                        p.name partner, e.name event_name'
-             . ($hasTrade ? ', m.account_id, m.channel_id, ac.name account_name, ch.name channel_name' : '')
+             . ($hasAcc ? ', m.account_id, ac.name account_name' : '')
              . ' FROM account_movements m
                   JOIN partners p ON p.id = m.partner_id
                   LEFT JOIN events e ON e.id = m.event_id'
-             . ($hasTrade ? ' LEFT JOIN accounts ac ON ac.id = m.account_id
-                             LEFT JOIN channels ch ON ch.id = m.channel_id' : '')
+             . ($hasAcc ? ' LEFT JOIN accounts ac ON ac.id = m.account_id' : '')
              . ($where ? ' WHERE ' . implode(' AND ', $where) : '')
              . ' ORDER BY m.mov_date DESC, m.id DESC LIMIT ? OFFSET ?';
 
@@ -454,8 +447,6 @@ api_dispatch([
                       'event_name' => $r['event_name'],
                       'account_id' => isset($r['account_id']) && $r['account_id'] !== null ? (int)$r['account_id'] : null,
                       'account_name' => $r['account_name'] ?? null,
-                      'channel_id' => isset($r['channel_id']) && $r['channel_id'] !== null ? (int)$r['channel_id'] : null,
-                      'channel_name' => $r['channel_name'] ?? null,
                       // The app greys out Edit on these: a settlement is a
                       // pair, and a credit with orders stamped on it has an
                       // amount that must match them.
@@ -568,38 +559,18 @@ api_dispatch([
         $note   = mb_substr(api_str('note'), 0, 500);
 
         $accId  = valid_account_id($conn, api_in('account_id', null));
-        $chanId = valid_channel_id($conn, api_in('channel_id', null));
-
-        // 'kind' is only settable between the two plain kinds. The
-        // settlement kinds were already refused above, and letting an
-        // edit turn a profit share into a payout would silently move
-        // revenue.
-        $kind = api_str('kind', (string)$cur['kind']);
-        if (!in_array($kind, ['normal', 'payout'], true)) $kind = (string)$cur['kind'];
-        if ($kind === 'payout') {
-            if ($dir !== 'credit') {
-                throw new ApiInputError('A payout is money coming in, so it must be a credit.');
-            }
-            if ($chanId === null) {
-                throw new ApiInputError('A payout needs a channel, so it can be matched '
-                    . 'against that channel\'s orders.');
-            }
-        }
-
-        $hasTrade = db_has_column($conn, 'account_movements', 'account_id');
+        $hasAcc = movements_have_account($conn);
         $s = $conn->prepare(
-            $hasTrade
+            $hasAcc
             ? 'UPDATE account_movements
-                  SET mov_date = ?, partner_id = ?, account_id = ?, channel_id = ?,
-                      direction = ?, kind = ?, amount = ?, source = ?, note = ?
+                  SET mov_date = ?, partner_id = ?, account_id = ?, direction = ?, amount = ?, source = ?, note = ?
                 WHERE id = ?'
             : 'UPDATE account_movements
                   SET mov_date = ?, partner_id = ?, direction = ?, amount = ?, source = ?, note = ?
                 WHERE id = ?'
         );
-        if ($hasTrade) {
-            $s->bind_param('siiissdssi', $date, $pid, $accId, $chanId, $dir, $kind,
-                           $amount, $source, $note, $id);
+        if ($hasAcc) {
+            $s->bind_param('siisdssi', $date, $pid, $accId, $dir, $amount, $source, $note, $id);
         } else {
             $s->bind_param('sisdssi', $date, $pid, $dir, $amount, $source, $note, $id);
         }
@@ -690,26 +661,8 @@ api_dispatch([
         $chk->close();
         if (!$p) throw new ApiInputError('That partner no longer exists.');
 
-        $accId  = valid_account_id($conn, api_in('account_id', null));
-        $chanId = valid_channel_id($conn, api_in('channel_id', null));
-
         $kind   = api_str('kind', 'normal');
-        if (!in_array($kind, ['normal', 'profit', 'payout'], true)) $kind = 'normal';
-
-        // A payout is money arriving from a marketplace for orders that
-        // are already on the books, so it moves an account balance
-        // without being counted as revenue a second time. It has to be a
-        // credit, and it has to name the channel it settles, or there is
-        // nothing to match it against.
-        if ($kind === 'payout') {
-            if ($dir !== 'credit') {
-                throw new ApiInputError('A payout is money coming in, so it must be a credit.');
-            }
-            if ($chanId === null) {
-                throw new ApiInputError('A payout needs a channel, so it can be matched '
-                    . 'against that channel\'s orders.');
-            }
-        }
+        if (!in_array($kind, ['normal', 'profit'], true)) $kind = 'normal';
         $source = mb_substr(api_str('source', $dir === 'credit' ? 'Manual credit' : 'Manual debit'), 0, 120);
         // source/note are NOT NULL DEFAULT '' in account_movements, so an
         // empty note is stored as '', never NULL — strict mode rejects NULL.
@@ -717,29 +670,28 @@ api_dispatch([
 
         $eventId = api_in('event_id', null);
         $eventId = ($eventId === null || $eventId === '' || (int)$eventId < 1) ? null : (int)$eventId;
+        $accId   = valid_account_id($conn, api_in('account_id', null));
 
-        $hasTrade = db_has_column($conn, 'account_movements', 'account_id');
+        // The column is written only if it is there: the API may be
+        // uploaded before the SQL is run, and a movement must not fail
+        // in that window.
+        $hasAcc = movements_have_account($conn);
         $s = $conn->prepare(
-            $hasTrade
-            ? 'INSERT INTO account_movements
-                 (mov_date, partner_id, account_id, channel_id, event_id, direction, kind, amount, source, note)
-               VALUES (?,?,?,?,?,?,?,?,?,?)'
+            $hasAcc
+            ? 'INSERT INTO account_movements (mov_date, partner_id, account_id, event_id, direction, kind, amount, source, note)
+               VALUES (?,?,?,?,?,?,?,?,?)'
             : 'INSERT INTO account_movements (mov_date, partner_id, event_id, direction, kind, amount, source, note)
                VALUES (?,?,?,?,?,?,?,?)'
         );
-        if ($hasTrade) {
-            $s->bind_param('siiiissdss', $date, $pid, $accId, $chanId, $eventId, $dir, $kind,
-                           $amount, $source, $note);
+        if ($hasAcc) {
+            $s->bind_param('siiissdss', $date, $pid, $accId, $eventId, $dir, $kind, $amount, $source, $note);
         } else {
             $s->bind_param('siissdss', $date, $pid, $eventId, $dir, $kind, $amount, $source, $note);
         }
         $s->execute();
         $s->close();
 
-        api_ok(['message' => $kind === 'payout'
-            ? money($amount) . ' payout recorded. It moves the account balance without '
-              . 'being counted as revenue again — the orders it pays for already are.'
-            : money($amount) . ' ' . $dir . 'ed ' . ($dir === 'credit' ? 'to ' : 'from ') . $p['name'] . '.']);
+        api_ok(['message' => money($amount) . ' ' . $dir . 'ed ' . ($dir === 'credit' ? 'to ' : 'from ') . $p['name'] . '.']);
     },
 
     // ── POST credit_offline {partner_id, from, to} ─────────────────
