@@ -136,6 +136,10 @@ h2.section .hint { font-weight: 400; font-size: 12px; color: var(--muted); }
 .row .grow { flex: 1; min-width: 0; }
 .row .t { font-weight: 600; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .row .s { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Truncating is right for an order's item list, which can be long and
+   is only a hint. It is wrong where the line IS the information — a
+   price range and when it was last taken — so that case opts out. */
+.row .s.wrap { white-space: normal; overflow: visible; text-overflow: clip; }
 .row .amt { font-weight: 700; text-align: right; white-space: nowrap; }
 .row .amt .s { font-weight: 400; }
 

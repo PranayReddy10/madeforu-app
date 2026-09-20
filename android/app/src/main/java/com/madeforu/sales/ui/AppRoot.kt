@@ -46,6 +46,8 @@ import com.madeforu.sales.ui.screens.CatalogScreen
 import com.madeforu.sales.ui.screens.EventsScreen
 import com.madeforu.sales.ui.screens.ExpenseDetailScreen
 import com.madeforu.sales.ui.screens.ExpensesScreen
+import com.madeforu.sales.ui.screens.WholesaleBuyerScreen
+import com.madeforu.sales.ui.screens.WholesaleScreen
 import com.madeforu.sales.ui.screens.HomeScreen
 import com.madeforu.sales.ui.screens.LoginScreen
 import com.madeforu.sales.ui.screens.MoneyScreen
@@ -196,6 +198,7 @@ fun AppRoot(signedIn: Boolean) {
                         onOpenSettings = { navController.navigate(Routes.SETTINGS) },
                         onOpenBills = { navController.navigate(Routes.BILLS) },
                         onOpenExpenses = { navController.navigate(Routes.EXPENSES) },
+                        onOpenWholesale = { navController.navigate(Routes.WHOLESALE) },
                         onOpenEvents = { navController.navigate(Routes.EVENTS) },
                         onOpenCatalog = { navController.navigate(Routes.CATALOG) },
                         onSessionExpired = signOut,
@@ -332,6 +335,30 @@ fun AppRoot(signedIn: Boolean) {
                             // is stale, so step back to it.
                             navController.popBackStack()
                         },
+                        onSessionExpired = signOut,
+                    )
+                }
+
+                // The wholesale notebook. Deliberately not on the bottom
+                // bar: it is not part of taking a sale, and putting it
+                // there would suggest it is.
+                composable(Routes.WHOLESALE) {
+                    WholesaleScreen(
+                        repository = repository,
+                        onBack = { navController.popBackStack() },
+                        onOpenBuyer = { id -> navController.navigate(Routes.wholesaleBuyer(id)) },
+                        onSessionExpired = signOut,
+                    )
+                }
+
+                composable(
+                    route = Routes.WHOLESALE_BUYER,
+                    arguments = listOf(navArgument("id") { type = NavType.IntType }),
+                ) { entry ->
+                    WholesaleBuyerScreen(
+                        buyerId = entry.arguments?.getInt("id") ?: 0,
+                        repository = repository,
+                        onBack = { navController.popBackStack() },
                         onSessionExpired = signOut,
                     )
                 }

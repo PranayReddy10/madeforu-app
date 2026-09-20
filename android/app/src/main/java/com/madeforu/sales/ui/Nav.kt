@@ -34,6 +34,11 @@ object Routes {
     const val EVENTS = "events"
     const val SETTINGS = "settings"
 
+    /** The wholesale notebook. Nothing here is an order. */
+    const val WHOLESALE = "wholesale"
+    const val WHOLESALE_BUYER = "wholesale/{id}"
+    fun wholesaleBuyer(id: Int) = "wholesale/$id"
+
     /** The five destinations reachable from the bottom bar. */
     val bottomBar = listOf(HOME, ORDERS, NEW_ORDER, STATS, MONEY)
 }
