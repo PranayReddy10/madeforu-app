@@ -755,3 +755,88 @@ data class ReleaseResponse(val release: Release = Release())
 
 @Serializable
 data class SettingsResponse(val settings: Settings = Settings(), val message: String = "")
+
+// ── Wholesale buyers ───────────────────────────────────────────────
+//
+// A notebook, kept away from the money. Nothing here is an order: it is
+// not revenue, not profit, it does not appear on Money or Stats and it
+// does not move stock. Prices are typed each time and never looked up,
+// because a wholesale price is negotiated and must not move when the
+// catalogue moves.
+
+@Serializable
+data class WholesaleCustomer(
+    val id: Int = 0,
+    val name: String = "",
+    val phone: String? = null,
+    val shop: String? = null,
+    val place: String? = null,
+    val notes: String? = null,
+    @SerialName("is_active") val isActive: Boolean = true,
+    // Present on the list, absent on the detail's own customer object.
+    val visits: Int = 0,
+    @SerialName("last_visit") val lastVisit: String? = null,
+    val taken: Double = 0.0,
+) {
+    /** "Sri Gift Corner · Ameerpet", or nothing worth showing. */
+    val where: String get() = listOfNotNull(
+        shop?.takeIf { it.isNotBlank() },
+        place?.takeIf { it.isNotBlank() },
+    ).joinToString(" · ")
+}
+
+@Serializable
+data class WholesaleLine(
+    val item: String = "",
+    val quantity: Int = 0,
+    @SerialName("unit_price") val unitPrice: Double = 0.0,
+    @SerialName("line_total") val lineTotal: Double = 0.0,
+)
+
+@Serializable
+data class WholesaleVisit(
+    val id: Int = 0,
+    val date: String = "",
+    val note: String? = null,
+    val by: String? = null,
+    val total: Double = 0.0,
+    val items: List<WholesaleLine> = emptyList(),
+)
+
+/** One product across every visit, with the range the price has moved in. */
+@Serializable
+data class WholesaleSummaryRow(
+    val item: String = "",
+    val times: Int = 0,
+    val qty: Int = 0,
+    val low: Double = 0.0,
+    val high: Double = 0.0,
+    val total: Double = 0.0,
+    @SerialName("last_date") val lastDate: String = "",
+)
+
+@Serializable
+data class WholesaleTotals(
+    val visits: Int = 0,
+    val units: Int = 0,
+    val value: Double = 0.0,
+)
+
+@Serializable
+data class WholesaleListResponse(
+    // False when the server has the app but not the migration. Named
+    // rather than returned as an empty list, so the screen can say why
+    // instead of looking broken.
+    val ready: Boolean = false,
+    val customers: List<WholesaleCustomer> = emptyList(),
+    val message: String? = null,
+)
+
+@Serializable
+data class WholesaleDetail(
+    val customer: WholesaleCustomer = WholesaleCustomer(),
+    val visits: List<WholesaleVisit> = emptyList(),
+    val summary: List<WholesaleSummaryRow> = emptyList(),
+    val totals: WholesaleTotals = WholesaleTotals(),
+    val message: String? = null,
+)

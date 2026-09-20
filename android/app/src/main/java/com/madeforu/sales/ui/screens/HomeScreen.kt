@@ -7,6 +7,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.material3.ButtonDefaults
 import com.madeforu.sales.ui.theme.BrandGradient
+import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.filled.Sell
 import androidx.compose.material.icons.filled.Storefront
@@ -106,6 +107,7 @@ fun HomeScreen(
     onOpenOrders: (String) -> Unit,
     onNewOrder: () -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenWholesale: () -> Unit,
     onOpenBills: () -> Unit,
     onOpenExpenses: () -> Unit,
     onOpenEvents: () -> Unit,
@@ -268,6 +270,7 @@ fun HomeScreen(
                         onCatalog = onOpenCatalog,
                         onBills = onOpenBills,
                         onSettings = onOpenSettings,
+                        onWholesale = onOpenWholesale,
                     )
                 }
 
@@ -459,8 +462,13 @@ private fun QuickActions(
     onCatalog: () -> Unit,
     onBills: () -> Unit,
     onSettings: () -> Unit,
+    onWholesale: () -> Unit,
 ) {
     val actions = listOf(
+        // First, and on its own button, because it is a separate book:
+        // nothing in it is an order, and it is not reachable from the
+        // sale flow by design.
+        QuickAction("Wholesale buyers", Icons.Filled.Inventory2, onWholesale),
         QuickAction("Expenses", Icons.Filled.Payments, onExpenses),
         QuickAction("Events & stalls", Icons.Filled.Storefront, onEvents),
         QuickAction("Products & prices", Icons.Filled.Sell, onCatalog),

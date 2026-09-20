@@ -475,6 +475,77 @@ class Repository(private val api: ApiClient, private val prefs: Prefs) {
     suspend fun deleteExpense(id: Int): ApiResult<String> =
         api.post("expenses.php", "delete", ApiClient.body { put("id", JsonPrimitive(id)) })
             .map { api.decode<SimpleMessage>(it).message }
+    // ── Wholesale buyers ───────────────────────────────────────────
+    //
+    // Separate from everything else on purpose: none of these calls
+    // touch an order, revenue, profit or stock.
+
+    suspend fun wholesaleList(): ApiResult<WholesaleListResponse> =
+        api.get("wholesale.php", "list").map { api.decode<WholesaleListResponse>(it) }
+
+    suspend fun wholesaleBuyer(id: Int): ApiResult<WholesaleDetail> =
+        api.get("wholesale.php", "get", mapOf("id" to id.toString()))
+            .map { api.decode<WholesaleDetail>(it) }
+
+    suspend fun addWholesaleCustomer(
+        name: String, phone: String, shop: String, place: String, notes: String,
+    ): ApiResult<WholesaleListResponse> =
+        api.post(
+            "wholesale.php", "add_customer",
+            ApiClient.body {
+                put("name", JsonPrimitive(name))
+                put("phone", JsonPrimitive(phone))
+                put("shop", JsonPrimitive(shop))
+                put("place", JsonPrimitive(place))
+                put("notes", JsonPrimitive(notes))
+            },
+        ).map { api.decode<WholesaleListResponse>(it) }
+
+    suspend fun updateWholesaleCustomer(
+        id: Int, name: String, phone: String, shop: String, place: String, notes: String,
+    ): ApiResult<WholesaleListResponse> =
+        api.post(
+            "wholesale.php", "update_customer",
+            ApiClient.body {
+                put("id", JsonPrimitive(id))
+                put("name", JsonPrimitive(name))
+                put("phone", JsonPrimitive(phone))
+                put("shop", JsonPrimitive(shop))
+                put("place", JsonPrimitive(place))
+                put("notes", JsonPrimitive(notes))
+            },
+        ).map { api.decode<WholesaleListResponse>(it) }
+
+    /** Record one visit. Prices are sent exactly as typed. */
+    suspend fun addWholesaleVisit(
+        customerId: Int, date: String, note: String, lines: List<WholesaleLine>,
+    ): ApiResult<WholesaleDetail> =
+        api.post(
+            "wholesale.php", "add_visit",
+            ApiClient.body {
+                put("customer_id", JsonPrimitive(customerId))
+                put("visit_date", JsonPrimitive(date))
+                put("note", JsonPrimitive(note))
+                put("items", kotlinx.serialization.json.JsonArray(
+                    lines.map { line ->
+                        JsonObject(
+                            mapOf(
+                                "item" to JsonPrimitive(line.item),
+                                "quantity" to JsonPrimitive(line.quantity),
+                                "unit_price" to JsonPrimitive(line.unitPrice),
+                            )
+                        )
+                    }
+                ))
+            },
+        ).map { api.decode<WholesaleDetail>(it) }
+
+    suspend fun deleteWholesaleVisit(id: Int): ApiResult<WholesaleDetail> =
+        api.post(
+            "wholesale.php", "delete_visit",
+            ApiClient.body { put("id", JsonPrimitive(id)) },
+        ).map { api.decode<WholesaleDetail>(it) }
+
 }
 
 /** One line on an order being composed. */

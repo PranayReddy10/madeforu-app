@@ -24,11 +24,11 @@ const DEFAULT_API = new URL('../api/', location.href).href;
  * browser, the server or the app is the stale one. It must match the
  * CACHE name in sw.js.
  */
-const BUILD = '2026-09-19.4';
+const BUILD = '2026-09-20.1';
 
 /** What this build of the app expects the server to be able to do. */
 const NEEDS_FEATURES = ['revenue_breakdown', 'expense_create', 'price_history',
-                        'all_channel_revenue', 'reprice_open'];
+                        'all_channel_revenue', 'reprice_open', 'wholesale'];
 
 const store = {
   get token() { return localStorage.getItem('mfu.token') || ''; },
@@ -148,9 +148,34 @@ async function api(endpoint, action, { body = null, params = {} } = {}) {
     data = JSON.parse(text);
   } catch (e) {
     // Shared hosting loves to prepend a warning or serve an error page.
-    throw new ApiError('bad_response', text.trim().startsWith('<')
-      ? 'The server returned a web page instead of data. Check the server address.'
-      : 'The server sent a reply the app could not read.');
+    //
+    // This used to say only "the server sent a reply the app could not
+    // read", which names nothing: the same sentence covered a 500, a
+    // missing file, a PHP warning printed in front of the JSON and an
+    // empty body. Whoever saw it could only guess, and so could I. It
+    // now says which call, what status came back, and what the first
+    // line of the reply actually was -- which is usually the PHP error
+    // itself, and names the problem outright.
+    const where = endpoint + '?action=' + action;
+    const body = text.trim();
+
+    if (body === '') {
+      throw new ApiError('bad_response',
+        `${where} returned HTTP ${response.status} with an empty reply. ` +
+        'That is usually a PHP fatal error on the server with error display ' +
+        'switched off — a file that is missing or half-uploaded. Re-upload ' +
+        'the whole api/ folder and the sale/ files beside it.');
+    }
+    if (body.startsWith('<')) {
+      throw new ApiError('bad_response',
+        `${where} returned a web page instead of data (HTTP ${response.status}). ` +
+        'Either the address is wrong or that file is not on the server.');
+    }
+    // A PHP notice or warning in front of otherwise good JSON. Show it:
+    // it names the file and the line.
+    const firstLine = body.split('\n')[0].slice(0, 220);
+    throw new ApiError('bad_response',
+      `${where} replied with something that is not data (HTTP ${response.status}): ` + firstLine);
   }
 
   if (!data.ok) {
@@ -183,6 +208,7 @@ const ICONS = {
   events: '<path d="M12 4 3 20h18L12 4z"/><path d="M12 12v8"/>',
   catalog: '<path d="M20.6 13.4 12 22l-9-9V4h9l8.6 9.4z"/><circle cx="7.5" cy="7.5" r="1.4"/>',
   bills: '<path d="M6 3h12v18l-3-2-3 2-3-2-3 2V3z"/><path d="M9 8h6M9 12h6"/>',
+  wholesale: '<path d="M3 7h18l-1.5 12H4.5z"/><path d="M8 7V5a4 4 0 0 1 8 0v2"/>',
   caret: '<path d="m6 9 6 6 6-6"/>',
   close: '<path d="M6 6l12 12M18 6 6 18"/>',
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9 6.3 6.3M17.7 17.7l1.4 1.4M19.1 4.9 17.7 6.3M6.3 17.7l-1.4 1.4"/>',
@@ -487,6 +513,7 @@ route('home', async () => {
     <section>
       <h2 class="section">Manage</h2>
       <div class="grid2">
+        ${actionTile('wholesale', 'Wholesale buyers', 'wholesale')}
         ${actionTile('expenses', 'Expenses', 'expenses')}
         ${actionTile('events', 'Events & stalls', 'events')}
         ${actionTile('catalog', 'Products & prices', 'catalog')}
@@ -781,7 +808,10 @@ async function takePayment(order) {
 let draft = null;
 
 route('new', async () => {
-  draft = draft && draft.keep ? draft : { lines: {}, name: '', phone: '', notes: '', paid: '', mode: 'cash', eventId: '' };
+  draft = draft && draft.keep ? draft : {
+    lines: {}, name: '', phone: '', notes: '', paid: '', mode: 'cash', eventId: '',
+    discount: '', discountReason: '', extra: '', extraReason: '',
+  };
   draft.keep = false;
 
   setHtml(`<div class="screen"><div class="head"><h1 class="grow">New sale</h1></div>
@@ -804,6 +834,7 @@ route('new', async () => {
         <input id="cphone" type="tel" inputmode="numeric" maxlength="10" value="${esc(draft.phone)}"></label>
       <label class="field"><span>Notes</span><input id="cnotes" value="${esc(draft.notes)}"></label>`,
       { open: !!(draft.name || draft.phone || draft.notes) })}</div>
+    <div style="margin-top:10px" id="adjustFold"></div>
     <div style="margin-top:10px" id="paidFold"></div>
     <div id="summary"></div>
     <button class="btn" id="save" style="margin-top:14px">Save sale</button>`;
@@ -822,9 +853,15 @@ route('new', async () => {
   }
 
   const productFold = document.getElementById('productFold');
+  const adjustFold = document.getElementById('adjustFold');
   const paidFold = document.getElementById('paidFold');
 
-  /** Lines, and what they come to — one place, used by three renderers. */
+  // fold() renders a <details> and sets `open` from its argument every
+  // time, so a repaint would slam the section shut while somebody was
+  // typing in it. Remember whether it is open and hand that back.
+  let adjustOpen = !!(draft.discount || draft.extra);
+
+  /** Lines, and what they come to — one place, used by four renderers. */
   function basket() {
     const rows = Object.entries(draft.lines);
     const units = rows.reduce((n, [, q]) => n + q, 0);
@@ -832,7 +869,84 @@ route('new', async () => {
       const p = products.find((x) => x.name === name);
       return sum + (p ? p.price * qty : 0);
     }, 0);
-    return { rows, units, subtotal };
+
+    // Mirrors the server: an extra charge is never negative (that would
+    // be a discount), and the discount ceiling is the whole charged
+    // base, so a discount can cancel a delivery fee.
+    const extra = Math.max(0, Number(draft.extra) || 0);
+    const base = subtotal + extra;
+    const discount = Math.min(Math.max(0, Number(draft.discount) || 0), base);
+    const total = base - discount;
+    return { rows, units, subtotal, extra, discount, total };
+  }
+
+  // Built once, then only its subtitle and badge are refreshed.
+  //
+  // Repainting the whole fold on every change was the obvious way and
+  // the wrong one: the change event fires on blur, so tapping straight
+  // from the discount box to the extra-charge box destroyed the second
+  // input at the moment the tap was landing on it. Nothing visibly
+  // broke, the keystrokes just went nowhere. Building it once means the
+  // inputs are never replaced while somebody is using them.
+  let adjustBuilt = false;
+
+  function paintAdjust() {
+    const b = basket();
+    const bits = [];
+    if (b.discount > 0) bits.push('-' + money(b.discount));
+    if (b.extra > 0) bits.push('+' + money(b.extra));
+    const subtitle = bits.length ? bits.join(' · ') : 'None';
+
+    if (adjustBuilt) {
+      adjustFold.querySelector('summary .s').textContent = subtitle;
+      const badge = adjustFold.querySelector('summary .badge');
+      if (badge) badge.textContent = bits.length ? String(bits.length) : '';
+      return;
+    }
+
+    adjustFold.innerHTML = fold('Discount & extra charges', subtitle, `
+      <label class="field"><span>Discount (₹)</span>
+        <input id="disc" inputmode="decimal" value="${esc(draft.discount)}"></label>
+      <label class="field"><span>Why the discount</span>
+        <input id="discWhy" value="${esc(draft.discountReason)}"
+               placeholder="e.g. regular customer"></label>
+      <label class="field"><span>Extra charge (₹)</span>
+        <input id="extra" inputmode="decimal" value="${esc(draft.extra)}"
+               placeholder="delivery, rush, packing"></label>
+      <label class="field"><span>Why the extra charge</span>
+        <input id="extraWhy" value="${esc(draft.extraReason)}"></label>`,
+      // A badge is always rendered, even when empty, so that later
+      // repaints have something to write into.
+      { open: !!(draft.discount || draft.extra), badge: ' ' });
+    adjustBuilt = true;
+
+    const bind = (id, key) => {
+      const el = document.getElementById(id);
+      el.addEventListener('input', () => { draft[key] = el.value; paintSummary(); });
+    };
+    bind('disc', 'discount');
+    bind('discWhy', 'discountReason');
+    bind('extra', 'extra');
+    bind('extraWhy', 'extraReason');
+
+    // Reflect the values the server will actually use, once the field
+    // is left: a discount larger than the bill is capped, and a
+    // negative extra charge is not a thing.
+    ['disc', 'extra'].forEach((id) => {
+      const el = document.getElementById(id);
+      el.addEventListener('blur', () => {
+        const bb = basket();
+        if (id === 'disc' && (Number(draft.discount) || 0) !== bb.discount) {
+          draft.discount = bb.discount ? String(bb.discount) : '';
+          el.value = draft.discount;
+        }
+        if (id === 'extra' && (Number(draft.extra) || 0) !== bb.extra) {
+          draft.extra = bb.extra ? String(bb.extra) : '';
+          el.value = draft.extra;
+        }
+        paintSummary();
+      });
+    });
   }
 
   function paintPaid() {
@@ -842,7 +956,7 @@ route('new', async () => {
     if (document.activeElement && document.activeElement.id === 'paid') return;
     const b = basket();
     paidFold.innerHTML = fold('Money taken now',
-      b.subtotal > 0 ? 'Bill comes to ' + money(b.subtotal) : 'Cash, UPI, card or other', `
+      b.total > 0 ? 'Bill comes to ' + money(b.total) : 'Cash, UPI, card or other', `
       <label class="field"><span>Amount</span>
         <input id="paid" inputmode="decimal" value="${esc(draft.paid)}"></label>
       <div class="chips" style="margin-top:10px" id="modeChips"></div>`,
@@ -893,7 +1007,8 @@ route('new', async () => {
     // Shown so the counter can read the total back before taking money.
     // The server recomputes it from the catalogue regardless — this is a
     // display, not the price.
-    const { rows, subtotal } = basket();
+    const { rows, subtotal, extra, discount, total } = basket();
+    paintAdjust();
     paintPaid();
     document.getElementById('summary').innerHTML = rows.length ? `
       <section><h2 class="section">This bill</h2><div class="card">
@@ -901,7 +1016,12 @@ route('new', async () => {
           const p = products.find((x) => x.name === n);
           return detailRow(`${esc(n)} × ${q}`, money(p ? p.price * q : 0));
         }).join('')}
-        <div class="row"><div class="grow t">Total</div><div class="amt">${money(subtotal)}</div></div>
+        ${(extra > 0 || discount > 0) ? detailRow('Subtotal', money(subtotal)) : ''}
+        ${extra > 0 ? detailRow('Extra charge' + (draft.extraReason ? ' — ' + esc(draft.extraReason) : ''),
+                                '+' + money(extra)) : ''}
+        ${discount > 0 ? detailRow('Discount' + (draft.discountReason ? ' — ' + esc(draft.discountReason) : ''),
+                                   '-' + money(discount)) : ''}
+        <div class="row"><div class="grow t">Total</div><div class="amt">${money(total)}</div></div>
       </div></section>` : '';
   }
 
@@ -937,6 +1057,10 @@ route('new', async () => {
           phone: draft.phone,
           notes: draft.notes,
           event_id: draft.eventId || null,
+          discount: Number(draft.discount) || 0,
+          discount_reason: draft.discountReason,
+          extra_charge: Number(draft.extra) || 0,
+          extra_charge_reason: draft.extraReason,
           paid_amount: Number(draft.paid || 0),
           payment_mode: draft.mode,
         },
@@ -1070,6 +1194,243 @@ function listCard(title, rows) {
       <div class="grow"><div class="t">${esc(label)}</div><div class="s">${esc(sub || '')}</div></div>
       <div class="amt">${esc(amount)}</div></div>`).join('')}
   </div></section>`;
+}
+
+/* ── Wholesale buyers ─────────────────────────────────────────── */
+
+/*
+ * A notebook, kept away from the money. Nothing recorded here is an
+ * order: it is not revenue, not profit, it does not appear on Money or
+ * Stats and it does not move stock. Prices are typed each time and are
+ * never looked up from the catalogue, because a wholesale price is
+ * negotiated and must not move when the catalogue moves.
+ */
+
+route('wholesale', async (id) => {
+  // #wholesale shows the list, #wholesale/5 shows that buyer. One entry
+  // in the route table, because route() assigns rather than appends and
+  // a second registration would silently replace the first.
+  if (id) return wholesaleBuyer(id);
+
+  setHtml(`<div class="screen"><div class="head">
+    <button class="back" data-go="home">‹</button><h1 class="grow">Wholesale buyers</h1></div>
+    <div id="body">${spinner()}</div></div>`);
+
+  const d = await api('wholesale.php', 'list');
+  const body = document.getElementById('body');
+
+  if (!d.ready) {
+    body.innerHTML = errorBox(d.message || 'Wholesale is not set up on the server yet.');
+    return;
+  }
+
+  const list = d.customers || [];
+  body.innerHTML = `
+    <p class="muted" style="margin-bottom:12px">
+      What each bulk buyer has taken, and at what. Not counted in revenue or profit.
+    </p>
+    <button class="btn" id="addBuyer">Add a buyer</button>
+    ${list.length ? `<section><h2 class="section">${list.length} buyer${list.length === 1 ? '' : 's'}</h2>
+      <div class="card">${list.map((c) => `
+        <button class="row" data-go="wholesale/${c.id}" style="width:100%;text-align:left">
+          ${tile(c.name)}
+          <div class="grow">
+            <div class="t">${esc(c.name)}${c.is_active ? '' : ' <span class="pill">hidden</span>'}</div>
+            <div class="s wrap">${esc([c.shop, c.place].filter(Boolean).join(' · ') || 'No shop recorded')}</div>
+            <div class="s wrap">${c.visits} visit${c.visits === 1 ? '' : 's'}${
+              c.last_visit ? ' · last ' + esc(prettyDate(c.last_visit)) : ''}</div>
+          </div>
+          <div class="amt">${money(c.taken)}</div>
+        </button>`).join('')}</div></section>`
+      : '<p class="muted center" style="margin-top:24px">No buyers yet. Add one, then record what they take each time they come.</p>'}`;
+
+  document.getElementById('addBuyer').onclick = () => buyerSheet();
+});
+
+/** Add a buyer, or edit one. */
+function buyerSheet(existing = null) {
+  const v = existing || { id: 0, name: '', phone: '', shop: '', place: '', notes: '' };
+  const sheet = openSheet(existing ? 'Edit buyer' : 'Add a buyer', `
+    <div class="card">
+      <label class="field"><span>Name</span><input id="bname" value="${esc(v.name)}"></label>
+      <label class="field"><span>Phone</span>
+        <input id="bphone" type="tel" inputmode="numeric" maxlength="10" value="${esc(v.phone || '')}"></label>
+      <label class="field"><span>Shop</span><input id="bshop" value="${esc(v.shop || '')}"></label>
+      <label class="field"><span>Place</span><input id="bplace" value="${esc(v.place || '')}"></label>
+      <label class="field"><span>Note — optional</span><input id="bnotes" value="${esc(v.notes || '')}"></label>
+    </div>
+    <button class="btn" id="bsave" style="margin-top:12px">${existing ? 'Save' : 'Add buyer'}</button>`);
+
+  document.getElementById('bsave').onclick = async () => {
+    const button = document.getElementById('bsave');
+    const name = document.getElementById('bname').value.trim();
+    if (!name) { toast('A name is required.'); return; }
+    button.disabled = true; button.textContent = 'Saving…';
+    try {
+      const body = {
+        name,
+        phone: document.getElementById('bphone').value.trim(),
+        shop: document.getElementById('bshop').value.trim(),
+        place: document.getElementById('bplace').value.trim(),
+        notes: document.getElementById('bnotes').value.trim(),
+      };
+      if (existing) body.id = existing.id;
+      const r = await api('wholesale.php', existing ? 'update_customer' : 'add_customer', { body });
+      sheet.close();
+      toast(r.message || 'Saved.');
+      if (existing) go('wholesale/' + existing.id); else go('wholesale/' + r.id);
+    } catch (e) {
+      toast(e.message);
+      button.disabled = false; button.textContent = existing ? 'Save' : 'Add buyer';
+    }
+  };
+}
+
+/** One buyer: what they take, and every visit. */
+async function wholesaleBuyer(id) {
+  setHtml(`<div class="screen"><div class="head">
+    <button class="back" data-go="wholesale">‹</button><h1 class="grow">Buyer</h1></div>
+    <div id="body">${spinner()}</div></div>`);
+
+  const d = await api('wholesale.php', 'get', { params: { id } });
+  const c = d.customer, t = d.totals;
+
+  document.getElementById('body').innerHTML = `
+    <div class="hero">
+      <div class="label">${esc([c.shop, c.place].filter(Boolean).join(' · ') || 'Wholesale buyer')}</div>
+      <div class="big">${esc(c.name)}</div>
+      <div class="meta">${t.visits} visit${t.visits === 1 ? '' : 's'} · ${t.units} pieces · ${money(t.value)}</div>
+    </div>
+
+    <div class="grid2" style="margin-top:10px">
+      <button class="btn" id="addVisit">Record what they took</button>
+      <button class="btn ghost" id="editBuyer">Edit details</button>
+    </div>
+    ${c.phone ? `<a class="btn ghost" style="margin-top:8px;display:block;text-align:center"
+        href="tel:${esc(c.phone)}">Call ${esc(c.phone)}</a>` : ''}
+
+    ${d.summary.length ? `<section><h2 class="section">What they take</h2><div class="card">
+      ${d.summary.map((r) => `<div class="row">${tile(r.item)}
+        <div class="grow"><div class="t">${esc(r.item)}</div>
+          <div class="s wrap">${r.qty} pieces over ${r.times} visit${r.times === 1 ? '' : 's'}</div>
+          <div class="s wrap">${r.low === r.high ? money(r.low) : money(r.low) + ' – ' + money(r.high)} each
+            · last ${esc(prettyDate(r.last_date))}</div></div>
+        <div class="amt">${money(r.total)}</div></div>`).join('')}
+    </div></section>` : ''}
+
+    ${d.visits.length ? `<section><h2 class="section">${d.visits.length} visit${d.visits.length === 1 ? '' : 's'}</h2>
+      ${d.visits.map((v) => `<div class="card" style="margin-bottom:10px">
+        <div class="row" style="border:none">
+          <div class="grow"><div class="t">${esc(prettyDate(v.date))}</div>
+            ${v.note ? `<div class="s">${esc(v.note)}</div>` : ''}</div>
+          <div class="amt">${money(v.total)}</div>
+        </div>
+        ${v.items.map((l) => detailRow(`${esc(l.item)} × ${l.quantity}`,
+            money(l.unit_price) + '  ·  ' + money(l.line_total))).join('')}
+        <button class="btn ghost small" data-visit-del="${v.id}" style="margin-top:8px">Remove this entry</button>
+      </div>`).join('')}</section>`
+      : '<p class="muted center" style="margin-top:20px">Nothing recorded yet.</p>'}`;
+
+  document.getElementById('addVisit').onclick = () => visitSheet(c);
+  document.getElementById('editBuyer').onclick = () => buyerSheet(c);
+  document.getElementById('body').addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-visit-del]');
+    if (!b) return;
+    if (!confirm('Remove this entry?')) return;
+    try {
+      const r = await api('wholesale.php', 'delete_visit', { body: { id: Number(b.dataset.visitDel) } });
+      toast(r.message || 'Removed.');
+      wholesaleBuyer(id);
+    } catch (err) { toast(err.message); }
+  });
+}
+
+/**
+ * Record a visit. Lines are added one at a time and priced by hand —
+ * there is deliberately no lookup, because the whole point is the price
+ * that was agreed on the day.
+ */
+function visitSheet(customer) {
+  const lines = [{ item: '', quantity: '1', unit_price: '' }];
+
+  const sheet = openSheet('What did ' + customer.name + ' take?', `
+    <div class="card">
+      <label class="field"><span>Date</span><input id="vdate" type="date" value="${today()}"></label>
+      <label class="field"><span>Note — optional</span>
+        <input id="vnote" placeholder="e.g. paid cash, collected himself"></label>
+    </div>
+    <div id="vlines"></div>
+    <button class="btn ghost" id="vadd" style="margin-top:10px">+ Another product</button>
+    <div class="row" style="border:none;padding:12px 0">
+      <div class="grow t">Total</div><div class="amt" id="vtotal">₹0.00</div></div>
+    <button class="btn" id="vsave">Save entry</button>`);
+
+  function paint() {
+    document.getElementById('vlines').innerHTML = lines.map((l, i) => `
+      <div class="card" style="margin-top:10px">
+        <label class="field"><span>Product</span>
+          <input data-i="${i}" data-k="item" value="${esc(l.item)}" placeholder="type anything"></label>
+        <div class="grid2">
+          <label class="field"><span>Qty</span>
+            <input data-i="${i}" data-k="quantity" inputmode="numeric" value="${esc(l.quantity)}"></label>
+          <label class="field"><span>Price each (₹)</span>
+            <input data-i="${i}" data-k="unit_price" inputmode="decimal" value="${esc(l.unit_price)}"></label>
+        </div>
+        ${lines.length > 1 ? `<button class="btn ghost small" data-drop="${i}">Remove</button>` : ''}
+      </div>`).join('');
+
+    // Bound after each repaint, because the markup above replaced them.
+    document.querySelectorAll('#vlines input').forEach((el) => {
+      el.addEventListener('input', () => {
+        lines[Number(el.dataset.i)][el.dataset.k] = el.value;
+        total();
+      });
+    });
+    document.querySelectorAll('#vlines [data-drop]').forEach((b) => {
+      b.onclick = () => { lines.splice(Number(b.dataset.drop), 1); paint(); };
+    });
+    total();
+  }
+
+  function total() {
+    const sum = lines.reduce((n, l) =>
+      n + (parseInt(l.quantity) || 0) * (parseFloat(l.unit_price) || 0), 0);
+    document.getElementById('vtotal').textContent = money(sum);
+  }
+
+  document.getElementById('vadd').onclick = () => { lines.push({ item: '', quantity: '1', unit_price: '' }); paint(); };
+  paint();
+
+  document.getElementById('vsave').onclick = async () => {
+    const button = document.getElementById('vsave');
+    const items = lines
+      .filter((l) => l.item.trim() !== '')
+      .map((l) => ({
+        item: l.item.trim(),
+        quantity: parseInt(l.quantity) || 0,
+        unit_price: parseFloat(l.unit_price) || 0,
+      }));
+    if (!items.length) { toast('Add at least one product.'); return; }
+    if (items.some((i) => i.quantity < 1)) { toast('Every line needs a quantity of at least 1.'); return; }
+
+    button.disabled = true; button.textContent = 'Saving…';
+    try {
+      const r = await api('wholesale.php', 'add_visit', {
+        body: {
+          customer_id: customer.id,
+          visit_date: document.getElementById('vdate').value || today(),
+          note: document.getElementById('vnote').value.trim(),
+          items,
+        },
+      });
+      sheet.close();
+      toast(r.message || 'Recorded.');
+      wholesaleBuyer(customer.id);
+    } catch (e) {
+      toast(e.message);
+      button.disabled = false; button.textContent = 'Save entry';
+    }
+  };
 }
 
 /* ── Money — the investment summary ───────────────────────────── */
