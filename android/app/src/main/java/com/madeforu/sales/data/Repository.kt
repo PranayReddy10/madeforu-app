@@ -323,6 +323,12 @@ class Repository(private val api: ApiClient, private val prefs: Prefs) {
         date: String,
         source: String,
         note: String,
+        accountId: Int? = null,
+        channelId: Int? = null,
+        // 'payout' marks a marketplace settling up for orders already on
+        // the books: it moves an account balance without being counted as
+        // revenue a second time.
+        kind: String = "normal",
     ): ApiResult<String> =
         api.post(
             "finance.php", "add_movement",
@@ -333,6 +339,9 @@ class Repository(private val api: ApiClient, private val prefs: Prefs) {
                 put("mov_date", JsonPrimitive(date))
                 put("source", JsonPrimitive(source))
                 put("note", JsonPrimitive(note))
+                put("kind", JsonPrimitive(kind))
+                if (accountId != null) put("account_id", JsonPrimitive(accountId))
+                if (channelId != null) put("channel_id", JsonPrimitive(channelId))
             },
         ).map { api.decode<SimpleMessage>(it).message }
 
@@ -345,6 +354,9 @@ class Repository(private val api: ApiClient, private val prefs: Prefs) {
         date: String,
         source: String,
         note: String,
+        accountId: Int? = null,
+        channelId: Int? = null,
+        kind: String = "normal",
     ): ApiResult<String> =
         api.post(
             "finance.php", "update_movement",
@@ -356,8 +368,38 @@ class Repository(private val api: ApiClient, private val prefs: Prefs) {
                 put("mov_date", JsonPrimitive(date))
                 put("source", JsonPrimitive(source))
                 put("note", JsonPrimitive(note))
+                put("kind", JsonPrimitive(kind))
+                if (accountId != null) put("account_id", JsonPrimitive(accountId))
+                if (channelId != null) put("channel_id", JsonPrimitive(channelId))
             },
         ).map { api.decode<SimpleMessage>(it).message }
+
+    /**
+     * Channels with their price overrides, the account list, and what
+     * each marketplace still owes — in one call.
+     *
+     * Sent together rather than fetched per channel because the sale
+     * screen prices lines as the basket changes: a round trip on every
+     * change of the picker would show the wrong total until it landed.
+     */
+    suspend fun trade(): ApiResult<TradeResponse> =
+        api.get("trade.php", "list").map { api.decode<TradeResponse>(it) }
+
+    suspend fun setChannelPrice(channelId: Int, item: String, price: Double?): ApiResult<TradeResponse> =
+        api.post(
+            "trade.php", "set_channel_price",
+            ApiClient.body {
+                put("channel_id", JsonPrimitive(channelId))
+                put("item", JsonPrimitive(item))
+                // Absent clears the override, which is not the same as
+                // zero: zero is a free item.
+                if (price != null) put("price", JsonPrimitive(price))
+            },
+        ).map { api.decode<TradeResponse>(it) }
+
+    /** Raw material bought against raw material used. */
+    suspend fun materialAudit(): ApiResult<MaterialAuditResponse> =
+        api.get("trade.php", "material_audit").map { api.decode<MaterialAuditResponse>(it) }
 
     /**
      * Remove a movement.
@@ -491,6 +533,9 @@ data class OrderDraft(
     val phone: String = "",
     val notes: String = "",
     val eventId: Int? = null,
+    // Where the sale came from. Independent of the event, and it decides
+    // what the lines are priced at.
+    val channelId: Int? = null,
     val lines: List<DraftLine> = emptyList(),
     val extraCharge: Double = 0.0,
     val extraChargeReason: String = "",
@@ -518,6 +563,7 @@ data class OrderDraft(
         map["phone"] = JsonPrimitive(phone)
         map["notes"] = JsonPrimitive(notes)
         if (eventId != null) map["event_id"] = JsonPrimitive(eventId)
+        if (channelId != null) map["channel_id"] = JsonPrimitive(channelId)
         map["items"] = kotlinx.serialization.json.JsonArray(
             lines.map { line ->
                 JsonObject(
