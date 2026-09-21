@@ -40,12 +40,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.madeforu.sales.core.ApiResult
 import com.madeforu.sales.core.Dates
 import com.madeforu.sales.core.Money
-import com.madeforu.sales.data.ApiResult
+import com.madeforu.sales.core.isAuthFailure
 import com.madeforu.sales.data.Repository
 import com.madeforu.sales.data.WholesaleCustomer
-import com.madeforu.sales.data.isAuthFailure
 import com.madeforu.sales.ui.components.LoadingBox
 import com.madeforu.sales.ui.components.ProductThumb
 import com.madeforu.sales.ui.components.errorBannerItem

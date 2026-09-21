@@ -13,6 +13,11 @@
 #               silently moves it onto whatever follows)
 #   importlint  a symbol used in one package, declared in another, never
 #               imported -- "Unresolved reference"
+#   packagelint an in-project import naming the wrong package. importlint
+#               asks whether a symbol is imported at all, which is a
+#               different question: ApiResult was imported, from .data,
+#               and it lives in .core. The symbol was there, the package
+#               was wrong, every check passed and the build did not.
 #   symbollint  a capitalised name used but never imported -- the same
 #               failure as importlint, for framework symbols it cannot
 #               see (nine androidx imports missed in one edit, and an
@@ -28,7 +33,7 @@ src="$tools/../app/src/main/java"
 cd "$src" || { echo "cannot find $src" >&2; exit 2; }
 
 fail=0
-for check in annlint importlint symbollint arglint; do
+for check in annlint importlint packagelint symbollint arglint; do
   python3 "$tools/$check.py" || fail=1
 done
 python3 "$tools/orphanlint.py" | grep -v '@Preview' || true
