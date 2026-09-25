@@ -367,6 +367,7 @@ fun AppRoot(signedIn: Boolean) {
                     EventsScreen(
                         repository = repository,
                         onBack = { navController.popBackStack() },
+                        onOpenOrder = { id -> navController.navigate(Routes.orderDetail(id)) },
                         onSessionExpired = signOut,
                     )
                 }

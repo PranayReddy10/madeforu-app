@@ -4,6 +4,19 @@ package com.madeforu.sales.ui.screens
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Storefront
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.ui.text.style.TextOverflow
+import com.madeforu.sales.data.Order
+import com.madeforu.sales.data.OrderSummary
+import com.madeforu.sales.ui.components.IconTile
+import com.madeforu.sales.ui.components.KpiCard
+import com.madeforu.sales.ui.components.softCardColors
+import com.madeforu.sales.ui.theme.negativeColor
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -69,6 +82,7 @@ import kotlinx.coroutines.launch
 fun EventsScreen(
     repository: Repository,
     onBack: () -> Unit,
+    onOpenOrder: (Int) -> Unit,
     onSessionExpired: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
@@ -81,6 +95,30 @@ fun EventsScreen(
     var message by remember { mutableStateOf<String?>(null) }
     var showAdd by remember { mutableStateOf(false) }
     var creditingEvent by remember { mutableStateOf<Event?>(null) }
+
+    // The event whose orders are showing, and what has been fetched for
+    // each. Kept per event so closing and reopening one does not refetch,
+    // and a pull after a sale does (see openEvent).
+    var openEventId by remember { mutableStateOf<Int?>(null) }
+    var eventOrders by remember { mutableStateOf<Map<Int, EventOrders>>(emptyMap()) }
+    var loadingOrdersFor by remember { mutableStateOf<Int?>(null) }
+
+    fun openEvent(event: Event) {
+        if (openEventId == event.id) { openEventId = null; return }
+        openEventId = event.id
+        scope.launch {
+            loadingOrdersFor = event.id
+            // The same list the Orders tab uses, filtered to this event.
+            // 200 covers the busiest stall so far several times over.
+            when (val result = repository.orders(event = event.id.toString(), limit = 200)) {
+                is ApiResult.Success -> eventOrders = eventOrders +
+                    (event.id to EventOrders(result.value.orders, result.value.summary))
+                is ApiResult.Failure ->
+                    if (result.isAuthFailure()) onSessionExpired() else error = result.message
+            }
+            loadingOrdersFor = null
+        }
+    }
 
     fun load() {
         scope.launch {
@@ -155,56 +193,49 @@ fun EventsScreen(
                 }
             }
 
-            items(events.size) { index ->
-                val event = events[index]
-                Card(
-                    shape = RoundedCornerShape(18.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(
-                            alpha = if (event.isActive) 0.32f else 0.15f,
-                        ),
-                    ),
-                ) {
-                    Column(Modifier.fillMaxWidth().padding(16.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                event.name,
-                                style = MaterialTheme.typography.titleMedium,
-                                modifier = Modifier.weight(1f),
-                            )
-                            if (event.isActive) Pill("Open", positiveColor())
-                            else Pill("Closed", MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                        Spacer(Modifier.height(8.dp))
-                        DetailRow("Orders", event.orderCount.toString())
-                        DetailRow("Revenue", Money.full(event.revenue))
-                        if (event.isPaid) DetailRow("Stall fee", Money.full(event.entryCost))
-                        if (!event.startDate.isNullOrBlank()) {
-                            DetailRow(
-                                "Dates",
-                                Dates.pretty(event.startDate) +
-                                    (event.endDate?.takeIf { it.isNotBlank() }
-                                        ?.let { " – " + Dates.pretty(it) } ?: ""),
-                            )
-                        }
-                        Spacer(Modifier.height(8.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            TextButton(onClick = {
-                                busy = true
-                                scope.launch {
-                                    val result = repository.setEventActive(event.id, !event.isActive)
-                                    when (result) {
-                                        is ApiResult.Success -> events = result.value
-                                        is ApiResult.Failure -> error = result.message
-                                    }
-                                    busy = false
+            events.forEach { event ->
+                val open = openEventId == event.id
+                item(key = "event-${event.id}") {
+                    EventCard(
+                        event = event,
+                        open = open,
+                        busy = busy,
+                        onToggle = { openEvent(event) },
+                        onToggleActive = {
+                            busy = true
+                            scope.launch {
+                                when (val result = repository.setEventActive(event.id, !event.isActive)) {
+                                    is ApiResult.Success -> events = result.value
+                                    is ApiResult.Failure -> error = result.message
                                 }
-                            }, enabled = !busy) {
-                                Text(if (event.isActive) "Close event" else "Reopen")
+                                busy = false
                             }
-                            if (event.revenue > 0.5) {
-                                TextButton(onClick = { creditingEvent = event }) {
-                                    Text("Credit revenue")
+                        },
+                        onCredit = { creditingEvent = event },
+                    )
+                }
+                if (open) {
+                    val fetched = eventOrders[event.id]
+                    when {
+                        fetched == null && loadingOrdersFor == event.id -> item(key = "loading-${event.id}") {
+                            Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
+                                CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
+                            }
+                        }
+                        fetched == null -> Unit
+                        fetched.orders.isEmpty() -> item(key = "none-${event.id}") {
+                            Text(
+                                "No orders at this event yet.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp),
+                            )
+                        }
+                        else -> {
+                            item(key = "summary-${event.id}") { EventOrdersSummary(fetched.summary) }
+                            fetched.orders.forEach { order ->
+                                item(key = "order-${event.id}-${order.id}") {
+                                    OrderRow(order, onClick = { onOpenOrder(order.id) })
                                 }
                             }
                         }
@@ -371,5 +402,103 @@ private fun AddEventSheet(
             ) { Text("Create event") }
             Spacer(Modifier.height(24.dp))
         }
+    }
+}
+
+/** One event's orders, as fetched when its card is opened. */
+private data class EventOrders(val orders: List<Order>, val summary: OrderSummary)
+
+/**
+ * An event, laid out like every other list row: tile, name, one line of
+ * facts, and what it took on the right. Tapping it shows its orders.
+ */
+@Composable
+private fun EventCard(
+    event: Event,
+    open: Boolean,
+    busy: Boolean,
+    onToggle: () -> Unit,
+    onToggleActive: () -> Unit,
+    onCredit: () -> Unit,
+) {
+    Card(onClick = onToggle, shape = RoundedCornerShape(20.dp), colors = softCardColors()) {
+        Column(Modifier.fillMaxWidth().padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconTile(
+                    label = event.name,
+                    icon = Icons.Filled.Storefront,
+                    size = 42.dp,
+                )
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        event.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        "${event.orderCount} orders" +
+                            (event.startDate?.takeIf { it.isNotBlank() }?.let { " · " + Dates.pretty(it) } ?: ""),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        Money.short(event.revenue),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    if (event.isActive) Pill("Open", positiveColor())
+                    else Pill("Closed", MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+
+            if (event.isPaid || !event.endDate.isNullOrBlank()) {
+                Spacer(Modifier.height(8.dp))
+                if (event.isPaid) DetailRow("Stall fee", Money.full(event.entryCost))
+                if (!event.startDate.isNullOrBlank() && !event.endDate.isNullOrBlank()) {
+                    DetailRow("Dates", Dates.pretty(event.startDate) + " – " + Dates.pretty(event.endDate))
+                }
+            }
+
+            Spacer(Modifier.height(4.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                TextButton(onClick = onToggle) {
+                    Text(if (open) "Hide orders" else "Show orders")
+                    Icon(
+                        if (open) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+                Spacer(Modifier.weight(1f))
+                if (event.revenue > 0.5) {
+                    TextButton(onClick = onCredit) { Text("Credit") }
+                }
+                TextButton(onClick = onToggleActive, enabled = !busy) {
+                    Text(if (event.isActive) "Close" else "Reopen")
+                }
+            }
+        }
+    }
+}
+
+/** Billed, collected and still due across the open event's orders. */
+@Composable
+private fun EventOrdersSummary(summary: OrderSummary) {
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        KpiCard("Billed", Money.compact(summary.total), Modifier.weight(1f))
+        KpiCard("Collected", Money.compact(summary.paid), Modifier.weight(1f), accent = positiveColor())
+        KpiCard(
+            "Due",
+            Money.compact(summary.balance),
+            Modifier.weight(1f),
+            accent = if (summary.balance > 0.5) negativeColor() else null,
+        )
     }
 }
