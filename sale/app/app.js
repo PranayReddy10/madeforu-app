@@ -24,7 +24,7 @@ const DEFAULT_API = new URL('../api/', location.href).href;
  * browser, the server or the app is the stale one. It must match the
  * CACHE name in sw.js.
  */
-const BUILD = '2026-09-26.3';
+const BUILD = '2026-09-26.4';
 
 /** What this build of the app expects the server to be able to do. */
 const NEEDS_FEATURES = ['revenue_breakdown', 'expense_create', 'activity_feed', 'push', 'price_history',
@@ -2686,6 +2686,7 @@ async function paintVersions() {
  */
 const FIREBASE_SDK = 'https://www.gstatic.com/firebasejs/10.12.2/';
 let pushActive = false;
+let pushProblem = '';   // why this browser is not on real-time push, in words
 const ACTIVITY_EVERY = 30000;
 let activityTimer = null;
 
@@ -2728,7 +2729,8 @@ async function checkActivity() {
 
 function startActivity() {
   if (activityTimer) return;
-  setupPush();
+  // Settings may already be on screen; show how the attempt went.
+  setupPush().then(() => paintNotifySettings());
   checkActivity();
   activityTimer = setInterval(checkActivity, ACTIVITY_EVERY);
 }
@@ -2740,35 +2742,105 @@ function startActivity() {
  * token, which also tells the server the device is still in use.
  */
 async function setupPush() {
-  if (!store.token || !activity.on || !activity.supported || Notification.permission !== 'granted') return false;
+  pushProblem = '';
+  if (!store.token || !activity.on) return false;
+  if (!activity.supported) {
+    pushProblem = /iPhone|iPad/.test(navigator.userAgent)
+      ? 'On iPhone, notifications only work in the app opened from its Home Screen icon (iOS 16.4 or later).'
+      : 'This browser cannot receive notifications.';
+    return false;
+  }
+  if (Notification.permission !== 'granted') {
+    pushProblem = Notification.permission === 'denied'
+      ? 'Notifications are blocked for this site in the browser settings.'
+      : 'Notifications are not allowed on this device yet.';
+    return false;
+  }
+
+  let push;
   try {
-    const { push } = await api('push.php', 'config');
-    if (!push || !push.enabled || !push.web) return false;
-    const [{ initializeApp, getApps }, { getMessaging, getToken, isSupported }] = await Promise.all([
+    ({ push } = await api('push.php', 'config'));
+  } catch (e) {
+    pushProblem = 'Could not ask the server about push: ' + e.message;
+    return false;
+  }
+  if (!push || !push.enabled || !push.web) {
+    try {
+      const st = await api('push.php', 'status');
+      pushProblem = st.problem || 'The server has no web app settings for push yet.';
+    } catch (e) {
+      pushProblem = 'Push is not set up on the server yet (website → Notifications).';
+    }
+    return false;
+  }
+
+  let firebase;
+  try {
+    firebase = await Promise.all([
       import(FIREBASE_SDK + 'firebase-app.js'),
       import(FIREBASE_SDK + 'firebase-messaging.js'),
     ]);
-    if (!(await isSupported())) return false;
+  } catch (e) {
+    pushProblem = 'Could not load Firebase from www.gstatic.com. An ad blocker, a data saver or a '
+      + 'network filter may be stopping it. (' + (e.message || e) + ')';
+    return false;
+  }
+  const [{ initializeApp, getApps }, { getMessaging, getToken, isSupported }] = firebase;
+
+  let token;
+  try {
+    if (!(await isSupported())) {
+      pushProblem = 'This browser does not support push (private window, or a browser inside another app). '
+        + 'Open the site in Chrome, or from the Home Screen icon.';
+      return false;
+    }
     const { vapidKey, ...config } = push.web;
     const app = getApps()[0] || initializeApp(config);
-    const token = await getToken(getMessaging(app), {
+    token = await getToken(getMessaging(app), {
       vapidKey,
       serviceWorkerRegistration: await navigator.serviceWorker.ready,
     });
-    if (!token) return false;
+  } catch (e) {
+    pushProblem = firebaseHint(e);
+    console.warn('Firebase getToken failed', e);
+    return false;
+  }
+  if (!token) {
+    pushProblem = 'Firebase gave this browser no token. Try again in a minute.';
+    return false;
+  }
+
+  try {
     await api('push.php', 'register', {
       body: { token, platform: 'web', device: navigator.userAgent.slice(0, 120) },
     });
-    localStorage.setItem('mfu.pushToken', token);
-    pushActive = true;
-    // Push has taken over: move the polling cursor to "now" so switching
-    // back later does not replay everything pushed in between.
-    activity.cursor = '';
-    return true;
   } catch (e) {
-    console.warn('Push not available, checking every 30 seconds instead:', e.message || e);
+    pushProblem = 'The server did not accept this browser: ' + e.message;
     return false;
   }
+  localStorage.setItem('mfu.pushToken', token);
+  pushActive = true;
+  // Push has taken over: move the polling cursor to "now" so switching
+  // back later does not replay everything pushed in between.
+  activity.cursor = '';
+  return true;
+}
+
+/** Firebase's error, with what to change for the ones that have a known fix. */
+function firebaseHint(e) {
+  const code = (e && e.code) || '';
+  const msg = (e && e.message) || String(e);
+  const fix = {
+    'messaging/token-subscribe-failed': 'Check the Web Push key (vapidKey) on the website\'s Notifications page: it must be the key pair from this same Firebase project.',
+    'messaging/token-unsubscribe-failed': 'Try again; if it repeats, re-save the web app settings.',
+    'messaging/invalid-vapid-key': 'The Web Push key (vapidKey) is wrong. Copy it again from Cloud Messaging → Web Push certificates.',
+    'messaging/permission-blocked': 'Notifications are blocked for this site in the browser settings.',
+    'messaging/failed-service-worker-registration': 'The app\'s service worker is not running. Reload the page and try again.',
+    'installations/request-failed': 'Firebase rejected the web app settings. Paste the firebaseConfig block again on the website\'s Notifications page (apiKey, projectId and appId must all be from the same project).',
+    'installations/app-offline': 'This device could not reach Firebase. Check the connection.',
+  }[code];
+  return 'Firebase refused this browser' + (code ? ' (' + code + ')' : '') + '. '
+    + (fix || '') + (fix ? ' ' : '') + 'Details: ' + msg.slice(0, 200);
 }
 
 /** The Notifications card in Settings. */
@@ -2799,9 +2871,15 @@ function paintNotifySettings() {
       try { toast((await api('push.php', 'test', { body: {} })).message); } catch (e) { toast(e.message); }
     };
   } else if (activity.on && perm === 'granted') {
-    box.insertAdjacentHTML('beforeend', `<p class="muted" style="margin-top:8px">Real-time push is not set up on
-      the server yet, or this browser cannot receive it${/iPhone|iPad/.test(navigator.userAgent)
-        ? ' — on iPhone, open the app from the Home Screen icon' : ''}.</p>`);
+    box.insertAdjacentHTML('beforeend', `<p class="muted warn" style="margin-top:8px">Not real time yet:
+      ${esc(pushProblem || 'checking…')}</p>
+      <button class="btn small ghost" id="pushRetry" style="margin-top:8px">Try again</button>`);
+    document.getElementById('pushRetry').onclick = async (ev) => {
+      ev.target.disabled = true; ev.target.textContent = 'Trying…';
+      await setupPush();
+      paintNotifySettings();
+      if (pushActive) toast('Real-time notifications are on.');
+    };
   }
   document.getElementById('notifyToggle').onclick = async () => {
     activity.on = !activity.on;

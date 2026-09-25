@@ -38,7 +38,7 @@ class PushService : FirebaseMessagingService() {
     override fun onNewToken(token: String) {
         scope.launch {
             if (!ServiceLocator.prefs(applicationContext).token.first().isNullOrBlank()) {
-                PushSetup.register(applicationContext, token)
+                PushSetup.setup(applicationContext)
             }
         }
     }

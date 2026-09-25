@@ -81,6 +81,7 @@ fun SettingsScreen(
     var theme by remember { mutableStateOf("system") }
     var notificationsOn by remember { mutableStateOf(true) }
     var pushActive by remember { mutableStateOf(PushSetup.isActive(context)) }
+    var pushProblem by remember { mutableStateOf(PushSetup.problem(context)) }
     var settings by remember { mutableStateOf(Settings()) }
     var error by remember { mutableStateOf<String?>(null) }
     var message by remember { mutableStateOf<String?>(null) }
@@ -210,9 +211,10 @@ fun SettingsScreen(
                                 "Sales, payments, order changes, expenses and movements from the " +
                                     "website, the web app or another phone. " +
                                     if (pushActive) "Real time: each arrives the moment it is saved."
-                                    else "Real-time push is not set up on the server yet, so the " +
-                                        "app checks every 30 seconds while open and about every " +
-                                        "15 minutes when closed.",
+                                    else "Not real time yet" +
+                                        (if (pushProblem.isNotBlank()) ": $pushProblem" else ".") +
+                                        " Until then the app checks every 30 seconds while open " +
+                                        "and about every 15 minutes when closed.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -230,10 +232,11 @@ fun SettingsScreen(
                         TextButton(
                             onClick = {
                                 scope.launch {
-                                    pushActive = PushSetup.setup(context)
-                                    message = if (!pushActive) {
-                                        "Real-time push is not available yet: firebase-config.php is " +
-                                            "not on the server, or Google Play services is missing."
+                                    val problem = PushSetup.setup(context)
+                                    pushActive = problem == null
+                                    pushProblem = problem.orEmpty()
+                                    message = if (problem != null) {
+                                        "Not real time yet: $problem"
                                     } else {
                                         when (val r = repository.pushTest()) {
                                             is ApiResult.Success -> r.value
