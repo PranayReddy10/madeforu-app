@@ -46,6 +46,13 @@ class Repository(private val api: ApiClient, private val prefs: Prefs) {
 
     suspend fun clearSessionLocally() = prefs.clearSession()
 
+    // ── Activity (notifications) ───────────────────────────────────
+
+    /** What changed after `after` (a cursor activity.php handed out); "" asks for the cursor only. */
+    suspend fun activity(after: String): ApiResult<ActivityFeed> =
+        api.get("activity.php", "feed", mapOf("after" to after))
+            .map { api.decode<ActivityFeed>(it) }
+
     /**
      * Ping, keeping the answer. The version and feature list are what
      * Settings shows so "I updated and nothing changed" has a factual

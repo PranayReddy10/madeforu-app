@@ -539,7 +539,7 @@ data class ServerInfo(
 ) {
     companion object {
         /** What this build of the app needs the server to be able to do. */
-        val NEEDED = listOf("revenue_breakdown", "expense_create")
+        val NEEDED = listOf("revenue_breakdown", "expense_create", "activity_feed")
     }
 
     val missing: List<String> get() = NEEDED.filter { it !in features }
@@ -839,4 +839,26 @@ data class WholesaleDetail(
     val summary: List<WholesaleSummaryRow> = emptyList(),
     val totals: WholesaleTotals = WholesaleTotals(),
     val message: String? = null,
+)
+
+/** activity.php?action=feed — everything changed since the cursor. */
+@Serializable
+data class ActivityFeed(
+    val now: String = "",
+    val items: List<ActivityItem> = emptyList(),
+)
+
+/**
+ * One change: a sale, a payment, an order update, an expense or a
+ * movement. `mine` is true only when the server knows the caller made it.
+ */
+@Serializable
+data class ActivityItem(
+    val kind: String = "",
+    val id: Int = 0,
+    @SerialName("order_id") val orderId: Int? = null,
+    val at: String = "",
+    val mine: Boolean = false,
+    val title: String = "",
+    val body: String = "",
 )

@@ -19,7 +19,7 @@
  * Bump CACHE whenever the shell changes; keep it in step with BUILD in
  * app.js, which is what Settings prints.
  */
-const VERSION = '2026-09-25.2';
+const VERSION = '2026-09-26.1';
 const CACHE = 'madeforu-shell-' + VERSION;
 const SHELL = [
   './',
@@ -50,6 +50,23 @@ self.addEventListener('activate', (event) => {
 });
 
 // Settings' "Force a fresh copy" asks the worker to stand aside.
+// A tapped activity notification: bring the app forward on the screen it
+// names (an order, or home), opening it if it was closed.
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const hash = (event.notification.data && event.notification.data.hash) || '#home';
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+      const open = list.find((c) => c.url.startsWith(self.registration.scope));
+      if (open) {
+        open.postMessage({ go: hash });
+        return open.focus();
+      }
+      return self.clients.openWindow(self.registration.scope + hash);
+    })
+  );
+});
+
 self.addEventListener('message', (event) => {
   if (event.data === 'skip-waiting') self.skipWaiting();
 });

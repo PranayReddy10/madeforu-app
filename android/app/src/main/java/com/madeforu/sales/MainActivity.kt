@@ -1,5 +1,6 @@
 package com.madeforu.sales
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -10,24 +11,41 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import com.madeforu.sales.core.ServiceLocator
+import com.madeforu.sales.notify.Notifier
 import com.madeforu.sales.ui.AppRoot
 import com.madeforu.sales.ui.theme.MadeForUTheme
 import kotlinx.coroutines.flow.first
 
 class MainActivity : ComponentActivity() {
+
+    /** The order a tapped notification asked for, until AppRoot has opened it. */
+    private var pendingOrder by mutableStateOf<Int?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
-        setContent { MadeForURoot() }
+        pendingOrder = orderFrom(intent)
+        setContent { MadeForURoot(pendingOrder, onOrderOpened = { pendingOrder = null }) }
     }
+
+    // singleTop: a notification tapped while the app is open lands here.
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        orderFrom(intent)?.let { pendingOrder = it }
+    }
+
+    private fun orderFrom(intent: Intent?): Int? =
+        intent?.getIntExtra(Notifier.EXTRA_ORDER_ID, 0)?.takeIf { it > 0 }
 }
 
 @Composable
-private fun MadeForURoot() {
+private fun MadeForURoot(openOrderId: Int?, onOrderOpened: () -> Unit) {
     val context = LocalContext.current
     val prefs = ServiceLocator.prefs(context)
 
@@ -50,7 +68,11 @@ private fun MadeForURoot() {
             if (theme == null || startSignedIn == null) {
                 Box(Modifier.fillMaxSize())
             } else {
-                AppRoot(signedIn = startSignedIn == true)
+                AppRoot(
+                    signedIn = startSignedIn == true,
+                    openOrderId = openOrderId,
+                    onOrderOpened = onOrderOpened,
+                )
             }
         }
     }

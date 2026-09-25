@@ -3,6 +3,8 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- Android 13+ asks before an app may post notifications. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!-- WhatsApp is how every customer message goes out, so the app must be
          allowed to see whether it is installed before offering the button. -->
@@ -28,6 +30,7 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:launchMode="singleTop"
             android:label="@string/app_name"
             android:windowSoftInputMode="adjustResize"
             android:theme="@style/Theme.MadeForU">

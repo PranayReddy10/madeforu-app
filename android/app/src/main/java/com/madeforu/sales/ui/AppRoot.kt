@@ -1,10 +1,15 @@
 package com.madeforu.sales.ui
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -31,7 +36,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -40,14 +49,13 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.madeforu.sales.core.ServiceLocator
+import com.madeforu.sales.notify.ActivitySync
 import com.madeforu.sales.ui.screens.BillScreen
 import com.madeforu.sales.ui.screens.BillsScreen
 import com.madeforu.sales.ui.screens.CatalogScreen
 import com.madeforu.sales.ui.screens.EventsScreen
 import com.madeforu.sales.ui.screens.ExpenseDetailScreen
 import com.madeforu.sales.ui.screens.ExpensesScreen
-import com.madeforu.sales.ui.screens.WholesaleBuyerScreen
-import com.madeforu.sales.ui.screens.WholesaleScreen
 import com.madeforu.sales.ui.screens.HomeScreen
 import com.madeforu.sales.ui.screens.LoginScreen
 import com.madeforu.sales.ui.screens.MoneyScreen
@@ -57,6 +65,10 @@ import com.madeforu.sales.ui.screens.OrderDetailScreen
 import com.madeforu.sales.ui.screens.OrdersScreen
 import com.madeforu.sales.ui.screens.SettingsScreen
 import com.madeforu.sales.ui.screens.StatsScreen
+import com.madeforu.sales.ui.screens.WholesaleBuyerScreen
+import com.madeforu.sales.ui.screens.WholesaleScreen
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 private data class BottomDestination(
@@ -75,7 +87,11 @@ private val bottomDestinations = listOf(
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun AppRoot(signedIn: Boolean) {
+fun AppRoot(
+    signedIn: Boolean,
+    openOrderId: Int? = null,
+    onOrderOpened: () -> Unit = {},
+) {
     val navController = rememberNavController()
     val context = LocalContext.current
     val repository = remember { ServiceLocator.repository(context) }
@@ -299,7 +315,6 @@ fun AppRoot(signedIn: Boolean) {
                 composable(Routes.MONEY) {
                     MoneyScreen(
                         repository = repository,
-                        onOpenMovements = { navController.navigate(Routes.MOVEMENTS) },
                         onSessionExpired = signOut,
                     )
                 }
@@ -411,6 +426,52 @@ fun AppRoot(signedIn: Boolean) {
                         },
                     )
                 }
+            }
+        }
+    }
+
+    // ── Notifications ────────────────────────────────────────────
+    //
+    // A tapped notification about an order opens that order.
+    LaunchedEffect(openOrderId, currentRoute) {
+        val id = openOrderId ?: return@LaunchedEffect
+        if (currentRoute == null || currentRoute == Routes.LOGIN) return@LaunchedEffect
+        navController.navigate(Routes.orderDetail(id))
+        onOrderOpened()
+    }
+
+    // Android 13 and later ask before the app may notify. Asked once
+    // someone is signed in, which is when there is something to hear about.
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { }
+    LaunchedEffect(currentRoute == Routes.LOGIN) {
+        if (currentRoute == null || currentRoute == Routes.LOGIN) return@LaunchedEffect
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
+    // While the app is on screen it checks every 30 seconds itself, which
+    // is far sooner than the 15-minute background job. What it finds is
+    // shown here as a message, not a system notification: the person is
+    // already looking at the app. The shared cursor means the background
+    // job will not announce the same things again later.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    LaunchedEffect(lifecycleOwner) {
+        lifecycleOwner.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            while (true) {
+                val items = ActivitySync.check(context)
+                if (items.isNotEmpty() && ServiceLocator.prefs(context).notificationsOn.first()) {
+                    notify(
+                        if (items.size == 1) items[0].title + " · " + items[0].body.lineSequence().first()
+                        else "${items.size} updates · latest: " + items.last().title,
+                    )
+                }
+                delay(30_000)
             }
         }
     }
