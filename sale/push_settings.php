@@ -25,21 +25,39 @@ function push_parse_snippet(string $text): array {
     return $out;
 }
 
-/** The Android app's values out of a google-services.json, for this app's package. */
+/**
+ * The Android app's values out of a google-services.json: every client
+ * for this app's packages, so the release build (com.madeforu.sales) and
+ * a debug build (com.madeforu.sales.debug) each register with their own
+ * App ID. Firebase answers INVALID_SENDER to an App ID used by a package
+ * it was not made for.
+ */
 function push_parse_google_services(string $json): array {
     $g = json_decode($json, true);
     if (!is_array($g) || empty($g['client'])) throw new Exception('That is not a google-services.json file.');
+    $apps = [];
+    $apiKey = '';
     foreach ($g['client'] as $client) {
-        $pkg = $client['client_info']['android_client_info']['package_name'] ?? '';
-        if ($pkg !== 'com.madeforu.sales') continue;
-        return [
-            'apiKey'            => (string)($client['api_key'][0]['current_key'] ?? ''),
-            'appId'             => (string)($client['client_info']['mobilesdk_app_id'] ?? ''),
-            'projectId'         => (string)($g['project_info']['project_id'] ?? ''),
-            'messagingSenderId' => (string)($g['project_info']['project_number'] ?? ''),
-        ];
+        $pkg = (string)($client['client_info']['android_client_info']['package_name'] ?? '');
+        if (strpos($pkg, 'com.madeforu.sales') !== 0) continue;
+        $apps[$pkg] = (string)($client['client_info']['mobilesdk_app_id'] ?? '');
+        if ($apiKey === '') $apiKey = (string)($client['api_key'][0]['current_key'] ?? '');
     }
-    throw new Exception('That google-services.json has no app with package com.madeforu.sales. Add the Android app in Firebase with that package name.');
+    if (!$apps) {
+        throw new Exception('That google-services.json has no app with package com.madeforu.sales. Add the Android app in Firebase with that package name.');
+    }
+    return [
+        'apiKey'            => $apiKey,
+        'appId'             => $apps['com.madeforu.sales'] ?? reset($apps),
+        'apps'              => $apps,
+        'projectId'         => (string)($g['project_info']['project_id'] ?? ''),
+        'messagingSenderId' => (string)($g['project_info']['project_number'] ?? ''),
+    ];
+}
+
+/** The project number inside an App ID: 1:<number>:android:<hash>. */
+function push_app_number(string $appId): string {
+    return preg_match('/^1:(\d+):android:[0-9a-f]+$/i', $appId, $m) ? $m[1] : '';
 }
 
 function push_uploaded(string $field): ?string {
@@ -94,20 +112,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         } elseif ($action === 'android') {
             $raw = push_uploaded('google_services');
-            $android = $raw !== null ? push_parse_google_services($raw) : [
-                'apiKey'            => trim((string)($_POST['a_apiKey'] ?? '')),
-                'appId'             => trim((string)($_POST['a_appId'] ?? '')),
-                'projectId'         => trim((string)($_POST['a_projectId'] ?? '')),
-                'messagingSenderId' => trim((string)($_POST['a_messagingSenderId'] ?? '')),
-            ];
+            if ($raw !== null) {
+                $android = push_parse_google_services($raw);
+            } else {
+                $android = [
+                    'apiKey'            => trim((string)($_POST['a_apiKey'] ?? '')),
+                    'appId'             => trim((string)($_POST['a_appId'] ?? '')),
+                    'projectId'         => trim((string)($_POST['a_projectId'] ?? '')),
+                    'messagingSenderId' => trim((string)($_POST['a_messagingSenderId'] ?? '')),
+                ];
+                $android['apps'] = ['com.madeforu.sales' => $android['appId']];
+                $debugId = trim((string)($_POST['a_debugAppId'] ?? ''));
+                if ($debugId !== '') $android['apps']['com.madeforu.sales.debug'] = $debugId;
+            }
             // The project-wide values are the same as the web app's; fill
             // any left empty from there.
             $web = push_settings($conn)['web'];
             foreach (['apiKey', 'projectId', 'messagingSenderId'] as $k) {
                 if (($android[$k] ?? '') === '') $android[$k] = (string)($web[$k] ?? '');
             }
-            if (!preg_match('/^1:\d+:android:[0-9a-f]+$/i', $android['appId'])) {
-                throw new Exception('Android: the App ID looks like 1:1234567890:android:abc123…');
+            foreach ($android['apps'] as $pkg => $id) {
+                if (push_app_number($id) === '') {
+                    throw new Exception("Android: the App ID for $pkg looks like 1:1234567890:android:abc123…");
+                }
+            }
+            // The sender is the project number, and it is written into the
+            // App ID itself. Taking it from there is what keeps the two
+            // from disagreeing, which Firebase answers with INVALID_SENDER.
+            $android['messagingSenderId'] = push_app_number($android['appId']);
+            foreach ($android['apps'] as $pkg => $id) {
+                if (push_app_number($id) !== $android['messagingSenderId']) {
+                    throw new Exception("Android: the App ID for $pkg is from a different Firebase project than the others.");
+                }
+            }
+            $sa = push_settings($conn)['sa'];
+            if ($sa && $android['projectId'] !== '' && $android['projectId'] !== $sa['project_id']) {
+                throw new Exception('Android: these settings are for Firebase project "' . $android['projectId']
+                    . '" but the service-account key is for "' . $sa['project_id'] . '". Use one project for both.');
             }
             foreach (['apiKey', 'projectId', 'messagingSenderId'] as $need) {
                 if ($android[$need] === '') throw new Exception("Android: $need is missing. Save the web app first, or upload google-services.json.");
@@ -239,7 +280,7 @@ $flash = flash();
       <div class="step">2. Web app (PWA)<br>
         <?= $webReady ? '<span class="ok">✓ ' . e($web['projectId'] ?? '') . '</span>' : '<span class="no">Not set</span>' ?></div>
       <div class="step">3. Android app<br>
-        <?= $androidReady ? '<span class="ok">✓ ' . e($android['appId']) . '</span>' : '<span class="no">Not set</span>' ?></div>
+        <?= $androidReady ? '<span class="ok">✓ ' . e(implode(', ', array_keys($android['apps'] ?? ['com.madeforu.sales' => 1]))) . '</span>' : '<span class="no">Not set</span>' ?></div>
       <div class="step">4. Devices registered<br>
         <span class="<?= $devices ? 'ok' : 'no' ?>"><?= count($devices) ?></span></div>
     </div>
@@ -313,7 +354,8 @@ $flash = flash();
   <div class="card">
     <h2>3. Android app</h2>
     <p class="hint">Project settings → General → Your apps → add an <b>Android</b> app with package name
-      <code>com.madeforu.sales</code>. Upload the <b>google-services.json</b> it offers, or just type its App ID.
+      <code>com.madeforu.sales</code>. If you install builds from Android Studio, add a second Android app with
+      <code>com.madeforu.sales.debug</code> too. Then upload the <b>google-services.json</b> (it covers both), or type the App IDs.
       The app itself does not need the file; the settings reach it from here.</p>
     <form method="post" enctype="multipart/form-data">
       <?= csrf_field() ?><input type="hidden" name="action" value="android">
@@ -327,8 +369,8 @@ $flash = flash();
           <input id="a_apiKey" name="a_apiKey" value="<?= e($android['apiKey'] ?? '') ?>"></div>
         <div><label for="a_projectId">projectId <small>(empty = same as web)</small></label>
           <input id="a_projectId" name="a_projectId" value="<?= e($android['projectId'] ?? '') ?>"></div>
-        <div><label for="a_sender">messagingSenderId <small>(empty = same as web)</small></label>
-          <input id="a_sender" name="a_messagingSenderId" value="<?= e($android['messagingSenderId'] ?? '') ?>"></div>
+        <div><label for="a_debug">Debug build App ID <small>(com.madeforu.sales.debug, optional)</small></label>
+          <input id="a_debug" name="a_debugAppId" value="<?= e($android['apps']['com.madeforu.sales.debug'] ?? '') ?>" placeholder="1:1234567890:android:…"></div>
       </div>
       <button class="primary">Save Android app</button>
     </form>

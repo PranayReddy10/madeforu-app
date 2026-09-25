@@ -72,7 +72,9 @@ object PushSetup {
             // Firebase starts once per launch. New settings from the website
             // only take effect after the app is closed and opened again.
             val running = FirebaseApp.getInstance().options
-            return if (running.applicationId == c.appId && running.apiKey == c.apiKey) null
+            return if (running.applicationId == c.appId && running.apiKey == c.apiKey &&
+                running.gcmSenderId == c.messagingSenderId
+            ) null
             else "The Firebase settings changed on the website. Close the app fully (swipe it away) and open it again."
         }
         return try {
@@ -114,11 +116,22 @@ object PushSetup {
             is ApiResult.Success -> r.value
             is ApiResult.Failure -> return "Could not ask the server about push: " + r.message
         }
-        val android = config.android
-        if (!config.enabled || android == null || android.appId.isBlank()) {
+        val saved = config.android
+        if (!config.enabled || saved == null || saved.appId.isBlank()) {
             return (repository.pushStatus() as? ApiResult.Success)?.value
                 ?: "Push is not set up on the server yet (website → Notifications)."
         }
+        // Each package needs its own App ID: one made for com.madeforu.sales
+        // used by com.madeforu.sales.debug is refused with INVALID_SENDER.
+        val pkg = app.packageName
+        val appId = if (saved.apps.isEmpty()) saved.appId else saved.apps[pkg]
+            ?: return "Firebase has no Android app for this build's package ($pkg). In Firebase, add an " +
+                "Android app with package $pkg, then upload its google-services.json on the website's " +
+                "Notifications page (or type its App ID in Debug build App ID)."
+        // The sender is the project number inside the App ID; taking it
+        // from there means the two can never disagree.
+        val sender = Regex("^1:(\\d+):android:").find(appId)?.groupValues?.get(1) ?: saved.messagingSenderId
+        val android = saved.copy(appId = appId, messagingSenderId = sender)
         store(app).edit()
             .putString(API_KEY, android.apiKey)
             .putString(APP_ID, android.appId)
