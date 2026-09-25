@@ -24,7 +24,7 @@ const DEFAULT_API = new URL('../api/', location.href).href;
  * browser, the server or the app is the stale one. It must match the
  * CACHE name in sw.js.
  */
-const BUILD = '2026-09-26.1';
+const BUILD = '2026-09-26.2';
 
 /** What this build of the app expects the server to be able to do. */
 const NEEDS_FEATURES = ['revenue_breakdown', 'expense_create', 'activity_feed', 'price_history',
@@ -783,6 +783,10 @@ async function paintOrder(id) {
       ${o.balance > 0.5 ? '<button class="btn" id="pay">Take payment</button>' : ''}
       <button class="btn ghost" data-go="bill/${o.id}">${o.has_bill ? 'Bill' : 'Make bill'}</button>
     </div>
+    <div class="btnrow">
+      <button class="btn ghost" data-go="edit/${o.id}">Edit order</button>
+      <button class="btn ghost" id="deleteOrder" style="color:var(--negative)">Delete</button>
+    </div>
 
     <section><h2 class="section">Status</h2>
       <div class="chips">
@@ -851,6 +855,7 @@ async function paintOrder(id) {
 
   const pay = document.getElementById('pay');
   if (pay) pay.onclick = () => takePayment(o);
+  document.getElementById('deleteOrder').onclick = () => deleteOrder(o);
   const copyTrack = document.getElementById('copyTrack');
   if (copyTrack) copyTrack.onclick = async () => {
     try { await navigator.clipboard.writeText(o.track_url); toast('Tracking link copied.'); }
@@ -929,12 +934,27 @@ route('new', async () => {
   };
   draft.keep = false;
 
-  setHtml(`<div class="screen"><div class="head"><h1 class="grow">New sale</h1></div>
-    <div id="body">${spinner()}</div></div>`);
+  // The same form edits an order: draft.editId is set by route('edit').
+  const editing = draft.editId || null;
+  setHtml(`<div class="screen"><div class="head">
+    ${editing ? `<button class="back" data-go="order/${editing}">‹</button>` : ''}
+    <h1 class="grow">${editing ? 'Edit ' + esc(draft.orderNo || 'order') : 'New sale'}</h1></div>
+    <div id="body">${spinner()}</div></div>`, { tabs: !editing });
 
   const boot = await api('catalog.php', 'bootstrap');
-  const products = boot.products || [];
+  const products = (boot.products || []).slice();
   const events = boot.events || [];
+
+  // An edited order keeps the prices it was sold at (the server does the
+  // same), so the form shows those rather than today's. A line whose
+  // product has since been hidden is kept on the list, or saving would
+  // silently drop it from the order.
+  if (editing) {
+    Object.keys(draft.lines).forEach((name) => {
+      if (!products.some((p) => p.name === name)) products.push({ name, price: draft.sold[name] || 0 });
+    });
+  }
+  const priceOf = (p) => (editing && draft.sold[p.name] != null ? draft.sold[p.name] : p.price);
 
   // Every section folds, products included. A sale is four decisions and
   // only one of them is on screen at a time, so nobody scrolls past the
@@ -952,7 +972,8 @@ route('new', async () => {
     <div style="margin-top:10px" id="adjustFold"></div>
     <div style="margin-top:10px" id="paidFold"></div>
     <div id="summary"></div>
-    <button class="btn" id="save" style="margin-top:14px">Save sale</button>`;
+    <button class="btn" id="save" style="margin-top:14px">${editing ? 'Save changes' : 'Save sale'}</button>
+    ${editing ? '<p class="muted" style="margin-top:8px">Payments are changed on the order itself. Lines already on the order keep the price they were sold at.</p>' : ''}`;
 
   if (events.length) {
     chipRow('eventChips', [['', 'Direct / walk-up']].concat(events.map((e) => [String(e.id), e.name])),
@@ -982,7 +1003,7 @@ route('new', async () => {
     const units = rows.reduce((n, [, q]) => n + q, 0);
     const subtotal = rows.reduce((sum, [name, qty]) => {
       const p = products.find((x) => x.name === name);
-      return sum + (p ? p.price * qty : 0);
+      return sum + (p ? priceOf(p) * qty : 0);
     }, 0);
 
     // Mirrors the server: an extra charge is never negative (that would
@@ -1065,6 +1086,7 @@ route('new', async () => {
   }
 
   function paintPaid() {
+    if (editing) { paidFold.innerHTML = ''; return; }
     // Re-rendering replaces the input, which would drop the caret in the
     // middle of a number. If someone is typing in it, leave it alone —
     // the subtitle is stale for a moment, the keyboard is not.
@@ -1100,7 +1122,7 @@ route('new', async () => {
       return `<div class="row">
         ${p.image_url ? `<img class="tile" src="${esc(p.image_url)}" alt="" style="object-fit:cover">` : tile(p.name)}
         <div class="grow"><div class="t">${esc(p.name)}</div>
-          <div class="s">${money(p.price)}${qty ? ' · ' + money(p.price * qty) : ''}</div></div>
+          <div class="s">${money(priceOf(p))}${qty ? ' · ' + money(priceOf(p) * qty) : ''}</div></div>
         <div style="display:flex;align-items:center;gap:8px">
           ${qty ? `<button class="btn small ghost" data-minus="${esc(p.name)}">−</button>
                    <b style="min-width:18px;text-align:center">${qty}</b>` : ''}
@@ -1129,7 +1151,7 @@ route('new', async () => {
       <section><h2 class="section">This bill</h2><div class="card">
         ${rows.map(([n, q]) => {
           const p = products.find((x) => x.name === n);
-          return detailRow(`${esc(n)} × ${q}`, money(p ? p.price * q : 0));
+          return detailRow(`${esc(n)} × ${q}`, money(p ? priceOf(p) * q : 0));
         }).join('')}
         ${(extra > 0 || discount > 0) ? detailRow('Subtotal', money(subtotal)) : ''}
         ${extra > 0 ? detailRow('Extra charge' + (draft.extraReason ? ' — ' + esc(draft.extraReason) : ''),
@@ -1164,6 +1186,38 @@ route('new', async () => {
     const items = Object.entries(draft.lines).map(([item, quantity]) => ({ item, quantity }));
     if (!items.length) { toast('Add at least one product.'); return; }
     button.disabled = true; button.textContent = 'Saving…';
+    if (editing) {
+      try {
+        const r = await api('orders.php', 'update', {
+          body: {
+            id: Number(editing),
+            items,
+            name: draft.name,
+            phone: draft.phone,
+            notes: draft.notes,
+            event_id: draft.eventId || null,
+            discount: Number(draft.discount) || 0,
+            discount_reason: draft.discountReason,
+            extra_charge: Number(draft.extra) || 0,
+            extra_charge_reason: draft.extraReason,
+            // update rewrites these from what it is sent, so send back
+            // what the order already has or an edit would reset them.
+            is_ready: !!draft.isReady,
+            is_delivered: !!draft.isDelivered,
+            is_online: !!draft.awb,
+            awb: draft.awb || '',
+            dispatch_date: draft.dispatchDate || '',
+          },
+        });
+        draft = null;
+        toast(r.message || 'Order updated.');
+        go('order/' + editing);
+      } catch (e) {
+        toast(e.message);
+        button.disabled = false; button.textContent = 'Save changes';
+      }
+      return;
+    }
     try {
       const r = await api('orders.php', 'create', {
         body: {
@@ -1189,6 +1243,38 @@ route('new', async () => {
     }
   };
 });
+
+/* ── Edit / delete an order ───────────────────────────────────── */
+
+route('edit', async (id) => {
+  const { order: o } = await api('orders.php', 'get', { params: { id } });
+  const lines = {};
+  const sold = {};
+  (o.items || []).forEach((i) => {
+    lines[i.item] = (lines[i.item] || 0) + Number(i.quantity);
+    sold[i.item] = Number(i.unit_price);
+  });
+  draft = {
+    editId: String(o.id), orderNo: o.order_no, lines, sold,
+    name: o.is_walk_in ? '' : o.name, phone: o.phone || '', notes: o.notes || '',
+    eventId: o.event_id ? String(o.event_id) : '',
+    discount: o.discount > 0.001 ? String(o.discount) : '', discountReason: o.discount_reason || '',
+    extra: o.extra_charge > 0.001 ? String(o.extra_charge) : '', extraReason: o.extra_charge_reason || '',
+    isReady: o.is_ready, isDelivered: o.is_delivered, awb: o.awb || '', dispatchDate: o.dispatch_date || '',
+    paid: '', mode: 'cash', keep: true,
+  };
+  await routes.new();
+});
+
+async function deleteOrder(o) {
+  if (o.paid_amount > 0.5 && !confirm(`${money(o.paid_amount)} has been collected on this order. Deleting it removes those payments too.`)) return;
+  if (!confirm(`Delete order ${o.order_no}${o.is_walk_in ? '' : ' for ' + o.name}? This cannot be undone.`)) return;
+  try {
+    const r = await api('orders.php', 'delete', { body: { id: o.id } });
+    toast(r.message || 'Order deleted.');
+    go('orders');
+  } catch (e) { toast(e.message); }
+}
 
 /* ── Bill ─────────────────────────────────────────────────────── */
 
