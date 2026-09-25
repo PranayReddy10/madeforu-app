@@ -150,8 +150,18 @@ function push_state_get(mysqli $conn, string $key): ?string {
     return $row ? (string)$row['sval'] : null;
 }
 
+/**
+ * Replace the row outright, rather than INSERT … ON DUPLICATE KEY. That
+ * relies on skey being the primary key; on a copy of the table that lost
+ * it in an import, it quietly adds a second row and the old value keeps
+ * being read back, so a saved setting looks as if it never changed.
+ */
 function push_state_set(mysqli $conn, string $key, string $value): void {
-    $s = $conn->prepare('INSERT INTO app_settings (skey, sval) VALUES (?, ?) ON DUPLICATE KEY UPDATE sval = VALUES(sval)');
+    $s = $conn->prepare('DELETE FROM app_settings WHERE skey = ?');
+    $s->bind_param('s', $key);
+    $s->execute();
+    $s->close();
+    $s = $conn->prepare('INSERT INTO app_settings (skey, sval) VALUES (?, ?)');
     $s->bind_param('ss', $key, $value);
     $s->execute();
     $s->close();
