@@ -24,6 +24,10 @@
 #               OutlinedTextField import deleted while still in use)
 #   arglint     a named argument that the function does not have, or a
 #               required parameter left out
+#   nulllint    a literal null passed where the parameter is not
+#               nullable -- ProductThumb(item, null), where imageUrl is
+#               a plain String and the wrapped IconTile defaults it to
+#               "" instead, so the null read as reasonable
 #   orphanlint  a composable defined and never called anywhere
 #
 # Run from the android/ directory before pushing. Not a substitute for
@@ -33,7 +37,7 @@ src="$tools/../app/src/main/java"
 cd "$src" || { echo "cannot find $src" >&2; exit 2; }
 
 fail=0
-for check in annlint importlint packagelint symbollint arglint; do
+for check in annlint importlint packagelint symbollint arglint nulllint; do
   python3 "$tools/$check.py" || fail=1
 done
 python3 "$tools/orphanlint.py" | grep -v '@Preview' || true

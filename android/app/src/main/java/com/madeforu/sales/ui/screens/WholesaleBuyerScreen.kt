@@ -55,8 +55,8 @@ import com.madeforu.sales.data.Repository
 import com.madeforu.sales.data.WholesaleDetail
 import com.madeforu.sales.data.WholesaleLine
 import com.madeforu.sales.ui.components.DetailRow
+import com.madeforu.sales.ui.components.IconTile
 import com.madeforu.sales.ui.components.LoadingBox
-import com.madeforu.sales.ui.components.ProductThumb
 import com.madeforu.sales.ui.components.SectionHeader
 import com.madeforu.sales.ui.components.ThinDivider
 import com.madeforu.sales.ui.components.errorBannerItem
@@ -215,7 +215,7 @@ fun WholesaleBuyerScreen(
                                     Spacer(Modifier.height(10.dp))
                                 }
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    ProductThumb(row.item, null)
+                                    IconTile(label = row.item)
                                     Spacer(Modifier.width(12.dp))
                                     Column(Modifier.weight(1f)) {
                                         Text(
