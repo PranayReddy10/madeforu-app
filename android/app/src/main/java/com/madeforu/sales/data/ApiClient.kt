@@ -109,7 +109,7 @@ class ApiClient(private val prefs: Prefs) {
     private fun execute(request: Request): ApiResult<JsonObject> = try {
         http.newCall(request).execute().use { response ->
             val raw = response.body?.string().orEmpty()
-            parseEnvelope(raw, response.code)
+            parseEnvelope(raw, response.code, request.url.toString())
         }
     } catch (e: UnknownHostException) {
         ApiResult.Failure(ApiResult.CODE_NETWORK, "No internet connection.")
@@ -119,23 +119,53 @@ class ApiClient(private val prefs: Prefs) {
         ApiResult.Failure(ApiResult.CODE_NETWORK, "Could not reach the server. Check the connection.")
     }
 
-    private fun parseEnvelope(raw: String, code: Int): ApiResult<JsonObject> {
+    /**
+     * Turn a reply into the payload, or into a sentence worth reading.
+     *
+     * The message now names the URL that was actually called. "Check the
+     * server address in Settings" on its own sent somebody to look at an
+     * address that read perfectly correctly, because the fault was in
+     * what the app appended to it, not in what they had typed. The URL
+     * is the one thing they cannot see and the one thing that settles it.
+     */
+    private fun parseEnvelope(raw: String, code: Int, url: String): ApiResult<JsonObject> {
         if (raw.isBlank()) {
-            return ApiResult.Failure("empty", "The server sent an empty reply (HTTP $code).")
+            return ApiResult.Failure(
+                "empty",
+                "$url returned HTTP $code with an empty reply. That is usually a PHP " +
+                    "fatal error with error display switched off — a file that is missing " +
+                    "or half-uploaded. Re-upload the api/ folder.",
+            )
         }
         val element: JsonElement = try {
             json.parseToJsonElement(raw)
         } catch (e: Exception) {
             // Shared hosting loves to prepend a warning or an HTML error
             // page. Say so plainly instead of "Unexpected character".
+            val body = raw.trim()
             return ApiResult.Failure(
                 "bad_response",
-                if (raw.trimStart().startsWith("<")) "The server returned a web page instead of data. Check the server address in Settings."
-                else "The server sent a reply the app could not read."
+                when {
+                    // 404 is worth its own sentence: it is not the address
+                    // being wrong, it is one file not being on the server,
+                    // which is what a part-finished upload looks like.
+                    body.startsWith("<") && code == 404 ->
+                        "$url is not on the server (HTTP 404). Upload the api/ folder again — " +
+                            "that file is missing from it."
+                    body.startsWith("<") ->
+                        "$url returned a web page instead of data (HTTP $code). " +
+                            "Either the address is wrong or that file is not on the server."
+                    else ->
+                        "$url replied with something that is not data (HTTP $code). " +
+                            "It begins: " + body.lineSequence().first().take(160)
+                },
             )
         }
         val obj = element as? JsonObject
-            ?: return ApiResult.Failure("bad_response", "The server sent a reply the app could not read.")
+            ?: return ApiResult.Failure(
+                "bad_response",
+                "$url replied with data the app could not use (HTTP $code).",
+            )
 
         val ok = (obj["ok"] as? JsonPrimitive)?.content == "true"
         if (ok) return ApiResult.Success(obj)
@@ -143,7 +173,8 @@ class ApiClient(private val prefs: Prefs) {
         val error = obj["error"]?.jsonObject
         return ApiResult.Failure(
             error?.get("code")?.jsonPrimitive?.content ?: "failed",
-            error?.get("message")?.jsonPrimitive?.content ?: "Something went wrong (HTTP $code).",
+            error?.get("message")?.jsonPrimitive?.content
+                ?: "Something went wrong (HTTP $code) at $url.",
         )
     }
 
