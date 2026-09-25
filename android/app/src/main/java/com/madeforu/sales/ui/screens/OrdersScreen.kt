@@ -2,6 +2,7 @@
 
 package com.madeforu.sales.ui.screens
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -50,6 +51,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.madeforu.sales.core.ApiResult
 import com.madeforu.sales.core.Dates
 import com.madeforu.sales.core.Money
@@ -61,6 +63,7 @@ import com.madeforu.sales.ui.components.ChipRow
 import com.madeforu.sales.ui.components.EmptyState
 import com.madeforu.sales.ui.components.ErrorBanner
 import com.madeforu.sales.ui.components.IconTile
+import com.madeforu.sales.ui.components.ListSegment
 import com.madeforu.sales.ui.components.softCardColors
 import com.madeforu.sales.ui.components.PayStatusPill
 import com.madeforu.sales.ui.components.Pill
@@ -160,7 +163,7 @@ fun OrdersScreen(
                     }
                 },
                 singleLine = true,
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(14.dp),
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
             )
 
@@ -208,10 +211,11 @@ fun OrdersScreen(
                 else -> LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 96.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     items(orders.size) { index ->
-                        OrderRow(orders[index], onClick = { onOpenOrder(orders[index].id) })
+                        ListSegment(index, orders.size) {
+                            OrderRow(orders[index], onClick = { onOpenOrder(orders[index].id) })
+                        }
                     }
                     if (hasMore) {
                         item {
@@ -243,11 +247,12 @@ fun OrdersScreen(
 private fun SummaryStrip(summary: OrderSummary) {
     Surface(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-        shape = RoundedCornerShape(14.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.surface,
+        shadowElevation = 1.dp,
     ) {
         Row(
-            Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             StripStat("Orders", summary.count.toString())
@@ -272,115 +277,114 @@ private fun StripStat(label: String, value: String, tint: androidx.compose.ui.gr
         )
         Text(
             value,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold,
+            style = MaterialTheme.typography.titleMedium.copy(fontSize = 17.sp),
+            fontWeight = FontWeight.Bold,
             color = tint ?: MaterialTheme.colorScheme.onSurface,
         )
     }
 }
 
+/**
+ * An order as a row of the list card, laid out as the web app's orderRow:
+ * a tile carrying the making state, who it is for, what it is, and the
+ * total with what is still due under it.
+ *
+ * It draws no card of its own. The list around it does (ListSegment),
+ * so a screen of orders is one surface rather than a stack of boxes.
+ */
 @Composable
 internal fun OrderRow(order: Order, onClick: () -> Unit) {
-    Card(
-        onClick = onClick,
-        shape = RoundedCornerShape(18.dp),
-        colors = softCardColors(),
+    val state = when {
+        order.isDelivered -> "Delivered"
+        order.isReady -> "Ready"
+        else -> "To make"
+    }
+    val (payLabel, payTint) = when (order.payStatus) {
+        "paid" -> "Paid" to positiveColor()
+        "partial" -> "Part paid" to warnColor()
+        else -> "Unpaid" to negativeColor()
+    }
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .padding(vertical = 11.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(Modifier.fillMaxWidth().padding(14.dp)) {
+        // The tile carries the state, so a glance down the list reads as
+        // work-to-do rather than a wall of text.
+        IconTile(
+            label = if (order.isWalkIn) "Walk in" else order.name,
+            icon = when {
+                order.isDelivered -> Icons.Filled.CheckCircle
+                order.isReady -> Icons.Filled.Inventory2
+                else -> Icons.Filled.Schedule
+            },
+            tint = when {
+                order.isDelivered -> positiveColor()
+                order.isReady -> MaterialTheme.colorScheme.primary
+                else -> warnColor()
+            },
+            size = 42.dp,
+        )
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                // The tile carries the state, so a glance down the list
-                // reads as work-to-do rather than a wall of text.
-                IconTile(
-                    label = if (order.isWalkIn) "Walk in" else order.name,
-                    icon = when {
-                        order.isDelivered -> Icons.Filled.CheckCircle
-                        order.isReady -> Icons.Filled.Inventory2
-                        else -> Icons.Filled.Schedule
-                    },
-                    tint = when {
-                        order.isDelivered -> positiveColor()
-                        order.isReady -> MaterialTheme.colorScheme.primary
-                        else -> warnColor()
-                    },
-                )
-                Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        if (order.isWalkIn) {
-                            Icon(
-                                Icons.Filled.PersonOff,
-                                contentDescription = "Walk-in sale",
-                                modifier = Modifier.size(15.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            Spacer(Modifier.width(5.dp))
-                        }
-                        Text(
-                            if (order.isWalkIn) "Walk-in" else order.name,
-                            style = MaterialTheme.typography.titleMedium,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                    Text(
-                        order.orderNo + " · " + Dates.relativeDay(order.createdAt),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                if (order.isWalkIn) {
+                    Icon(
+                        Icons.Filled.PersonOff,
+                        contentDescription = "Walk-in sale",
+                        modifier = Modifier.size(14.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                    Spacer(Modifier.width(4.dp))
                 }
-                Column(horizontalAlignment = Alignment.End) {
-                    Text(
-                        Money.short(order.total),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
+                Text(
+                    if (order.isWalkIn) "Walk-in" else order.name,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (order.awb != null) {
+                    Spacer(Modifier.width(5.dp))
+                    Icon(
+                        Icons.Filled.LocalShipping,
+                        contentDescription = "Shipped",
+                        modifier = Modifier.size(14.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    if (order.balance > 0.5) {
-                        Text(
-                            Money.short(order.balance) + " due",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = negativeColor(),
-                        )
-                    }
                 }
             }
-
+            Text(
+                order.orderNo + " · " + Dates.relativeDay(order.createdAt) + " · " + state +
+                    (order.eventName?.let { " · $it" } ?: ""),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
             if (!order.itemsText.isNullOrBlank()) {
-                Spacer(Modifier.height(6.dp))
                 Text(
                     order.itemsText,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
+                    maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-
-            Spacer(Modifier.height(8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                PayStatusPill(order.payStatus)
-                when {
-                    order.isDelivered -> Pill("Delivered", positiveColor())
-                    order.isReady -> Pill("Ready", MaterialTheme.colorScheme.primary)
-                    else -> Pill("To make", warnColor())
-                }
-                if (order.awb != null) {
-                    Icon(
-                        Icons.Filled.LocalShipping,
-                        contentDescription = "Shipped",
-                        modifier = Modifier.size(15.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                order.eventName?.let {
-                    Text(
-                        it,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-            }
+        }
+        Spacer(Modifier.width(10.dp))
+        Column(horizontalAlignment = Alignment.End) {
+            Text(
+                Money.short(order.total),
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                if (order.balance > 0.5) Money.short(order.balance) + " due" else payLabel,
+                style = MaterialTheme.typography.bodySmall,
+                color = payTint,
+            )
         }
     }
 }

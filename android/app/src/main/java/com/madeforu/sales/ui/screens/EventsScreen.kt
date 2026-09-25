@@ -13,8 +13,11 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.ui.text.style.TextOverflow
 import com.madeforu.sales.data.Order
 import com.madeforu.sales.data.OrderSummary
+import com.madeforu.sales.ui.components.BackButton
 import com.madeforu.sales.ui.components.IconTile
 import com.madeforu.sales.ui.components.KpiCard
+import com.madeforu.sales.ui.components.ListCard
+import com.madeforu.sales.ui.components.ThinDivider
 import com.madeforu.sales.ui.components.softCardColors
 import com.madeforu.sales.ui.theme.negativeColor
 import androidx.compose.foundation.layout.PaddingValues
@@ -30,13 +33,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
@@ -146,9 +147,7 @@ fun EventsScreen(
                 ),
                 title = { Text("Events & stalls") },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
-                    }
+                    BackButton(onClick = onBack)
                 },
             )
         },
@@ -233,9 +232,12 @@ fun EventsScreen(
                         }
                         else -> {
                             item(key = "summary-${event.id}") { EventOrdersSummary(fetched.summary) }
-                            fetched.orders.forEach { order ->
-                                item(key = "order-${event.id}-${order.id}") {
-                                    OrderRow(order, onClick = { onOpenOrder(order.id) })
+                            item(key = "orders-${event.id}") {
+                                ListCard {
+                                    fetched.orders.forEachIndexed { index, order ->
+                                        OrderRow(order, onClick = { onOpenOrder(order.id) })
+                                        if (index < fetched.orders.lastIndex) ThinDivider()
+                                    }
                                 }
                             }
                         }

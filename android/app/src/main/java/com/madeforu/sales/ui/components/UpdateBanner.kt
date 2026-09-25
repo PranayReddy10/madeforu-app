@@ -77,7 +77,7 @@ fun UpdateBanner(repository: Repository, modifier: Modifier = Modifier) {
     AnimatedVisibility(visible = update != null && !dismissed, modifier = modifier) {
         if (update != null) {
             Card(
-                shape = RoundedCornerShape(18.dp),
+                shape = RoundedCornerShape(20.dp),
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.tertiaryContainer,
                 ),

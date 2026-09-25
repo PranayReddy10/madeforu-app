@@ -254,7 +254,6 @@ fun ProfitAndDistribution(
             }
             StatLine("Revenue (all sales)", Money.full(b.revenue), bold = true)
             StatLine("Expenses", Money.full(b.expenses))
-            ThinDivider(Modifier.padding(vertical = 8.dp))
             StatLine(
                 "Business profit",
                 Money.full(b.profit),
@@ -388,8 +387,7 @@ fun RevenueWorking(data: FinanceOverview) {
                     StatLine("Items, before adjustments", Money.full(r.subtotal))
                     StatLine("Less discounts given", "-" + Money.full(r.discount))
                     StatLine("Plus delivery and extras", "+" + Money.full(r.extra))
-                    ThinDivider(Modifier.padding(vertical = 8.dp))
-                    StatLine("Revenue (all sales)", Money.full(r.total), bold = true)
+                            StatLine("Revenue (all sales)", Money.full(r.total), bold = true)
 
                     Spacer(Modifier.height(16.dp))
                     Text(
@@ -447,7 +445,7 @@ private fun WorkingLine(label: String, caption: String, value: String) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
-            Text(label, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+            Text(label, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
             Text(
                 caption,
                 style = MaterialTheme.typography.bodySmall,
@@ -505,7 +503,7 @@ fun PartnerBoxes(detail: PartnerDetail) {
                     // whether this partner has to do anything, so the
                     // four sections below can be read at leisure.
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconTile(label = p.name, size = 44.dp)
+                        IconTile(label = p.name, size = 42.dp)
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
                             Text(p.name, style = MaterialTheme.typography.titleMedium)
@@ -522,7 +520,7 @@ fun PartnerBoxes(detail: PartnerDetail) {
                         if (p.position != "even") {
                             Text(
                                 Money.full(kotlin.math.abs(p.investmentGap)),
-                                style = MaterialTheme.typography.titleLarge,
+                                style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
                                 color = if (p.investmentGap >= 0) positiveColor() else negativeColor(),
                             )
@@ -581,7 +579,6 @@ fun PartnerBoxes(detail: PartnerDetail) {
                     if (kotlin.math.abs(p.settledAdjust) > 0.005) {
                         StatLine("Plus settle-up so far", signedMoney(p.settledAdjust))
                     }
-                    ThinDivider(Modifier.padding(vertical = 6.dp))
                     StatLine("Net invested", Money.full(p.investedNet), bold = true)
                     StatLine("An equal share would be", Money.full(p.fairInvested))
                     StatLine(
@@ -812,23 +809,34 @@ private fun MiniStat(
     }
 }
 
+/**
+ * The web app's detail row: a muted 12sp label, the figure bold on the
+ * right, a hairline under it. A `bold` line is a total, so its label is
+ * a title too, the way the web app sets its sums.
+ */
 @Composable
 private fun StatLine(label: String, value: String, tint: Color? = null, bold: Boolean = false) {
-    Row(
-        Modifier.fillMaxWidth().padding(vertical = 4.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        Text(
-            label,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Text(
-            value,
-            style = if (bold) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodyLarge,
-            fontWeight = if (bold) FontWeight.Bold else FontWeight.Medium,
-            color = tint ?: MaterialTheme.colorScheme.onSurface,
-        )
+    Column(Modifier.fillMaxWidth()) {
+        Row(
+            Modifier.fillMaxWidth().padding(vertical = 9.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                label,
+                style = if (bold) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodySmall,
+                color = if (bold) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f),
+            )
+            Spacer(Modifier.width(12.dp))
+            Text(
+                value,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Bold,
+                color = tint ?: MaterialTheme.colorScheme.onSurface,
+            )
+        }
+        ThinDivider()
     }
 }
 

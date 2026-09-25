@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Delete
@@ -53,6 +52,7 @@ import com.madeforu.sales.core.isAuthFailure
 import com.madeforu.sales.data.Expense
 import com.madeforu.sales.data.Partner
 import com.madeforu.sales.data.Repository
+import com.madeforu.sales.ui.components.BackButton
 import com.madeforu.sales.ui.components.DetailRow
 import com.madeforu.sales.ui.components.ErrorBanner
 import com.madeforu.sales.ui.components.errorBannerItem
@@ -123,9 +123,7 @@ fun ExpenseDetailScreen(
                 ),
                 title = { Text("Expense") },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
-                    }
+                    BackButton(onClick = onBack)
                 },
                 actions = {
                     IconButton(onClick = { editing = true }, enabled = expense != null) {
@@ -156,7 +154,7 @@ fun ExpenseDetailScreen(
 
             item {
                 Card(
-                    shape = RoundedCornerShape(22.dp),
+                    shape = RoundedCornerShape(20.dp),
                     colors = CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.errorContainer,
                     ),
@@ -186,7 +184,7 @@ fun ExpenseDetailScreen(
             item { SectionHeader("Details") }
             item {
                 Card(
-                    shape = RoundedCornerShape(18.dp),
+                    shape = RoundedCornerShape(20.dp),
                     colors = softCardColors(),
                 ) {
                     Column(Modifier.padding(16.dp)) {
@@ -216,7 +214,7 @@ fun ExpenseDetailScreen(
             }
             item {
                 Card(
-                    shape = RoundedCornerShape(18.dp),
+                    shape = RoundedCornerShape(20.dp),
                     colors = softCardColors(),
                 ) {
                     Column(Modifier.padding(16.dp)) {
@@ -370,7 +368,7 @@ private fun ExpenseBreakdown(expense: Expense) {
     val matches = kotlin.math.abs(linesTotal - expense.amount) < 0.01
 
     Card(
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(20.dp),
         colors = softCardColors(),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {

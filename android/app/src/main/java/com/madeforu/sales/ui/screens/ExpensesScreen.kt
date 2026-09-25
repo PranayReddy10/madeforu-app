@@ -2,6 +2,7 @@
 
 package com.madeforu.sales.ui.screens
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -17,13 +18,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
@@ -53,6 +52,8 @@ import com.madeforu.sales.data.Expense
 import com.madeforu.sales.data.ExpenseSummary
 import com.madeforu.sales.data.Partner
 import com.madeforu.sales.data.Repository
+import com.madeforu.sales.ui.components.ListSegment
+import com.madeforu.sales.ui.components.BackButton
 import com.madeforu.sales.ui.components.ChipRow
 import com.madeforu.sales.ui.components.DonutChart
 import com.madeforu.sales.ui.components.errorBannerItem
@@ -126,9 +127,7 @@ fun ExpensesScreen(
                 ),
                 title = { Text("Expenses") },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
-                    }
+                    BackButton(onClick = onBack)
                 },
             )
         },
@@ -213,14 +212,9 @@ fun ExpensesScreen(
 
                 items(expenses.size) { index ->
                     val expense = expenses[index]
-                    Card(
-                        onClick = { onOpenExpense(expense.id) },
-                        shape = RoundedCornerShape(16.dp),
-                        colors = softCardColors(),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-                    ) {
+                    ListSegment(index, expenses.size, gap = 8.dp) {
                         Row(
-                            Modifier.fillMaxWidth().padding(14.dp),
+                            Modifier.fillMaxWidth().clickable { onOpenExpense(expense.id) }.padding(vertical = 11.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             // Coloured by category, so the same kind of
@@ -251,7 +245,7 @@ fun ExpensesScreen(
                                 }
                             }
                             Column(horizontalAlignment = Alignment.End) {
-                                Text(Money.short(expense.net), fontWeight = FontWeight.SemiBold)
+                                Text(Money.short(expense.net), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
                                 if (expense.discount > 0.5) {
                                     Text(
                                         "-" + Money.short(expense.discount),

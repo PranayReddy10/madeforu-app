@@ -10,6 +10,7 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Toast
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,7 +26,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Autorenew
 import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.filled.Share
@@ -66,6 +66,8 @@ import com.madeforu.sales.core.Money
 import com.madeforu.sales.core.isAuthFailure
 import com.madeforu.sales.data.Bill
 import com.madeforu.sales.data.Repository
+import com.madeforu.sales.ui.components.ListSegment
+import com.madeforu.sales.ui.components.BackButton
 import com.madeforu.sales.ui.components.DetailRow
 import com.madeforu.sales.ui.components.ErrorBanner
 import com.madeforu.sales.ui.components.errorBannerItem
@@ -121,9 +123,7 @@ fun BillScreen(
                 ),
                 title = { Text(bill?.billNo ?: "Bill") },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
-                    }
+                    BackButton(onClick = onBack)
                 },
                 actions = {
                     IconButton(onClick = { load(reissue = true) }, enabled = !busy) {
@@ -395,9 +395,7 @@ fun BillsScreen(
                 ),
                 title = { Text("Bill book") },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
-                    }
+                    BackButton(onClick = onBack)
                 },
             )
         },
@@ -423,13 +421,9 @@ fun BillsScreen(
             }
             items(bills.size) { index ->
                 val item = bills[index]
-                Card(
-                    onClick = { onOpenBill(item.orderId) },
-                    shape = RoundedCornerShape(16.dp),
-                    colors = softCardColors(),
-                ) {
+                ListSegment(index, bills.size, gap = 8.dp) {
                     Row(
-                        Modifier.fillMaxWidth().padding(14.dp),
+                        Modifier.fillMaxWidth().clickable { onOpenBill(item.orderId) }.padding(vertical = 11.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Column(Modifier.weight(1f)) {
@@ -441,7 +435,7 @@ fun BillsScreen(
                             )
                         }
                         Column(horizontalAlignment = Alignment.End) {
-                            Text(Money.short(item.total), fontWeight = FontWeight.SemiBold)
+                            Text(Money.short(item.total), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
                             if (item.balance > 0.5) {
                                 Pill(Money.short(item.balance) + " due", negativeColor())
                             }

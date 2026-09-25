@@ -63,6 +63,8 @@ import com.madeforu.sales.ui.components.ChipRow
 import com.madeforu.sales.ui.components.errorBannerItem
 import com.madeforu.sales.ui.components.softCardColors
 import com.madeforu.sales.ui.components.KpiCard
+import com.madeforu.sales.ui.components.ListCard
+import com.madeforu.sales.ui.components.ListRow
 import com.madeforu.sales.ui.components.LoadingBox
 import com.madeforu.sales.ui.components.Pill
 import com.madeforu.sales.ui.components.RevenueLineChart
@@ -194,7 +196,7 @@ fun HomeScreen(
         LazyColumn(
             modifier = Modifier.fillMaxWidth(),
             contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             errorBannerItem(error, onRetry = { load() })
             // Quiet unless a newer build has actually been published.
@@ -204,7 +206,7 @@ fun HomeScreen(
                 item { TodayCard(data, onNewOrder = onNewOrder) }
 
                 item {
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         KpiCard(
                             label = "Revenue",
                             value = Money.short(data.headline.revenue),
@@ -221,7 +223,7 @@ fun HomeScreen(
                 }
 
                 item {
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         KpiCard(
                             label = "Collected",
                             value = Money.short(data.headline.collected),
@@ -241,7 +243,7 @@ fun HomeScreen(
                 }
 
                 item {
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         KpiCard(
                             label = "Product profit",
                             value = Money.short(data.headline.productProfit),
@@ -303,32 +305,32 @@ fun HomeScreen(
 
                 item { SectionHeader("Needs attention") }
 
+                // One card, three rows, as the web app draws its queue.
                 item {
-                    WorkQueueCard(
-                        label = "To make",
-                        count = data.queues.toMake,
-                        detail = "orders not marked ready",
-                        tint = warnColor(),
-                        onClick = { onOpenOrders("all") },
-                    )
-                }
-                item {
-                    WorkQueueCard(
-                        label = "To hand over",
-                        count = data.queues.toHandOver,
-                        detail = "ready, waiting for the customer",
-                        tint = MaterialTheme.colorScheme.primary,
-                        onClick = { onOpenOrders("all") },
-                    )
-                }
-                item {
-                    WorkQueueCard(
-                        label = "Money owed",
-                        count = data.queues.owing,
-                        detail = Money.full(data.queues.owedAmount) + " across unpaid orders",
-                        tint = negativeColor(),
-                        onClick = { onOpenOrders("unpaid") },
-                    )
+                    ListCard {
+                        WorkQueueRow(
+                            label = "To make",
+                            count = data.queues.toMake,
+                            detail = "orders not marked ready",
+                            tint = warnColor(),
+                            onClick = { onOpenOrders("all") },
+                        )
+                        WorkQueueRow(
+                            label = "To hand over",
+                            count = data.queues.toHandOver,
+                            detail = "ready, waiting for the customer",
+                            tint = MaterialTheme.colorScheme.primary,
+                            onClick = { onOpenOrders("all") },
+                        )
+                        WorkQueueRow(
+                            label = "Money owed",
+                            count = data.queues.owing,
+                            detail = Money.full(data.queues.owedAmount) + " across unpaid orders",
+                            tint = negativeColor(),
+                            onClick = { onOpenOrders("unpaid") },
+                            divider = false,
+                        )
+                    }
                 }
 
                 item { Spacer(Modifier.height(24.dp)) }
@@ -396,41 +398,22 @@ private fun TodayCard(data: Dashboard, onNewOrder: () -> Unit) {
 }
 
 @Composable
-private fun WorkQueueCard(
+private fun WorkQueueRow(
     label: String,
     count: Int,
     detail: String,
     tint: androidx.compose.ui.graphics.Color,
     onClick: () -> Unit,
+    divider: Boolean = true,
 ) {
-    Card(
+    ListRow(
+        title = label,
+        subtitle = detail,
+        amount = count.toString(),
+        amountColor = if (count == 0) MaterialTheme.colorScheme.onSurfaceVariant else tint,
+        divider = divider,
         onClick = onClick,
-        shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-        ),
-    ) {
-        Row(
-            Modifier.fillMaxWidth().padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Column(Modifier.weight(1f)) {
-                Text(label, style = MaterialTheme.typography.titleMedium)
-                Text(
-                    detail,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Text(
-                count.toString(),
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold,
-                color = if (count == 0) MaterialTheme.colorScheme.onSurfaceVariant else tint,
-            )
-        }
-    }
+    )
 }
 
 /** A small courtesy: the header should match the time of day. */
@@ -513,8 +496,7 @@ private fun QuickActionTile(action: QuickAction, modifier: Modifier = Modifier) 
             Spacer(Modifier.width(10.dp))
             Text(
                 action.label,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium,
+                style = MaterialTheme.typography.titleSmall,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )

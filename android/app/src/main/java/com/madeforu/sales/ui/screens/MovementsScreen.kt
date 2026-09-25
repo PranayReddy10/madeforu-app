@@ -18,7 +18,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -56,6 +55,8 @@ import com.madeforu.sales.data.Movement
 import com.madeforu.sales.data.MovementTotals
 import com.madeforu.sales.data.PartnerFinance
 import com.madeforu.sales.data.Repository
+import com.madeforu.sales.ui.components.ListSegment
+import com.madeforu.sales.ui.components.BackButton
 import com.madeforu.sales.ui.components.ChipRow
 import com.madeforu.sales.ui.components.errorBannerItem
 import com.madeforu.sales.ui.components.IconTile
@@ -119,9 +120,7 @@ fun MovementsScreen(
             TopAppBar(
                 title = { Text("Movements") },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
-                    }
+                    BackButton(onClick = onBack)
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface,
@@ -148,7 +147,7 @@ fun MovementsScreen(
 
                 message?.let { text ->
                     item {
-                        Card(shape = RoundedCornerShape(18.dp), colors = softCardColors()) {
+                        Card(shape = RoundedCornerShape(20.dp), colors = softCardColors()) {
                             Column(Modifier.fillMaxWidth().padding(16.dp)) {
                                 Text(text, style = MaterialTheme.typography.bodyMedium)
                                 TextButton(onClick = { message = null }) { Text("Got it") }
@@ -215,6 +214,8 @@ fun MovementsScreen(
                 items(movements.size) { index ->
                     val m = movements[index]
                     MovementRow(
+                        index = index,
+                        count = movements.size,
                         movement = m,
                         onEdit = {
                             if (m.editable) editing = m
@@ -411,26 +412,29 @@ private fun LedgerTotal(label: String, value: Double, tint: androidx.compose.ui.
 
 /** One ledger row: who, what for, and what moved. */
 @Composable
-private fun MovementRow(movement: Movement, onEdit: () -> Unit, onDelete: () -> Unit) {
+private fun MovementRow(
+    index: Int,
+    count: Int,
+    movement: Movement,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+) {
     val credit = movement.direction == "credit"
     // A settle-up carries amount 0 and an invest_adjust instead; showing
     // ₹0 would look like a bug, so show what actually moved.
     val shown = if (movement.amount > 0.001) movement.amount else movement.investAdjust
 
-    Card(
-        shape = RoundedCornerShape(18.dp),
-        colors = softCardColors(),
-        modifier = Modifier.fillMaxWidth().clickable { onEdit() },
-    ) {
+    // A row of the ledger card rather than a card of its own.
+    ListSegment(index, count, gap = 4.dp) {
         Row(
-            Modifier.fillMaxWidth().padding(14.dp),
+            Modifier.fillMaxWidth().clickable { onEdit() }.padding(vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            IconTile(label = movement.partner, size = 40.dp)
+            IconTile(label = movement.partner, size = 42.dp)
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(movement.partner, style = MaterialTheme.typography.titleSmall)
+                    Text(movement.partner, style = MaterialTheme.typography.titleMedium)
                     movementKindLabel(movement.kind)?.let {
                         Spacer(Modifier.width(6.dp))
                         Pill(it, tint = movementKindTint(movement.kind))
@@ -452,7 +456,7 @@ private fun MovementRow(movement: Movement, onEdit: () -> Unit, onDelete: () -> 
             }
             Text(
                 (if (credit) "+" else "-") + Money.full(kotlin.math.abs(shown)),
-                style = MaterialTheme.typography.titleMedium,
+                style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.Bold,
                 color = if (credit) positiveColor() else negativeColor(),
             )

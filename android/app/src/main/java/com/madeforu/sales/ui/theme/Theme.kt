@@ -3,7 +3,9 @@ package com.madeforu.sales.ui.theme
 import android.app.Activity
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Shapes
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
@@ -15,6 +17,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 
@@ -118,28 +121,45 @@ private fun isDarkNow(): Boolean = MaterialTheme.colorScheme.background.luminanc
 
 private fun Color.luminance(): Float = (0.299f * red + 0.587f * green + 0.114f * blue)
 
+/**
+ * Type sizes, taken from the web app's stylesheet so the two read alike:
+ *
+ *   hero figure 38 · page title 22 · stat figure 22 · section 15
+ *   row title 15 · body 14 · secondary line 12 · caps label 11
+ *
+ * The app used to run a size larger almost everywhere (26 for a stat,
+ * 16 for a row), which is what made its cards feel crowded next to the
+ * web app's on the same phone.
+ */
 private val AppTypography = Typography(
     // The hero number on a card is the thing people look at first, so it
     // is sized to be read at arm's length across a stall table.
     displaySmall = TextStyle(
-        fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Bold,
+        fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.ExtraBold,
         fontSize = 38.sp, lineHeight = 44.sp, letterSpacing = (-1).sp,
     ),
+    // A stat card's figure (.stat .v).
     headlineMedium = TextStyle(
         fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Bold,
-        fontSize = 26.sp, lineHeight = 32.sp, letterSpacing = (-0.4).sp,
+        fontSize = 22.sp, lineHeight = 28.sp, letterSpacing = (-0.4).sp,
     ),
     headlineSmall = TextStyle(
-        fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.SemiBold,
-        fontSize = 22.sp, lineHeight = 28.sp, letterSpacing = (-0.2).sp,
+        fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Bold,
+        fontSize = 20.sp, lineHeight = 26.sp, letterSpacing = (-0.3).sp,
     ),
+    // Page titles: the top bar uses this (.head h1).
     titleLarge = TextStyle(
-        fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.SemiBold,
-        fontSize = 19.sp, lineHeight = 26.sp,
+        fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Bold,
+        fontSize = 22.sp, lineHeight = 28.sp, letterSpacing = (-0.3).sp,
     ),
+    // Row titles and section headings (.row .t, h2.section).
     titleMedium = TextStyle(
         fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.SemiBold,
-        fontSize = 16.sp, lineHeight = 22.sp,
+        fontSize = 15.sp, lineHeight = 21.sp,
+    ),
+    titleSmall = TextStyle(
+        fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.SemiBold,
+        fontSize = 14.sp, lineHeight = 20.sp,
     ),
     bodyLarge = TextStyle(
         fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Normal,
@@ -149,18 +169,40 @@ private val AppTypography = Typography(
         fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Normal,
         fontSize = 14.sp, lineHeight = 20.sp,
     ),
+    // The muted second line under a row title (.row .s).
     bodySmall = TextStyle(
         fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Normal,
-        fontSize = 12.sp, lineHeight = 16.sp,
+        fontSize = 12.sp, lineHeight = 17.sp,
     ),
+    // Buttons (.btn is 16/600; 15 keeps two-word labels on one line).
     labelLarge = TextStyle(
         fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.SemiBold,
-        fontSize = 14.sp, letterSpacing = 0.1.sp,
+        fontSize = 15.sp, lineHeight = 20.sp, letterSpacing = 0.sp,
     ),
+    // Chips (.chip).
+    labelMedium = TextStyle(
+        fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Medium,
+        fontSize = 13.sp, lineHeight = 18.sp,
+    ),
+    // Caps labels over a figure (.stat .l) and pills.
     labelSmall = TextStyle(
         fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Medium,
-        fontSize = 11.sp, letterSpacing = 0.5.sp,
+        fontSize = 11.sp, lineHeight = 15.sp, letterSpacing = 0.5.sp,
     ),
+)
+
+/**
+ * Corner radii, also the web app's: 14 for fields, 16 for buttons, 20 for
+ * cards, 26 for sheets and the hero. Material's defaults (4 for a text
+ * field, 12 for a card) are what made the app look like a different
+ * product from the web app.
+ */
+private val AppShapes = Shapes(
+    extraSmall = RoundedCornerShape(14.dp),
+    small = RoundedCornerShape(16.dp),
+    medium = RoundedCornerShape(20.dp),
+    large = RoundedCornerShape(26.dp),
+    extraLarge = RoundedCornerShape(28.dp),
 )
 
 /**
@@ -196,5 +238,5 @@ fun MadeForUTheme(themeChoice: String = "system", content: @Composable () -> Uni
         }
     }
 
-    MaterialTheme(colorScheme = colors, typography = AppTypography, content = content)
+    MaterialTheme(colorScheme = colors, typography = AppTypography, shapes = AppShapes, content = content)
 }

@@ -49,6 +49,8 @@ import com.madeforu.sales.ui.components.ChipRow
 import com.madeforu.sales.ui.components.DetailRow
 import com.madeforu.sales.ui.components.errorBannerItem
 import com.madeforu.sales.ui.components.IconTile
+import com.madeforu.sales.ui.components.ListCard
+import com.madeforu.sales.ui.components.ListRow
 import com.madeforu.sales.ui.components.LoadingBox
 import com.madeforu.sales.ui.components.Pill
 import com.madeforu.sales.ui.components.SectionHeader
@@ -145,10 +147,9 @@ fun MoneyScreen(
                 if (data.uncreditedOffline.orders > 0) {
                     item {
                         Card(
-                            shape = RoundedCornerShape(18.dp),
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                            ),
+                            shape = RoundedCornerShape(20.dp),
+                            colors = softCardColors(),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
                         ) {
                             Column(Modifier.padding(16.dp)) {
                                 Text(
@@ -239,54 +240,38 @@ fun MoneyScreen(
                         )
                     }
                 } else {
-                    items(data.settleInvest.size) { index ->
-                        val step = data.settleInvest[index]
-                        Card(
-                            shape = RoundedCornerShape(16.dp),
-                            colors = softCardColors(),
-                        ) {
-                            Row(
-                                Modifier.fillMaxWidth().padding(14.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Column(Modifier.weight(1f)) {
-                                    Text(
-                                        "${step.from} → ${step.to}",
-                                        style = MaterialTheme.typography.titleMedium,
-                                    )
-                                    Text(
-                                        "closes the contribution gap",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                }
-                                Column(horizontalAlignment = Alignment.End) {
-                                    Text(
-                                        Money.short(step.amount),
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold,
-                                    )
-                                    TextButton(
-                                        onClick = {
-                                            busy = true
-                                            scope.launch {
-                                                val result = repository.settle(
-                                                    step.fromId, step.toId, step.amount,
-                                                    "Settled from the app",
-                                                )
-                                                when (result) {
-                                                    is ApiResult.Success -> {
-                                                        message = result.value
-                                                        refresh()
+                    item {
+                        ListCard {
+                            data.settleInvest.forEachIndexed { index, step ->
+                                ListRow(
+                                    title = "${step.from} → ${step.to}",
+                                    subtitle = "closes the contribution gap",
+                                    amount = Money.short(step.amount),
+                                    leading = { IconTile(label = step.from, size = 42.dp) },
+                                    trailing = {
+                                        TextButton(
+                                            onClick = {
+                                                busy = true
+                                                scope.launch {
+                                                    val result = repository.settle(
+                                                        step.fromId, step.toId, step.amount,
+                                                        "Settled from the app",
+                                                    )
+                                                    when (result) {
+                                                        is ApiResult.Success -> {
+                                                            message = result.value
+                                                            refresh()
+                                                        }
+                                                        is ApiResult.Failure -> error = result.message
                                                     }
-                                                    is ApiResult.Failure -> error = result.message
+                                                    busy = false
                                                 }
-                                                busy = false
-                                            }
-                                        },
-                                        enabled = !busy,
-                                    ) { Text("Record") }
-                                }
+                                            },
+                                            enabled = !busy,
+                                        ) { Text("Record") }
+                                    },
+                                    divider = index < data.settleInvest.lastIndex,
+                                )
                             }
                         }
                     }
@@ -301,7 +286,7 @@ fun MoneyScreen(
                     }
                 }
 
-                                item { SectionHeader("Account balance") }
+                item { SectionHeader("Account balance") }
                 item {
                     AccountBalanceShare(
                         data = data,
@@ -367,42 +352,30 @@ fun MoneyScreen(
                         )
                     }
                 }
-                items(movements.size) { index ->
-                    val movement = movements[index]
-                    val credit = movement.direction == "credit"
-                    Row(
-                        Modifier.fillMaxWidth()
-                            // A row opens for editing. The ones that cannot
-                            // be edited say so when tapped rather than
-                            // looking broken.
-                            // Adding and correcting happens on the ledger
-                            // page, where the whole set is visible and
-                            // filterable; this strip is a summary.
-                            .clickable { onOpenMovements() }
-                            .padding(vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                movement.partner + " · " + movement.source,
-                                style = MaterialTheme.typography.bodyMedium,
-                            )
-                            Text(
-                                Dates.pretty(movement.date) +
-                                    (movement.note?.takeIf { it.isNotBlank() }?.let { " · $it" } ?: ""),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
+                if (movements.isNotEmpty()) {
+                    item {
+                        // Adding and correcting happens on the ledger page,
+                        // where the whole set is visible and filterable;
+                        // this card is a summary, so a tap goes there.
+                        ListCard {
+                            movements.forEachIndexed { index, movement ->
+                                val credit = movement.direction == "credit"
+                                // A settle-up row carries amount 0 and an
+                                // invest_adjust instead; showing "₹0" would
+                                // look like a bug, so show what actually moved.
+                                val shown = if (movement.amount > 0.001) movement.amount else movement.investAdjust
+                                ListRow(
+                                    title = movement.partner + " · " + movement.source,
+                                    subtitle = Dates.pretty(movement.date) +
+                                        (movement.note?.takeIf { it.isNotBlank() }?.let { " · $it" } ?: ""),
+                                    amount = (if (credit) "+" else "-") + Money.short(kotlin.math.abs(shown)),
+                                    amountColor = if (credit) positiveColor() else negativeColor(),
+                                    leading = { IconTile(label = movement.partner, size = 42.dp) },
+                                    divider = index < movements.lastIndex,
+                                    onClick = onOpenMovements,
+                                )
+                            }
                         }
-                        // A settle-up row carries amount 0 and an
-                        // invest_adjust instead; showing "₹0" would look
-                        // like a bug, so show what actually moved.
-                        val shown = if (movement.amount > 0.001) movement.amount else movement.investAdjust
-                        Text(
-                            (if (credit) "+" else "-") + Money.short(kotlin.math.abs(shown)),
-                            style = MaterialTheme.typography.titleMedium,
-                            color = if (credit) positiveColor() else negativeColor(),
-                        )
                     }
                 }
 
