@@ -82,6 +82,14 @@ function push_client_config(mysqli $conn): array {
     $settings = push_settings($conn);
     $web = $settings['web'];
     $android = $settings['android'];
+    if (($android['appId'] ?? '') !== '') {
+        // The sender is the project number written into the App ID; sent
+        // from there so it can never disagree with it (Firebase answers
+        // that with INVALID_SENDER). Settings saved before the page knew
+        // about debug builds get their one App ID as the release one.
+        if (preg_match('/^1:(\d+):android:/i', (string)$android['appId'], $m)) $android['messagingSenderId'] = $m[1];
+        if (empty($android['apps'])) $android['apps'] = ['com.madeforu.sales' => $android['appId']];
+    }
     return [
         'enabled' => true,
         'web'     => ($web['apiKey'] ?? '') !== '' && ($web['vapidKey'] ?? '') !== '' ? $web : null,

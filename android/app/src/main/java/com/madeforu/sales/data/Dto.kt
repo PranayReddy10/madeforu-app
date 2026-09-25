@@ -879,4 +879,6 @@ data class AndroidPushConfig(
     val appId: String = "",
     val projectId: String = "",
     val messagingSenderId: String = "",
+    /** App ID per package: the release build and, if added, the debug build. */
+    val apps: Map<String, String> = emptyMap(),
 )
