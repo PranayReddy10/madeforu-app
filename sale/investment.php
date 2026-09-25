@@ -1,5 +1,6 @@
 <?php
 require 'config.php';
+require_once __DIR__ . '/lib_push.php';   // tells the other partners' phones
 require_once __DIR__ . '/lib_money.php';
 $me = require_login();
 

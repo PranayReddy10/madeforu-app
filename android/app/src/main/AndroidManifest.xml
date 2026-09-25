@@ -40,6 +40,15 @@
             </intent-filter>
         </activity>
 
+        <!-- Real-time push from the server (lib_push.php) via Firebase. -->
+        <service
+            android:name=".notify.PushService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
         <!-- Bills are shared as real PDF files. A file:// Uri would throw
              FileUriExposedException on Android 7+, so they go out through a
              content:// Uri from this provider instead. -->

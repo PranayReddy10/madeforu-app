@@ -34,6 +34,7 @@ ob_start();
 
 require __DIR__ . '/../config.php';
 require_once __DIR__ . '/../lib_money.php';   // revenue_sources(), shared with the website
+require_once __DIR__ . '/../lib_push.php';    // real-time push after every write
 
 // config.php installs a text/plain exception handler meant for HTML pages.
 // Replace it so an escaped throwable still reaches the app as JSON.
@@ -44,7 +45,7 @@ set_exception_handler(function (Throwable $t) {
 });
 
 // ── API-wide constants ─────────────────────────────────────────────
-define('API_VERSION',      '1.8.0');
+define('API_VERSION',      '1.9.0');
 
 /**
  * What this build of the API can do, for the apps to check against.
@@ -69,6 +70,7 @@ define('API_FEATURES', [
     'reprice_open',        // catalog.php: carry a new price onto orders that are still open
     'wholesale',           // wholesale.php: the wholesale buyers notebook (no revenue, no stock)
     'activity_feed',       // activity.php: what changed since a cursor, for notifications
+    'push',                // push.php: real-time Firebase push registration
 ]);
 define('TOKEN_TTL_DAYS',   90);     // a partner phone stays signed in for a quarter
 define('MAX_PAGE_SIZE',    200);
@@ -322,6 +324,7 @@ function api_require_auth(mysqli $conn): array {
     $u->execute();
     $u->close();
 
+    push_set_actor((int)$row['id']);   // their own changes are not pushed back to them
     return ['id' => (int)$row['id'], 'name' => $row['name'], 'phone' => $row['phone'],
             'token_id' => (int)$row['token_id']];
 }

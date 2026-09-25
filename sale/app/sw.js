@@ -19,7 +19,7 @@
  * Bump CACHE whenever the shell changes; keep it in step with BUILD in
  * app.js, which is what Settings prints.
  */
-const VERSION = '2026-09-26.2';
+const VERSION = '2026-09-26.3';
 const CACHE = 'madeforu-shell-' + VERSION;
 const SHELL = [
   './',
@@ -50,6 +50,24 @@ self.addEventListener('activate', (event) => {
 });
 
 // Settings' "Force a fresh copy" asks the worker to stand aside.
+// Real-time push from Firebase (lib_push.php on the server). The message
+// is data-only, so this draws the notification itself and a tap can open
+// the order it is about. Every push shows one: browsers withdraw push
+// from a site whose pushes stay invisible.
+self.addEventListener('push', (event) => {
+  let payload = {};
+  try { payload = event.data ? event.data.json() : {}; } catch (e) { /* not JSON */ }
+  const d = payload.data || payload;
+  const title = d.title || 'MadeForU';
+  event.waitUntil(self.registration.showNotification(title, {
+    body: d.body || '',
+    tag: d.tag || undefined,
+    icon: 'icons/icon-192.png',
+    badge: 'icons/icon-192.png',
+    data: { hash: d.order_id ? '#order/' + d.order_id : '#home' },
+  }));
+});
+
 // A tapped activity notification: bring the app forward on the screen it
 // names (an order, or home), opening it if it was closed.
 self.addEventListener('notificationclick', (event) => {

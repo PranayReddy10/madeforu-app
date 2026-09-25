@@ -24,10 +24,10 @@ const DEFAULT_API = new URL('../api/', location.href).href;
  * browser, the server or the app is the stale one. It must match the
  * CACHE name in sw.js.
  */
-const BUILD = '2026-09-26.2';
+const BUILD = '2026-09-26.3';
 
 /** What this build of the app expects the server to be able to do. */
-const NEEDS_FEATURES = ['revenue_breakdown', 'expense_create', 'activity_feed', 'price_history',
+const NEEDS_FEATURES = ['revenue_breakdown', 'expense_create', 'activity_feed', 'push', 'price_history',
                         'all_channel_revenue', 'reprice_open', 'wholesale'];
 
 const store = {
@@ -2585,6 +2585,14 @@ route('settings', async () => {
     location.reload();
   };
   document.getElementById('signout').onclick = async () => {
+    // Revoking the sign-in also stops pushes to this device; saying so
+    // explicitly just tidies the list.
+    const pushToken = localStorage.getItem('mfu.pushToken');
+    if (pushToken) {
+      try { await api('push.php', 'unregister', { body: { token: pushToken } }); } catch (e) { /* ignore */ }
+      localStorage.removeItem('mfu.pushToken');
+      pushActive = false;
+    }
     try { await api('auth.php', 'logout', { body: {} }); } catch (e) { /* sign out locally regardless */ }
     store.token = '';
     store.name = '';
@@ -2665,14 +2673,19 @@ async function paintVersions() {
 
 /*
  * New sales, payments, order changes, expenses and movements, from the
- * website, the Android app or another phone, read from api/activity.php.
+ * website, the Android app or another phone.
  *
- * A web app cannot run while it is closed, so this checks every 30
- * seconds while it is open. When the tab or home-screen app is in the
- * background the result is a system notification; when it is on screen,
- * a toast. The cursor is per device, so each phone hears about each
- * change once.
+ * Real time when the server has Firebase set up (firebase-config.php):
+ * the server pushes each change the moment it is saved, and the service
+ * worker shows it even while this app is closed. setupPush() registers
+ * this browser for that.
+ *
+ * Without push (not set up, notifications not allowed, or a browser that
+ * cannot do it) the app falls back to reading api/activity.php every 30
+ * seconds while it is open.
  */
+const FIREBASE_SDK = 'https://www.gstatic.com/firebasejs/10.12.2/';
+let pushActive = false;
 const ACTIVITY_EVERY = 30000;
 let activityTimer = null;
 
@@ -2685,7 +2698,7 @@ const activity = {
 };
 
 async function checkActivity() {
-  if (!store.token) return;
+  if (!store.token || pushActive) return;
   let d;
   try {
     d = await api('activity.php', 'feed', { params: { after: activity.cursor } });
@@ -2715,8 +2728,47 @@ async function checkActivity() {
 
 function startActivity() {
   if (activityTimer) return;
+  setupPush();
   checkActivity();
   activityTimer = setInterval(checkActivity, ACTIVITY_EVERY);
+}
+
+/**
+ * Register this browser for real-time push, if the server offers it and
+ * notifications are allowed. Quietly does nothing otherwise; polling
+ * carries on in its place. Safe to call again: it re-registers the same
+ * token, which also tells the server the device is still in use.
+ */
+async function setupPush() {
+  if (!store.token || !activity.on || !activity.supported || Notification.permission !== 'granted') return false;
+  try {
+    const { push } = await api('push.php', 'config');
+    if (!push || !push.enabled || !push.web) return false;
+    const [{ initializeApp, getApps }, { getMessaging, getToken, isSupported }] = await Promise.all([
+      import(FIREBASE_SDK + 'firebase-app.js'),
+      import(FIREBASE_SDK + 'firebase-messaging.js'),
+    ]);
+    if (!(await isSupported())) return false;
+    const { vapidKey, ...config } = push.web;
+    const app = getApps()[0] || initializeApp(config);
+    const token = await getToken(getMessaging(app), {
+      vapidKey,
+      serviceWorkerRegistration: await navigator.serviceWorker.ready,
+    });
+    if (!token) return false;
+    await api('push.php', 'register', {
+      body: { token, platform: 'web', device: navigator.userAgent.slice(0, 120) },
+    });
+    localStorage.setItem('mfu.pushToken', token);
+    pushActive = true;
+    // Push has taken over: move the polling cursor to "now" so switching
+    // back later does not replay everything pushed in between.
+    activity.cursor = '';
+    return true;
+  } catch (e) {
+    console.warn('Push not available, checking every 30 seconds instead:', e.message || e);
+    return false;
+  }
 }
 
 /** The Notifications card in Settings. */
@@ -2734,16 +2786,38 @@ function paintNotifySettings() {
     <div class="row" style="border:none;padding-top:0">
       <div class="grow"><div class="t">New activity</div>
         <div class="s wrap">Sales, payments, order changes, expenses and movements from anywhere.
-          Checked every 30 seconds while this app is open.</div></div>
+          ${pushActive ? '<b class="pos">Real time</b> — arrives the moment it is saved, even with this app closed.'
+            : 'Checked every 30 seconds while this app is open.'}</div></div>
       <button class="chip" id="notifyToggle" aria-pressed="${activity.on}">${activity.on ? 'On' : 'Off'}</button>
     </div>
     ${activity.on && perm !== 'granted' ? (perm === 'denied'
       ? '<p class="muted warn">Notifications are blocked for this site. Allow them in the browser\'s site settings; until then they show as messages inside the app.</p>'
       : '<button class="btn small" id="notifyAllow">Allow notifications on this device</button>') : ''}`;
-  document.getElementById('notifyToggle').onclick = () => { activity.on = !activity.on; paintNotifySettings(); };
+  if (pushActive) {
+    box.insertAdjacentHTML('beforeend', '<button class="btn small ghost" id="notifyTest" style="margin-top:10px">Send a test notification</button>');
+    document.getElementById('notifyTest').onclick = async () => {
+      try { toast((await api('push.php', 'test', { body: {} })).message); } catch (e) { toast(e.message); }
+    };
+  } else if (activity.on && perm === 'granted') {
+    box.insertAdjacentHTML('beforeend', `<p class="muted" style="margin-top:8px">Real-time push is not set up on
+      the server yet, or this browser cannot receive it${/iPhone|iPad/.test(navigator.userAgent)
+        ? ' — on iPhone, open the app from the Home Screen icon' : ''}.</p>`);
+  }
+  document.getElementById('notifyToggle').onclick = async () => {
+    activity.on = !activity.on;
+    const token = localStorage.getItem('mfu.pushToken');
+    if (!activity.on && token) {
+      try { await api('push.php', 'unregister', { body: { token } }); } catch (e) { /* signed out below anyway */ }
+      pushActive = false;
+    } else if (activity.on) {
+      await setupPush();
+    }
+    paintNotifySettings();
+  };
   const allow = document.getElementById('notifyAllow');
   if (allow) allow.onclick = async () => {
     try { await Notification.requestPermission(); } catch (e) { /* older Safari: callback form only */ }
+    await setupPush();
     paintNotifySettings();
   };
 }

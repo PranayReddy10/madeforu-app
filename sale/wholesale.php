@@ -21,6 +21,7 @@
  * hit the order book, designed out here from the start.
  */
 require 'config.php';
+require_once __DIR__ . '/lib_push.php';   // tells the other partners' phones
 $me = require_login();
 
 /** Are the wholesale tables there yet? The SQL lands separately. */

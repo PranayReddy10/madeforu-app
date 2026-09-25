@@ -50,6 +50,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.madeforu.sales.core.ServiceLocator
 import com.madeforu.sales.notify.ActivitySync
+import com.madeforu.sales.notify.PushSetup
 import com.madeforu.sales.ui.screens.BillScreen
 import com.madeforu.sales.ui.screens.BillsScreen
 import com.madeforu.sales.ui.screens.CatalogScreen
@@ -442,11 +443,15 @@ fun AppRoot(
 
     // Android 13 and later ask before the app may notify. Asked once
     // someone is signed in, which is when there is something to hear about.
+    //
+    // Registering for real-time push happens at the same moment, and again
+    // once permission is granted; until it succeeds, the checks below fill in.
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
-    ) { }
+    ) { scope.launch { PushSetup.setup(context) } }
     LaunchedEffect(currentRoute == Routes.LOGIN) {
         if (currentRoute == null || currentRoute == Routes.LOGIN) return@LaunchedEffect
+        PushSetup.setup(context)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
             PackageManager.PERMISSION_GRANTED
@@ -465,7 +470,10 @@ fun AppRoot(
         lifecycleOwner.repeatOnLifecycle(Lifecycle.State.RESUMED) {
             while (true) {
                 val items = ActivitySync.check(context)
-                if (items.isNotEmpty() && ServiceLocator.prefs(context).notificationsOn.first()) {
+                // With push active, the pushed notification already said it.
+                if (items.isNotEmpty() && !PushSetup.isActive(context) &&
+                    ServiceLocator.prefs(context).notificationsOn.first()
+                ) {
                     notify(
                         if (items.size == 1) items[0].title + " · " + items[0].body.lineSequence().first()
                         else "${items.size} updates · latest: " + items.last().title,

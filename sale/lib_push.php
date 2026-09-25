@@ -1,0 +1,360 @@
+<?php
+/**
+ * Real-time push: the moment a sale, payment, order change, expense or
+ * movement is saved, every other partner's phone and web app is told,
+ * through Firebase Cloud Messaging.
+ *
+ * How it fires
+ * ------------
+ * Every request that can write (a POST to the API, or to a website page
+ * that includes this file) registers a shutdown hook. After the response
+ * has gone back to whoever saved, the hook reads what changed since the
+ * last push (lib_activity.php, the same reading the apps' feed uses) and
+ * sends it. Nothing in any save handler had to change, and nothing that
+ * saves waits for Google.
+ *
+ * Setup lives in firebase-config.php (see firebase-config.example.php).
+ * Without it, this file does nothing at all.
+ *
+ * Who hears what
+ * --------------
+ * Everyone except the person whose request made the change. Devices are
+ * tied to the sign-in (api_tokens row) that registered them, so signing
+ * out, or "sign out all devices", stops pushes to that phone as well.
+ */
+declare(strict_types=1);
+
+require_once __DIR__ . '/lib_activity.php';
+if (is_file(__DIR__ . '/firebase-config.php')) require_once __DIR__ . '/firebase-config.php';
+
+/** Set by whoever authenticated this request: the API, or the website session. */
+function push_set_actor(int $adminId): void { $GLOBALS['PUSH_ACTOR'] = $adminId; }
+
+function push_actor(): ?int {
+    if (!empty($GLOBALS['PUSH_ACTOR'])) return (int)$GLOBALS['PUSH_ACTOR'];
+    // The website's session may already be written and closed by now; the
+    // array is still in memory either way.
+    if (!empty($_SESSION['admin']['id'])) {
+        return (int)$_SESSION['admin']['id'];
+    }
+    return null;
+}
+
+/** True once firebase-config.php names a readable service-account file. */
+function push_configured(): bool {
+    return defined('FIREBASE_SERVICE_ACCOUNT')
+        && (defined('PUSH_DRY_RUN') || is_readable((string)FIREBASE_SERVICE_ACCOUNT));
+}
+
+/** What the apps need to register: the public halves of the Firebase setup. */
+function push_client_config(): array {
+    if (!push_configured()) return ['enabled' => false];
+    $web = defined('FIREBASE_WEB') ? (array)FIREBASE_WEB : [];
+    $android = defined('FIREBASE_ANDROID') ? (array)FIREBASE_ANDROID : [];
+    return [
+        'enabled' => true,
+        'web'     => ($web['apiKey'] ?? '') !== '' && ($web['vapidKey'] ?? '') !== '' ? $web : null,
+        'android' => ($android['appId'] ?? '') !== '' ? $android : null,
+    ];
+}
+
+function push_ensure_table(mysqli $conn): void {
+    static $done = false;
+    if ($done) return;
+    $conn->query(
+        'CREATE TABLE IF NOT EXISTS push_devices (
+            id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+            admin_id INT NOT NULL,
+            api_token_id INT NULL,
+            platform VARCHAR(10) NOT NULL,
+            token VARCHAR(255) NOT NULL,
+            device VARCHAR(120) NOT NULL DEFAULT \'\',
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            last_seen DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY uq_push_token (token),
+            KEY ix_push_admin (admin_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
+    );
+    $done = true;
+}
+
+/** Remember this device for pushes, for the sign-in that is registering it. */
+function push_register(mysqli $conn, int $adminId, int $apiTokenId, string $platform, string $token, string $device): void {
+    push_ensure_table($conn);
+    $s = $conn->prepare(
+        'INSERT INTO push_devices (admin_id, api_token_id, platform, token, device)
+         VALUES (?,?,?,?,?)
+         ON DUPLICATE KEY UPDATE admin_id = VALUES(admin_id), api_token_id = VALUES(api_token_id),
+                                 platform = VALUES(platform), device = VALUES(device), last_seen = NOW()'
+    );
+    $s->bind_param('iisss', $adminId, $apiTokenId, $platform, $token, $device);
+    $s->execute();
+    $s->close();
+}
+
+function push_unregister(mysqli $conn, string $token): void {
+    push_ensure_table($conn);
+    $s = $conn->prepare('DELETE FROM push_devices WHERE token = ?');
+    $s->bind_param('s', $token);
+    $s->execute();
+    $s->close();
+}
+
+// ── Small state kept in app_settings ───────────────────────────────
+
+function push_state_get(mysqli $conn, string $key): ?string {
+    $s = $conn->prepare('SELECT sval FROM app_settings WHERE skey = ?');
+    $s->bind_param('s', $key);
+    $s->execute();
+    $row = $s->get_result()->fetch_assoc();
+    $s->close();
+    return $row ? (string)$row['sval'] : null;
+}
+
+function push_state_set(mysqli $conn, string $key, string $value): void {
+    $s = $conn->prepare('INSERT INTO app_settings (skey, sval) VALUES (?, ?) ON DUPLICATE KEY UPDATE sval = VALUES(sval)');
+    $s->bind_param('ss', $key, $value);
+    $s->execute();
+    $s->close();
+}
+
+// ── The flush ──────────────────────────────────────────────────────
+
+/**
+ * Send everything changed since the last push. Returns how many
+ * messages went out (for push_cron.php and the tests).
+ *
+ * The cursor is {at, seen}: the second it has read up to, and which
+ * changes in exactly that second were already sent. Reading from `at`
+ * inclusively and skipping `seen` is what lets a sale be pushed in the
+ * same second it was saved without a second sale in that same second
+ * being lost. A MySQL lock makes two requests finishing together take
+ * turns rather than send the same change twice.
+ */
+function push_flush(mysqli $conn, ?int $actor): int {
+    if (!push_configured()) return 0;
+    $got = $conn->query("SELECT GET_LOCK('madeforu_push', 10) l")->fetch_assoc();
+    if ((int)($got['l'] ?? 0) !== 1) return 0;
+    try {
+        $now = (string)$conn->query('SELECT NOW() n')->fetch_assoc()['n'];
+        $state = json_decode((string)push_state_get($conn, 'push_cursor'), true);
+        if (!is_array($state) || empty($state['at'])) {
+            // First run: nothing before this moment is news.
+            push_state_set($conn, 'push_cursor', json_encode(['at' => $now, 'seen' => []]));
+            return 0;
+        }
+        $at = (string)$state['at'];
+        $seen = array_flip((array)($state['seen'] ?? []));
+
+        $items = activity_items($conn, $at, $now, (int)$actor, '>=', $capped);
+        $key = fn(array $i) => $i['kind'] . ':' . $i['id'];
+        $items = array_values(array_filter($items,
+            fn($i) => !((string)$i['at'] === $at && isset($seen[$key($i)]))));
+
+        if ($capped !== null) {
+            // A kind came back full: send what is older than its cut-off
+            // and resume from that second.
+            $items = array_values(array_filter($items, fn($i) => (string)$i['at'] < $capped));
+            $next = ['at' => $capped, 'seen' => []];
+        } else {
+            $sentNow = array_map($key, array_filter($items, fn($i) => (string)$i['at'] === $now));
+            $carry = $at === $now ? array_keys($seen) : [];
+            $next = ['at' => $now, 'seen' => array_values(array_unique(array_merge($carry, $sentNow)))];
+        }
+
+        $sent = $items ? push_send($conn, $items, $actor) : 0;
+        push_state_set($conn, 'push_cursor', json_encode($next));
+        return $sent;
+    } finally {
+        $conn->query("SELECT RELEASE_LOCK('madeforu_push')");
+    }
+}
+
+/** Build the messages and send each to every device but the actor's. */
+function push_send(mysqli $conn, array $items, ?int $actor): int {
+    push_ensure_table($conn);
+    $s = $conn->prepare(
+        'SELECT d.id, d.token, d.platform FROM push_devices d
+           JOIN api_tokens t ON t.id = d.api_token_id
+          WHERE t.revoked = 0 AND t.expires_at > NOW() AND d.admin_id <> ?'
+    );
+    $skip = (int)$actor;   // 0 matches nobody: a cron flush tells everyone
+    $s->bind_param('i', $skip);
+    $s->execute();
+    $devices = $s->get_result()->fetch_all(MYSQLI_ASSOC);
+    $s->close();
+    if (!$devices) return 0;
+
+    // A few changes: one message each. A burst (crediting an event
+    // touches every order in it): one summary, not a wall of alerts.
+    if (count($items) > 3) {
+        $last = array_slice($items, -4);
+        $messages = [[
+            'title' => count($items) . ' updates',
+            'body'  => implode("\n", array_map(fn($i) => $i['title'], $last)),
+            'kind'  => 'summary', 'order_id' => '', 'tag' => 'summary',
+        ]];
+    } else {
+        $messages = array_map(fn($i) => [
+            'title'    => (string)$i['title'],
+            'body'     => (string)$i['body'],
+            'kind'     => (string)$i['kind'],
+            'order_id' => $i['order_id'] ? (string)$i['order_id'] : '',
+            'tag'      => $i['kind'] . ':' . $i['id'],
+        ], $items);
+    }
+
+    $jobs = [];
+    foreach ($devices as $d) {
+        foreach ($messages as $m) $jobs[] = ['device' => $d, 'data' => $m];
+    }
+    return push_fcm($conn, $jobs);
+}
+
+// ── Firebase Cloud Messaging (HTTP v1) ─────────────────────────────
+
+function push_b64url(string $raw): string {
+    return rtrim(strtr(base64_encode($raw), '+/', '-_'), '=');
+}
+
+/** An OAuth access token for FCM, from the service account, cached for its hour. */
+function push_access_token(mysqli $conn, array $sa): string {
+    $cached = json_decode((string)push_state_get($conn, 'push_oauth'), true);
+    if (is_array($cached) && ($cached['exp'] ?? 0) > time() + 120) return (string)$cached['token'];
+
+    $iat = time();
+    $jwt = push_b64url(json_encode(['alg' => 'RS256', 'typ' => 'JWT'])) . '.'
+         . push_b64url(json_encode([
+             'iss'   => $sa['client_email'],
+             'scope' => 'https://www.googleapis.com/auth/firebase.messaging',
+             'aud'   => $sa['token_uri'] ?? 'https://oauth2.googleapis.com/token',
+             'iat'   => $iat,
+             'exp'   => $iat + 3600,
+         ]));
+    if (!openssl_sign($jwt, $signature, $sa['private_key'], OPENSSL_ALGO_SHA256)) {
+        throw new RuntimeException('Could not sign with the Firebase service account key.');
+    }
+    $jwt .= '.' . push_b64url($signature);
+
+    $ch = curl_init($sa['token_uri'] ?? 'https://oauth2.googleapis.com/token');
+    curl_setopt_array($ch, [
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => http_build_query([
+            'grant_type' => 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+            'assertion'  => $jwt,
+        ]),
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT => 10,
+    ]);
+    $reply = json_decode((string)curl_exec($ch), true);
+    curl_close($ch);
+    if (empty($reply['access_token'])) {
+        throw new RuntimeException('Google refused the service account: ' . json_encode($reply));
+    }
+    push_state_set($conn, 'push_oauth', json_encode([
+        'token' => $reply['access_token'],
+        'exp'   => $iat + (int)($reply['expires_in'] ?? 3600),
+    ]));
+    return (string)$reply['access_token'];
+}
+
+/**
+ * Send every job in parallel. Tokens Firebase says are dead (the app was
+ * uninstalled, the browser's permission revoked) are forgotten.
+ */
+function push_fcm(mysqli $conn, array $jobs): int {
+    if (defined('PUSH_DRY_RUN')) {
+        foreach ($jobs as $j) {
+            file_put_contents((string)PUSH_DRY_RUN, json_encode([
+                'to' => $j['device']['platform'] . ':' . $j['device']['token'],
+            ] + $j['data'], JSON_UNESCAPED_UNICODE) . "\n", FILE_APPEND);
+        }
+        return count($jobs);
+    }
+
+    $sa = json_decode((string)file_get_contents((string)FIREBASE_SERVICE_ACCOUNT), true);
+    if (!is_array($sa) || empty($sa['project_id'])) {
+        throw new RuntimeException('FIREBASE_SERVICE_ACCOUNT is not a service-account JSON file.');
+    }
+    $url = 'https://fcm.googleapis.com/v1/projects/' . rawurlencode($sa['project_id']) . '/messages:send';
+    $auth = 'Authorization: Bearer ' . push_access_token($conn, $sa);
+
+    $multi = curl_multi_init();
+    $handles = [];
+    foreach ($jobs as $n => $j) {
+        // Data-only: the app and the service worker draw the notification
+        // themselves, so a tap can open the order it is about.
+        $message = [
+            'token'   => $j['device']['token'],
+            'data'    => $j['data'],
+            'android' => ['priority' => 'HIGH', 'ttl' => '86400s'],
+            'webpush' => ['headers' => ['Urgency' => 'high', 'TTL' => '86400']],
+        ];
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_POST => true,
+            CURLOPT_HTTPHEADER => [$auth, 'Content-Type: application/json'],
+            CURLOPT_POSTFIELDS => json_encode(['message' => $message], JSON_UNESCAPED_UNICODE),
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT => 10,
+        ]);
+        curl_multi_add_handle($multi, $ch);
+        $handles[$n] = $ch;
+    }
+    do {
+        $status = curl_multi_exec($multi, $running);
+        if ($running) curl_multi_select($multi, 1.0);
+    } while ($running && $status === CURLM_OK);
+
+    $sent = 0;
+    $dead = [];
+    foreach ($handles as $n => $ch) {
+        $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $body = (string)curl_multi_getcontent($ch);
+        if ($code === 200) {
+            $sent++;
+        } elseif ($code === 404 || strpos($body, 'UNREGISTERED') !== false
+                  || ($code === 400 && strpos($body, 'registration token') !== false)) {
+            $dead[(int)$jobs[$n]['device']['id']] = true;
+        } else {
+            error_log('MadeForU push: FCM answered ' . $code . ': ' . substr($body, 0, 300));
+        }
+        curl_multi_remove_handle($multi, $ch);
+        curl_close($ch);
+    }
+    curl_multi_close($multi);
+
+    foreach (array_keys($dead) as $id) {
+        $s = $conn->prepare('DELETE FROM push_devices WHERE id = ?');
+        $s->bind_param('i', $id);
+        $s->execute();
+        $s->close();
+    }
+    return $sent;
+}
+
+// ── The hook ───────────────────────────────────────────────────────
+
+/**
+ * After a write request has answered, push what it changed. A fresh
+ * connection, so a page that closed its own (or left a transaction
+ * open) cannot get in the way. A failure is logged, never shown: the
+ * sale is saved either way.
+ */
+function push_after_request(): void {
+    if (!push_configured() || !defined('DB_HOST')) return;
+    $actor = push_actor();
+    if (function_exists('fastcgi_finish_request')) fastcgi_finish_request();
+    try {
+        $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
+        $conn->set_charset('utf8mb4');
+        push_flush($conn, $actor);
+        $conn->close();
+    } catch (Throwable $e) {
+        error_log('MadeForU push: ' . $e->getMessage());
+    }
+}
+
+if (PHP_SAPI !== 'cli' && ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
+    register_shutdown_function('push_after_request');
+}
