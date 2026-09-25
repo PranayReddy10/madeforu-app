@@ -2,24 +2,10 @@
 
 package com.madeforu.sales.ui.screens
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.Storefront
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.ui.text.style.TextOverflow
-import com.madeforu.sales.data.Order
-import com.madeforu.sales.data.OrderSummary
-import com.madeforu.sales.ui.components.BackButton
-import com.madeforu.sales.ui.components.IconTile
-import com.madeforu.sales.ui.components.KpiCard
-import com.madeforu.sales.ui.components.ListCard
-import com.madeforu.sales.ui.components.ThinDivider
-import com.madeforu.sales.ui.components.softCardColors
-import com.madeforu.sales.ui.theme.negativeColor
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -33,18 +19,24 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -57,7 +49,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.madeforu.sales.core.ApiResult
@@ -67,23 +60,34 @@ import com.madeforu.sales.core.isAuthFailure
 import com.madeforu.sales.data.Event
 import com.madeforu.sales.data.Partner
 import com.madeforu.sales.data.Repository
+import com.madeforu.sales.ui.components.BackButton
 import com.madeforu.sales.ui.components.ChipRow
-import com.madeforu.sales.ui.components.DetailRow
-import com.madeforu.sales.ui.components.errorBannerItem
+import com.madeforu.sales.ui.components.EmptyState
+import com.madeforu.sales.ui.components.IconTile
+import com.madeforu.sales.ui.components.ListCard
+import com.madeforu.sales.ui.components.ListRow
 import com.madeforu.sales.ui.components.LoadingBox
-import com.madeforu.sales.ui.components.Pill
+import com.madeforu.sales.ui.components.errorBannerItem
+import com.madeforu.sales.ui.components.softCardColors
+import com.madeforu.sales.ui.theme.BrandGradient
 import com.madeforu.sales.ui.theme.positiveColor
 import kotlinx.coroutines.launch
 
 /**
- * Events and stalls: what each one sold, and crediting that revenue to the
- * partner who collected it.
+ * Events and stalls: what each one took, at a glance.
+ *
+ * Laid out like the rest of the app: a hero with the totals, a filter,
+ * and one list card. Tapping an event opens its orders on their own page,
+ * which is the Orders screen limited to that event, so searching and
+ * filtering them works exactly as it does on the Orders tab. Crediting
+ * and closing an event sit in each row's menu, out of the way of the
+ * thing people open this page for.
  */
 @Composable
 fun EventsScreen(
     repository: Repository,
     onBack: () -> Unit,
-    onOpenOrder: (Int) -> Unit,
+    onOpenEvent: (Event) -> Unit,
     onSessionExpired: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
@@ -96,30 +100,8 @@ fun EventsScreen(
     var message by remember { mutableStateOf<String?>(null) }
     var showAdd by remember { mutableStateOf(false) }
     var creditingEvent by remember { mutableStateOf<Event?>(null) }
-
-    // The event whose orders are showing, and what has been fetched for
-    // each. Kept per event so closing and reopening one does not refetch,
-    // and a pull after a sale does (see openEvent).
-    var openEventId by remember { mutableStateOf<Int?>(null) }
-    var eventOrders by remember { mutableStateOf<Map<Int, EventOrders>>(emptyMap()) }
-    var loadingOrdersFor by remember { mutableStateOf<Int?>(null) }
-
-    fun openEvent(event: Event) {
-        if (openEventId == event.id) { openEventId = null; return }
-        openEventId = event.id
-        scope.launch {
-            loadingOrdersFor = event.id
-            // The same list the Orders tab uses, filtered to this event.
-            // 200 covers the busiest stall so far several times over.
-            when (val result = repository.orders(event = event.id.toString(), limit = 200)) {
-                is ApiResult.Success -> eventOrders = eventOrders +
-                    (event.id to EventOrders(result.value.orders, result.value.summary))
-                is ApiResult.Failure ->
-                    if (result.isAuthFailure()) onSessionExpired() else error = result.message
-            }
-            loadingOrdersFor = null
-        }
-    }
+    var filter by remember { mutableStateOf("all") }
+    var query by remember { mutableStateOf("") }
 
     fun load() {
         scope.launch {
@@ -132,12 +114,33 @@ fun EventsScreen(
         }
     }
 
+    fun setActive(event: Event) {
+        busy = true
+        scope.launch {
+            when (val result = repository.setEventActive(event.id, !event.isActive)) {
+                is ApiResult.Success -> events = result.value
+                is ApiResult.Failure -> error = result.message
+            }
+            busy = false
+        }
+    }
+
     LaunchedEffect(Unit) {
         load()
         repository.bootstrap().let {
             if (it is ApiResult.Success) partners = it.value.partners.filter { p -> p.isActive }
         }
     }
+
+    val shown = events
+        .filter {
+            when (filter) {
+                "open" -> it.isActive
+                "closed" -> !it.isActive
+                else -> true
+            }
+        }
+        .filter { query.isBlank() || it.name.contains(query.trim(), ignoreCase = true) }
 
     Scaffold(
         topBar = {
@@ -146,9 +149,7 @@ fun EventsScreen(
                     containerColor = MaterialTheme.colorScheme.background,
                 ),
                 title = { Text("Events & stalls") },
-                navigationIcon = {
-                    BackButton(onClick = onBack)
-                },
+                navigationIcon = { BackButton(onClick = onBack) },
             )
         },
         floatingActionButton = {
@@ -166,8 +167,8 @@ fun EventsScreen(
 
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(padding),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 96.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 96.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             errorBannerItem(error, onRetry = { load() })
             message?.let {
@@ -181,65 +182,69 @@ fun EventsScreen(
                 }
             }
 
-            if (events.isEmpty()) {
+            if (events.isNotEmpty()) {
+                item { EventsHero(events) }
+
                 item {
-                    Text(
-                        "No events yet. Create one before a stall so its sales are kept separate " +
-                            "from walk-up orders.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    OutlinedTextField(
+                        value = query,
+                        onValueChange = { query = it },
+                        placeholder = { Text("Search events") },
+                        leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+                        trailingIcon = {
+                            if (query.isNotEmpty()) {
+                                IconButton(onClick = { query = "" }) {
+                                    Icon(Icons.Filled.Close, contentDescription = "Clear search")
+                                }
+                            }
+                        },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+
+                item {
+                    ChipRow(
+                        options = listOf(
+                            "all" to "All (${events.size})",
+                            "open" to "Open (${events.count { it.isActive }})",
+                            "closed" to "Closed (${events.count { !it.isActive }})",
+                        ),
+                        selected = filter,
+                        onSelect = { filter = it },
+                        contentPadding = PaddingValues(0.dp),
                     )
                 }
             }
 
-            events.forEach { event ->
-                val open = openEventId == event.id
-                item(key = "event-${event.id}") {
-                    EventCard(
-                        event = event,
-                        open = open,
-                        busy = busy,
-                        onToggle = { openEvent(event) },
-                        onToggleActive = {
-                            busy = true
-                            scope.launch {
-                                when (val result = repository.setEventActive(event.id, !event.isActive)) {
-                                    is ApiResult.Success -> events = result.value
-                                    is ApiResult.Failure -> error = result.message
-                                }
-                                busy = false
-                            }
-                        },
-                        onCredit = { creditingEvent = event },
+            when {
+                events.isEmpty() -> item {
+                    EmptyState(
+                        title = "No events yet",
+                        body = "Create one before a stall so its sales are kept separate from " +
+                            "walk-up orders.",
+                        actionLabel = "New event",
+                        onAction = { showAdd = true },
                     )
                 }
-                if (open) {
-                    val fetched = eventOrders[event.id]
-                    when {
-                        fetched == null && loadingOrdersFor == event.id -> item(key = "loading-${event.id}") {
-                            Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
-                                CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
-                            }
-                        }
-                        fetched == null -> Unit
-                        fetched.orders.isEmpty() -> item(key = "none-${event.id}") {
-                            Text(
-                                "No orders at this event yet.",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp),
+                shown.isEmpty() -> item {
+                    EmptyState(
+                        title = "Nothing here",
+                        body = if (query.isNotBlank()) "No event is called \"$query\"."
+                        else "No events match this filter.",
+                    )
+                }
+                else -> item {
+                    ListCard {
+                        shown.forEachIndexed { index, event ->
+                            EventRow(
+                                event = event,
+                                busy = busy,
+                                divider = index < shown.lastIndex,
+                                onOpen = { onOpenEvent(event) },
+                                onCredit = { creditingEvent = event },
+                                onToggleActive = { setActive(event) },
                             )
-                        }
-                        else -> {
-                            item(key = "summary-${event.id}") { EventOrdersSummary(fetched.summary) }
-                            item(key = "orders-${event.id}") {
-                                ListCard {
-                                    fetched.orders.forEachIndexed { index, order ->
-                                        OrderRow(order, onClick = { onOpenOrder(order.id) })
-                                        if (index < fetched.orders.lastIndex) ThinDivider()
-                                    }
-                                }
-                            }
                         }
                     }
                 }
@@ -285,6 +290,107 @@ fun EventsScreen(
             },
         )
     }
+}
+
+/** What every event together has taken, on the brand gradient. */
+@Composable
+private fun EventsHero(events: List<Event>) {
+    val revenue = events.sumOf { it.revenue }
+    val orders = events.sumOf { it.orderCount }
+    val open = events.count { it.isActive }
+    Card(
+        shape = RoundedCornerShape(26.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .background(Brush.linearGradient(BrandGradient))
+                .padding(22.dp),
+        ) {
+            Text(
+                "TAKEN AT EVENTS",
+                style = MaterialTheme.typography.labelSmall,
+                color = Color.White.copy(alpha = 0.82f),
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                Money.full(revenue),
+                style = MaterialTheme.typography.displaySmall,
+                color = Color.White,
+            )
+            Text(
+                "$orders orders · ${events.size} events · $open open",
+                style = MaterialTheme.typography.bodyMedium,
+                color = Color.White.copy(alpha = 0.88f),
+            )
+        }
+    }
+}
+
+/** One event: tile, name, what it took; its menu holds the rarer actions. */
+@Composable
+private fun EventRow(
+    event: Event,
+    busy: Boolean,
+    divider: Boolean,
+    onOpen: () -> Unit,
+    onCredit: () -> Unit,
+    onToggleActive: () -> Unit,
+) {
+    var menu by remember { mutableStateOf(false) }
+    val dates = event.startDate?.takeIf { it.isNotBlank() }?.let { start ->
+        Dates.pretty(start) + (event.endDate?.takeIf { it.isNotBlank() }?.let { " – " + Dates.pretty(it) } ?: "")
+    }
+    ListRow(
+        title = event.name,
+        subtitle = listOfNotNull(
+            "${event.orderCount} orders",
+            dates,
+            if (event.isPaid) "stall " + Money.short(event.entryCost) else null,
+        ).joinToString(" · "),
+        amount = Money.short(event.revenue),
+        amountCaption = if (event.isActive) "Open" else "Closed",
+        amountCaptionColor = if (event.isActive) positiveColor() else MaterialTheme.colorScheme.onSurfaceVariant,
+        leading = {
+            IconTile(
+                label = event.name,
+                icon = Icons.Filled.Storefront,
+                size = 42.dp,
+                tint = if (event.isActive) null else MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        },
+        trailing = {
+            Box {
+                IconButton(onClick = { menu = true }, enabled = !busy) {
+                    Icon(
+                        Icons.Filled.MoreVert,
+                        contentDescription = "More for ${event.name}",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                    DropdownMenuItem(
+                        text = { Text("See orders") },
+                        onClick = { menu = false; onOpen() },
+                    )
+                    if (event.revenue > 0.5) {
+                        DropdownMenuItem(
+                            text = { Text("Credit revenue to a partner") },
+                            onClick = { menu = false; onCredit() },
+                        )
+                    }
+                    DropdownMenuItem(
+                        text = { Text(if (event.isActive) "Close event" else "Reopen event") },
+                        onClick = { menu = false; onToggleActive() },
+                    )
+                }
+            }
+        },
+        divider = divider,
+        onClick = onOpen,
+    )
 }
 
 @Composable
@@ -404,103 +510,5 @@ private fun AddEventSheet(
             ) { Text("Create event") }
             Spacer(Modifier.height(24.dp))
         }
-    }
-}
-
-/** One event's orders, as fetched when its card is opened. */
-private data class EventOrders(val orders: List<Order>, val summary: OrderSummary)
-
-/**
- * An event, laid out like every other list row: tile, name, one line of
- * facts, and what it took on the right. Tapping it shows its orders.
- */
-@Composable
-private fun EventCard(
-    event: Event,
-    open: Boolean,
-    busy: Boolean,
-    onToggle: () -> Unit,
-    onToggleActive: () -> Unit,
-    onCredit: () -> Unit,
-) {
-    Card(onClick = onToggle, shape = RoundedCornerShape(20.dp), colors = softCardColors()) {
-        Column(Modifier.fillMaxWidth().padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                IconTile(
-                    label = event.name,
-                    icon = Icons.Filled.Storefront,
-                    size = 42.dp,
-                )
-                Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        event.name,
-                        style = MaterialTheme.typography.titleMedium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Text(
-                        "${event.orderCount} orders" +
-                            (event.startDate?.takeIf { it.isNotBlank() }?.let { " · " + Dates.pretty(it) } ?: ""),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Column(horizontalAlignment = Alignment.End) {
-                    Text(
-                        Money.short(event.revenue),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    if (event.isActive) Pill("Open", positiveColor())
-                    else Pill("Closed", MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
-
-            if (event.isPaid || !event.endDate.isNullOrBlank()) {
-                Spacer(Modifier.height(8.dp))
-                if (event.isPaid) DetailRow("Stall fee", Money.full(event.entryCost))
-                if (!event.startDate.isNullOrBlank() && !event.endDate.isNullOrBlank()) {
-                    DetailRow("Dates", Dates.pretty(event.startDate) + " – " + Dates.pretty(event.endDate))
-                }
-            }
-
-            Spacer(Modifier.height(4.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = onToggle) {
-                    Text(if (open) "Hide orders" else "Show orders")
-                    Icon(
-                        if (open) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp),
-                    )
-                }
-                Spacer(Modifier.weight(1f))
-                if (event.revenue > 0.5) {
-                    TextButton(onClick = onCredit) { Text("Credit") }
-                }
-                TextButton(onClick = onToggleActive, enabled = !busy) {
-                    Text(if (event.isActive) "Close" else "Reopen")
-                }
-            }
-        }
-    }
-}
-
-/** Billed, collected and still due across the open event's orders. */
-@Composable
-private fun EventOrdersSummary(summary: OrderSummary) {
-    Row(
-        Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        KpiCard("Billed", Money.compact(summary.total), Modifier.weight(1f))
-        KpiCard("Collected", Money.compact(summary.paid), Modifier.weight(1f), accent = positiveColor())
-        KpiCard(
-            "Due",
-            Money.compact(summary.balance),
-            Modifier.weight(1f),
-            accent = if (summary.balance > 0.5) negativeColor() else null,
-        )
     }
 }
