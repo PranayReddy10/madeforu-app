@@ -38,14 +38,15 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.madeforu.sales.BuildConfig
 import com.madeforu.sales.core.ApiResult
+import com.madeforu.sales.core.Prefs
 import com.madeforu.sales.core.ServiceLocator
 import com.madeforu.sales.data.Repository
-import com.madeforu.sales.data.Settings
 import com.madeforu.sales.data.ServerInfo
+import com.madeforu.sales.data.Settings
 import com.madeforu.sales.ui.components.ChipRow
 import com.madeforu.sales.ui.components.DetailRow
-import com.madeforu.sales.ui.components.errorBannerItem
 import com.madeforu.sales.ui.components.SectionHeader
+import com.madeforu.sales.ui.components.errorBannerItem
 import com.madeforu.sales.ui.components.softCardColors
 import com.madeforu.sales.ui.theme.negativeColor
 import com.madeforu.sales.ui.theme.positiveColor
@@ -343,11 +344,24 @@ fun SettingsScreen(
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                     )
+                    // The address the app will actually call, spelled out.
+                    // An address can read perfectly correctly and still be
+                    // missing its trailing slash, and that is invisible
+                    // until you see what gets appended to it.
+                    Text(
+                        "Calls will go to " +
+                            Prefs.normaliseBaseUrl(baseUrl) + "orders.php",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                     OutlinedButton(
                         onClick = {
                             busy = true
                             scope.launch {
                                 prefs.setBaseUrl(baseUrl)
+                                // Show it back tidied, so what is on
+                                // screen is what is stored.
+                                baseUrl = prefs.currentBaseUrl()
                                 when (val r = repository.ping()) {
                                     is ApiResult.Success -> {
                                         serverInfo = r.value
@@ -368,7 +382,10 @@ fun SettingsScreen(
                                         error = null
                                     }
                                     is ApiResult.Failure ->
-                                        error = "No answer from that address. Check it and try again."
+                                        // The reason, not a guess at it:
+                                        // ApiClient now names the URL it
+                                        // called and what came back.
+                                        error = r.message
                                 }
                                 busy = false
                             }
