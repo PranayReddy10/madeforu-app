@@ -1,5 +1,6 @@
 package com.madeforu.sales.data
 
+import android.content.Context
 import com.madeforu.sales.core.ApiResult
 import com.madeforu.sales.core.Prefs
 import kotlinx.coroutines.Dispatchers
@@ -31,7 +32,9 @@ import java.util.concurrent.TimeUnit
  * screen ever has to think about transport — a screen gets either the
  * payload it asked for or a message it can show.
  */
-class ApiClient(private val prefs: Prefs) {
+class ApiClient(context: Context, private val prefs: Prefs) {
+
+    private val appContext = context.applicationContext
 
     private val json = Json {
         ignoreUnknownKeys = true      // the server may grow fields; old builds keep working
@@ -48,18 +51,17 @@ class ApiClient(private val prefs: Prefs) {
         .readTimeout(30, TimeUnit.SECONDS)
         .writeTimeout(30, TimeUnit.SECONDS)
         .retryOnConnectionFailure(true)
-        // Shared hosting sits behind a web firewall that decides what to
-        // answer partly on who is asking, and OkHttp's own "okhttp/4.x" is
-        // on more than one blocklist. A request carrying it is refused with
-        // a 403 HTML page before PHP ever runs -- which is exactly what it
-        // looks like when the very same address opens fine in the browser
-        // and fails in the app. So ask the way a phone browser asks.
+        // The server sits behind Cloudflare, whose bot check is passed
+        // once in a WebView and then remembered as a cookie. Sharing the
+        // WebView's cookie store and its exact User-Agent is what lets
+        // that one pass cover these requests too. See WebGate.
+        .cookieJar(WebGate.cookieJar)
         .addInterceptor(
             object : Interceptor {
                 override fun intercept(chain: Interceptor.Chain): Response =
                     chain.proceed(
                         chain.request().newBuilder()
-                            .header("User-Agent", USER_AGENT)
+                            .header("User-Agent", WebGate.userAgent(appContext))
                             .header("Accept-Language", "en-IN,en;q=0.9")
                             .build(),
                     )
@@ -128,7 +130,17 @@ class ApiClient(private val prefs: Prefs) {
     private fun execute(request: Request): ApiResult<JsonObject> = try {
         http.newCall(request).execute().use { response ->
             val raw = response.body?.string().orEmpty()
-            parseEnvelope(raw, response.code, request.url.toString())
+            if (isBotCheck(response, raw)) {
+                WebGate.raise()
+                ApiResult.Failure(
+                    CODE_BOT_CHECK,
+                    "Cloudflare, in front of ${request.url.host}, stopped this request to check " +
+                        "the app is not a bot (HTTP ${response.code}). The check opens on screen -- " +
+                        "let it finish, then try again.",
+                )
+            } else {
+                parseEnvelope(raw, response.code, request.url.toString())
+            }
         }
     } catch (e: UnknownHostException) {
         ApiResult.Failure(ApiResult.CODE_NETWORK, "No internet connection.")
@@ -136,6 +148,22 @@ class ApiClient(private val prefs: Prefs) {
         ApiResult.Failure(ApiResult.CODE_NETWORK, "The server took too long to answer. Try again.")
     } catch (e: IOException) {
         ApiResult.Failure(ApiResult.CODE_NETWORK, "Could not reach the server. Check the connection.")
+    }
+
+    /**
+     * Whether this reply is Cloudflare's bot check rather than the API.
+     *
+     * Cloudflare marks a challenge with `cf-mitigated: challenge`. Older
+     * setups do not, so a 403 or 503 from Cloudflare whose body is a web
+     * page counts too -- the API itself only ever answers in JSON, so a
+     * page from Cloudflare cannot be the API refusing something.
+     */
+    private fun isBotCheck(response: Response, raw: String): Boolean {
+        if (response.header("cf-mitigated").equals("challenge", ignoreCase = true)) return true
+        val fromCloudflare = response.header("server")?.contains("cloudflare", ignoreCase = true) == true
+        return fromCloudflare &&
+            (response.code == 403 || response.code == 503) &&
+            raw.trimStart().startsWith("<")
     }
 
     /**
@@ -237,16 +265,8 @@ class ApiClient(private val prefs: Prefs) {
     private fun encode(v: String): String = java.net.URLEncoder.encode(v, "UTF-8")
 
     companion object {
-        /**
-         * What the app calls itself on the wire.
-         *
-         * Browser-shaped on purpose, with the app's own name on the end so
-         * the access log still shows which requests are ours. The default
-         * OkHttp agent is what a shared host's firewall blocks.
-         */
-        private const val USER_AGENT =
-            "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) " +
-                "Chrome/122.0.0.0 Mobile Safari/537.36 MadeForU/1.0"
+        /** A request stopped by Cloudflare's bot check; WebGate says how to pass it. */
+        const val CODE_BOT_CHECK = "bot_check"
 
         /** Small helper so call sites read as `body { "id" to 4 }`. */
         fun body(build: MutableMap<String, JsonElement>.() -> Unit): JsonObject {
