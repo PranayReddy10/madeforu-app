@@ -14,16 +14,14 @@ recognises the Android app as "not a browser" from how it connects, not
 from its User-Agent. It answers with a 403 challenge page before PHP runs.
 Chrome passes that check silently, which is why the web app works.
 
-The app now handles this itself. When Cloudflare asks, a "Checking the
-connection" screen opens and passes the check once in a WebView, and the
-app keeps the cookie. The clean fix, though, is to not challenge the API
-at all. It is JSON for the apps, not pages for people:
+The app does not try to pass the check itself. Stop Cloudflare from
+challenging the API instead: it is JSON for the apps, not pages for people.
 
 - **Cloudflare dashboard** → the domain → Security → WAF → Custom rules →
   create a rule for *URI Path starts with `/api/`* with action **Skip**,
   ticking all the managed/bot/challenge features it offers.
   On the free plan **Bot Fight Mode cannot be skipped by a rule**. Turn
   it off under Security → Bots instead.
-- **Hostinger CDN** (if the domain's Cloudflare is managed by Hostinger):
+- **Hostinger CDN** (if Hostinger manages the domain's Cloudflare):
   hPanel → Websites → the site → Performance → CDN → turn off bot
   protection / "Under attack" mode, or turn the CDN off for this subdomain.
