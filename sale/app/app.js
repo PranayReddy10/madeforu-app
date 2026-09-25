@@ -24,7 +24,7 @@ const DEFAULT_API = new URL('../api/', location.href).href;
  * browser, the server or the app is the stale one. It must match the
  * CACHE name in sw.js.
  */
-const BUILD = '2026-09-20.3';
+const BUILD = '2026-09-25.1';
 
 /** What this build of the app expects the server to be able to do. */
 const NEEDS_FEATURES = ['revenue_breakdown', 'expense_create', 'price_history',
@@ -2212,19 +2212,49 @@ function qtyText(q) {
 
 /* ── Events, catalogue, settings ──────────────────────────────── */
 
-route('events', async () => {
+route('events', async (id) => {
+  if (id) return eventOrders(id);
   setHtml(`<div class="screen"><div class="head">
     <button class="back" data-go="home">‹</button><h1 class="grow">Events &amp; stalls</h1></div>
     <div id="body">${spinner()}</div></div>`);
   const { events } = await api('catalog.php', 'events');
+  // Each event opens its own orders: what was sold at that stall, and
+  // what is still owed from it.
   document.getElementById('body').innerHTML = events.length ? `<div class="card">${events.map((e) => `
-    <div class="row">${tile(e.name, svg('events', 18))}
+    <button class="row" data-go="events/${e.id}" style="width:100%;text-align:left">${tile(e.name, svg('events', 18))}
       <div class="grow"><div class="t">${esc(e.name)}</div>
         <div class="s">${e.order_count} orders${e.start_date ? ' · ' + esc(prettyDate(e.start_date)) : ''}
           · ${e.is_active ? 'Open' : 'Closed'}</div></div>
-      <div class="amt">${moneyShort(e.revenue)}</div></div>`).join('')}</div>`
+      <div class="amt">${moneyShort(e.revenue)}<div class="s">orders ›</div></div></button>`).join('')}</div>`
     : '<p class="muted center" style="margin-top:30px">No events yet.</p>';
 });
+
+/** One event's orders, with the same summary the Orders tab heads its list with. */
+async function eventOrders(id) {
+  setHtml(`<div class="screen"><div class="head">
+    <button class="back" data-go="events">‹</button>
+    <h1 class="grow" id="evtitle">Event orders</h1></div>
+    <div id="body">${spinner()}</div></div>`);
+  const [{ events }, data] = await Promise.all([
+    api('catalog.php', 'events'),
+    api('orders.php', 'list', { params: { event: id, limit: 200 } }),
+  ]);
+  const e = events.find((x) => String(x.id) === String(id));
+  if (e) {
+    document.getElementById('evtitle').innerHTML = `${esc(e.name)}
+      <div class="sub">${e.start_date ? esc(prettyDate(e.start_date)) + ' · ' : ''}${e.is_active ? 'Open' : 'Closed'}</div>`;
+  }
+  const s = data.summary;
+  document.getElementById('body').innerHTML = `
+    <div class="grid2">
+      ${statCard('Orders', String(s.count), '')}
+      ${statCard('Billed', moneyShort(s.total), '')}
+      ${statCard('Collected', moneyShort(s.paid), '', 'pos')}
+      ${statCard('Due', moneyShort(s.balance), '', s.balance > 0.5 ? 'neg' : '')}
+    </div>
+    ${data.orders.length ? `<div class="card" style="margin-top:10px">${data.orders.map(orderRow).join('')}</div>`
+      : '<p class="muted center" style="margin-top:30px">No orders at this event yet.</p>'}`;
+}
 
 route('catalog', async () => {
   setHtml(`<div class="screen"><div class="head">

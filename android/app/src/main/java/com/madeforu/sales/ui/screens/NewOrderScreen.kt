@@ -21,7 +21,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Remove
@@ -62,6 +61,7 @@ import com.madeforu.sales.data.Event
 import com.madeforu.sales.data.OrderDraft
 import com.madeforu.sales.data.Product
 import com.madeforu.sales.data.Repository
+import com.madeforu.sales.ui.components.BackButton
 import com.madeforu.sales.ui.components.ChipRow
 import com.madeforu.sales.ui.components.DetailRow
 import com.madeforu.sales.ui.components.errorBannerItem
@@ -204,9 +204,7 @@ fun NewOrderScreen(
                 ),
                 title = { Text(if (editOrderId == null) "New sale" else "Edit order") },
                 navigationIcon = {
-                    IconButton(onClick = onCancel) {
-                        Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
-                    }
+                    BackButton(onClick = onCancel)
                 },
             )
         },
@@ -461,7 +459,7 @@ fun NewOrderScreen(
             if (editOrderId == null) {
                 item {
                     Card(
-                        shape = RoundedCornerShape(18.dp),
+                        shape = RoundedCornerShape(20.dp),
                         colors = softCardColors(),
                     ) {
                         Column(Modifier.padding(16.dp)) {
@@ -507,7 +505,7 @@ fun NewOrderScreen(
             if (draft.lines.isNotEmpty()) {
                 item {
                     Card(
-                        shape = RoundedCornerShape(18.dp),
+                        shape = RoundedCornerShape(20.dp),
                         colors = softCardColors(),
                     ) {
                         Column(Modifier.padding(16.dp)) {
@@ -550,7 +548,7 @@ fun NewOrderScreen(
 internal fun ProductPickerRow(product: Product, quantity: Int, onChange: (Int) -> Unit) {
     val selected = quantity > 0
     Card(
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(
             containerColor = if (selected) MaterialTheme.colorScheme.primaryContainer
             else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
@@ -615,7 +613,7 @@ private fun SectionToggle(
     onToggle: () -> Unit,
 ) {
     Card(
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(20.dp),
         colors = softCardColors(),
         onClick = onToggle,
     ) {
@@ -650,7 +648,7 @@ private fun ExpandableSection(
     content: @Composable () -> Unit,
 ) {
     Card(
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(20.dp),
         colors = softCardColors(),
         onClick = onToggle,
     ) {

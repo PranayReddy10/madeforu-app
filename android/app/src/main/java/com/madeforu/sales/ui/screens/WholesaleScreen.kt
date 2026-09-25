@@ -1,5 +1,6 @@
 package com.madeforu.sales.ui.screens
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -16,7 +17,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -46,6 +46,8 @@ import com.madeforu.sales.core.Money
 import com.madeforu.sales.core.isAuthFailure
 import com.madeforu.sales.data.Repository
 import com.madeforu.sales.data.WholesaleCustomer
+import com.madeforu.sales.ui.components.ListSegment
+import com.madeforu.sales.ui.components.BackButton
 import com.madeforu.sales.ui.components.IconTile
 import com.madeforu.sales.ui.components.LoadingBox
 import com.madeforu.sales.ui.components.errorBannerItem
@@ -108,9 +110,7 @@ fun WholesaleScreen(
             TopAppBar(
                 title = { Text("Wholesale buyers") },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
-                    }
+                    BackButton(onClick = onBack)
                 },
                 actions = {
                     IconButton(onClick = { adding = true }, enabled = notReady == null) {
@@ -134,7 +134,7 @@ fun WholesaleScreen(
 
             notReady?.let { message ->
                 item {
-                    Card(shape = RoundedCornerShape(18.dp), colors = softCardColors()) {
+                    Card(shape = RoundedCornerShape(20.dp), colors = softCardColors()) {
                         Text(
                             message,
                             style = MaterialTheme.typography.bodyMedium,
@@ -168,22 +168,17 @@ fun WholesaleScreen(
 
             items(customers.size) { index ->
                 val c = customers[index]
-                Card(
-                    shape = RoundedCornerShape(18.dp),
-                    colors = softCardColors(),
-                    onClick = { onOpenBuyer(c.id) },
-                ) {
+                ListSegment(index, customers.size, gap = 10.dp) {
                     Row(
-                        Modifier.fillMaxWidth().padding(14.dp),
+                        Modifier.fillMaxWidth().clickable { onOpenBuyer(c.id) }.padding(vertical = 11.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        IconTile(label = c.name)
+                        IconTile(label = c.name, size = 42.dp)
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
                             Text(
                                 c.name,
-                                style = MaterialTheme.typography.bodyLarge,
-                                fontWeight = FontWeight.SemiBold,
+                                style = MaterialTheme.typography.titleMedium,
                             )
                             if (c.where.isNotBlank()) {
                                 Text(

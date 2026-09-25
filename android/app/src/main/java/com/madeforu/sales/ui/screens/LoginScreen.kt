@@ -245,7 +245,7 @@ fun LoginScreen(repository: Repository, onSignedIn: () -> Unit) {
                             placeholder = { Text("https://sale.madeforu.co.in/api/") },
                             singleLine = true,
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-                            shape = RoundedCornerShape(16.dp),
+                            shape = RoundedCornerShape(14.dp),
                             modifier = Modifier.fillMaxWidth(),
                         )
                     }

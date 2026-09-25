@@ -22,7 +22,7 @@ object ServiceLocator {
 
     private fun buildRepository(appContext: Context): Repository {
         val prefs = Prefs(appContext)
-        return Repository(ApiClient(appContext, prefs), prefs)
+        return Repository(ApiClient(prefs), prefs)
     }
 
     fun prefs(context: Context): Prefs = Prefs(context.applicationContext)

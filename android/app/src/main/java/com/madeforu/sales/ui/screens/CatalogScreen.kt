@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -21,7 +22,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -60,6 +60,8 @@ import com.madeforu.sales.core.isAuthFailure
 import com.madeforu.sales.data.PriceHistory
 import com.madeforu.sales.data.Product
 import com.madeforu.sales.data.Repository
+import com.madeforu.sales.ui.components.ListSegment
+import com.madeforu.sales.ui.components.BackButton
 import com.madeforu.sales.ui.components.errorBannerItem
 import com.madeforu.sales.ui.components.LoadingBox
 import com.madeforu.sales.ui.components.Pill
@@ -116,9 +118,7 @@ fun CatalogScreen(
                 ),
                 title = { Text("Products & prices") },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
-                    }
+                    BackButton(onClick = onBack)
                 },
             )
         },
@@ -147,7 +147,7 @@ fun CatalogScreen(
             // toast that nobody finishes reading.
             message?.let { text ->
                 item {
-                    Card(shape = RoundedCornerShape(18.dp), colors = softCardColors()) {
+                    Card(shape = RoundedCornerShape(20.dp), colors = softCardColors()) {
                         Column(Modifier.fillMaxWidth().padding(16.dp)) {
                             Text(text, style = MaterialTheme.typography.bodyMedium)
                             Spacer(Modifier.height(8.dp))
@@ -159,17 +159,9 @@ fun CatalogScreen(
 
             items(products.size) { index ->
                 val product = products[index]
-                Card(
-                    onClick = { editing = product },
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(
-                            alpha = if (product.isActive) 0.32f else 0.15f,
-                        ),
-                    ),
-                ) {
+                ListSegment(index, products.size, gap = 8.dp) {
                     Row(
-                        Modifier.fillMaxWidth().padding(14.dp),
+                        Modifier.fillMaxWidth().clickable { editing = product }.padding(vertical = 11.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         ProductThumb(product.name, product.imageUrl)

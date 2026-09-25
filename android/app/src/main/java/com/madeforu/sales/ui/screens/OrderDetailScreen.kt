@@ -20,7 +20,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
@@ -63,6 +62,7 @@ import com.madeforu.sales.core.Money
 import com.madeforu.sales.core.isAuthFailure
 import com.madeforu.sales.data.Order
 import com.madeforu.sales.data.Repository
+import com.madeforu.sales.ui.components.BackButton
 import com.madeforu.sales.ui.components.DetailRow
 import com.madeforu.sales.ui.components.errorBannerItem
 import com.madeforu.sales.ui.components.softCardColors
@@ -151,9 +151,7 @@ fun OrderDetailScreen(
                 ),
                 title = { Text(order?.orderNo ?: "Order") },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
-                    }
+                    BackButton(onClick = onBack)
                 },
                 actions = {
                     IconButton(onClick = onEdit) {
@@ -226,7 +224,7 @@ fun OrderDetailScreen(
 
             item {
                 Card(
-                    shape = RoundedCornerShape(18.dp),
+                    shape = RoundedCornerShape(20.dp),
                     colors = softCardColors(),
                 ) {
                     Column(Modifier.padding(16.dp)) {
@@ -244,7 +242,7 @@ fun OrderDetailScreen(
 
             item {
                 Card(
-                    shape = RoundedCornerShape(18.dp),
+                    shape = RoundedCornerShape(20.dp),
                     colors = softCardColors(),
                 ) {
                     Column(Modifier.padding(16.dp)) {
@@ -352,7 +350,7 @@ fun OrderDetailScreen(
                 item { SectionHeader("Delivery") }
                 item {
                     Card(
-                        shape = RoundedCornerShape(18.dp),
+                        shape = RoundedCornerShape(20.dp),
                         colors = softCardColors(),
                         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
                     ) {
@@ -482,7 +480,7 @@ fun OrderDetailScreen(
 private fun MoneyHeader(order: Order) {
     val settled = order.balance <= 0.5
     Card(
-        shape = RoundedCornerShape(22.dp),
+        shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(
             containerColor = if (settled) MaterialTheme.colorScheme.primaryContainer
             else MaterialTheme.colorScheme.errorContainer,

@@ -16,7 +16,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.AlertDialog
@@ -54,6 +53,7 @@ import com.madeforu.sales.core.isAuthFailure
 import com.madeforu.sales.data.Repository
 import com.madeforu.sales.data.WholesaleDetail
 import com.madeforu.sales.data.WholesaleLine
+import com.madeforu.sales.ui.components.BackButton
 import com.madeforu.sales.ui.components.DetailRow
 import com.madeforu.sales.ui.components.IconTile
 import com.madeforu.sales.ui.components.LoadingBox
@@ -111,9 +111,7 @@ fun WholesaleBuyerScreen(
             TopAppBar(
                 title = { Text(current?.customer?.name ?: "Buyer") },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
-                    }
+                    BackButton(onClick = onBack)
                 },
                 actions = {
                     IconButton(onClick = { editing = true }, enabled = current != null) {
@@ -130,7 +128,7 @@ fun WholesaleBuyerScreen(
             Column(Modifier.padding(padding)) {
                 if (error != null) {
                     Card(
-                        shape = RoundedCornerShape(18.dp),
+                        shape = RoundedCornerShape(20.dp),
                         colors = softCardColors(),
                         modifier = Modifier.padding(16.dp),
                     ) {
@@ -162,7 +160,7 @@ fun WholesaleBuyerScreen(
             }
 
             item {
-                Card(shape = RoundedCornerShape(22.dp), colors = softCardColors()) {
+                Card(shape = RoundedCornerShape(20.dp), colors = softCardColors()) {
                     Column(Modifier.fillMaxWidth().padding(16.dp)) {
                         if (current.customer.where.isNotBlank()) {
                             Text(
@@ -206,7 +204,7 @@ fun WholesaleBuyerScreen(
             if (current.summary.isNotEmpty()) {
                 item { SectionHeader("What they take") }
                 item {
-                    Card(shape = RoundedCornerShape(22.dp), colors = softCardColors()) {
+                    Card(shape = RoundedCornerShape(20.dp), colors = softCardColors()) {
                         Column(Modifier.fillMaxWidth().padding(14.dp)) {
                             current.summary.forEachIndexed { index, row ->
                                 if (index > 0) {
@@ -268,7 +266,7 @@ fun WholesaleBuyerScreen(
 
             items(current.visits.size) { index ->
                 val visit = current.visits[index]
-                Card(shape = RoundedCornerShape(18.dp), colors = softCardColors()) {
+                Card(shape = RoundedCornerShape(20.dp), colors = softCardColors()) {
                     Column(Modifier.fillMaxWidth().padding(14.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
@@ -435,7 +433,7 @@ private fun VisitSheet(
 
             items(lines.size) { index ->
                 val line = lines[index]
-                Card(shape = RoundedCornerShape(16.dp), colors = softCardColors()) {
+                Card(shape = RoundedCornerShape(20.dp), colors = softCardColors()) {
                     Column(Modifier.fillMaxWidth().padding(12.dp)) {
                         OutlinedTextField(
                             value = line.item,

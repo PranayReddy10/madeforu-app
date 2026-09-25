@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+
 package com.madeforu.sales.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
@@ -21,12 +23,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -39,7 +40,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.madeforu.sales.core.Money
 import com.madeforu.sales.ui.theme.negativeColor
 import com.madeforu.sales.ui.theme.positiveColor
@@ -74,16 +78,18 @@ fun KpiCard(
         modifier = modifier.then(if (onClick != null) Modifier.clickable { onClick() } else Modifier),
         colors = softCardColors(),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-        shape = RoundedCornerShape(22.dp),
+        shape = RoundedCornerShape(20.dp),
     ) {
-        Column(Modifier.padding(16.dp)) {
+        // The web app's stat card: 14 padding, an 11sp caps label, a
+        // 22sp figure 3 below it, and an 11sp caption.
+        Column(Modifier.padding(14.dp)) {
             Text(
                 label.uppercase(),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
             )
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(3.dp))
             Text(
                 value,
                 style = MaterialTheme.typography.headlineMedium,
@@ -95,10 +101,10 @@ fun KpiCard(
                 Spacer(Modifier.height(4.dp))
                 DeltaBadge(change)
             } else if (caption != null) {
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(2.dp))
                 Text(
                     caption,
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.sp),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 2,
                 )
@@ -158,7 +164,7 @@ fun Pill(label: String, tint: Color, modifier: Modifier = Modifier) {
 @Composable
 fun SectionHeader(title: String, modifier: Modifier = Modifier, action: (@Composable () -> Unit)? = null) {
     Row(
-        modifier = modifier.fillMaxWidth().padding(top = 20.dp, bottom = 8.dp),
+        modifier = modifier.fillMaxWidth().padding(top = 18.dp, bottom = 6.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -270,16 +276,33 @@ fun <T> ChipRow(
     ) {
         items(options.size) { index ->
             val (value, label) = options[index]
-            FilterChip(
-                selected = value == selected,
-                onClick = { onSelect(value) },
-                label = { Text(label) },
-                colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                    selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                ),
-            )
+            AppChip(label, selected = value == selected, onClick = { onSelect(value) })
         }
+    }
+}
+
+/**
+ * The web app's chip: a white pill lifted off the page, filled rose when
+ * picked. Material's FilterChip draws an outline and a tick instead,
+ * which is what made the app's filter rows read heavier than the web's.
+ */
+@Composable
+fun AppChip(label: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Surface(
+        onClick = onClick,
+        modifier = modifier,
+        shape = RoundedCornerShape(50),
+        color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
+        contentColor = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+        shadowElevation = if (selected) 0.dp else 1.dp,
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+            maxLines = 1,
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+        )
     }
 }
 
@@ -328,7 +351,12 @@ fun numberText(value: Double): String =
     if (value == value.toLong().toDouble()) value.toLong().toString()
     else String.format(java.util.Locale.US, "%.2f", value)
 
-/** A label/value row — the workhorse of every detail screen. */
+/**
+ * A label/value row — the workhorse of every detail screen.
+ *
+ * Sized as the web app's detailRow: a muted label, the figure bold on the
+ * right. `emphasise` is its total line, where the label is a title too.
+ */
 @Composable
 fun DetailRow(
     label: String,
@@ -338,23 +366,188 @@ fun DetailRow(
     emphasise: Boolean = false,
 ) {
     Row(
-        modifier = modifier.fillMaxWidth().padding(vertical = 5.dp),
+        modifier = modifier.fillMaxWidth().padding(vertical = 6.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
             label,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = if (emphasise) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodyMedium,
+            color = if (emphasise) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.weight(1f),
         )
         Spacer(Modifier.width(12.dp))
         Text(
             value,
-            style = if (emphasise) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodyLarge,
-            fontWeight = if (emphasise) FontWeight.Bold else FontWeight.Medium,
+            style = MaterialTheme.typography.bodyLarge,
+            fontWeight = if (emphasise) FontWeight.Bold else FontWeight.SemiBold,
             color = valueColor ?: MaterialTheme.colorScheme.onSurface,
         )
+    }
+}
+
+/**
+ * The web app's list row: a tile, a title over a muted line, and an amount
+ * on the right, with a hairline under every row but the last.
+ *
+ * Rows go inside a [ListCard], one card per list, rather than a card per
+ * row. That is most of the difference between the two apps' lists: the
+ * web shows a list as one surface, the app used to show a stack of boxes.
+ */
+@Composable
+fun ListRow(
+    title: String,
+    modifier: Modifier = Modifier,
+    subtitle: String? = null,
+    amount: String? = null,
+    amountCaption: String? = null,
+    amountColor: Color? = null,
+    amountCaptionColor: Color? = null,
+    leading: (@Composable () -> Unit)? = null,
+    trailing: (@Composable () -> Unit)? = null,
+    divider: Boolean = true,
+    onClick: (() -> Unit)? = null,
+) {
+    Column(modifier.fillMaxWidth()) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier)
+                .padding(vertical = 11.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (leading != null) {
+                leading()
+                Spacer(Modifier.width(12.dp))
+            }
+            Column(Modifier.weight(1f)) {
+                Text(
+                    title,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (!subtitle.isNullOrBlank()) {
+                    Text(
+                        subtitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+            if (amount != null) {
+                Spacer(Modifier.width(10.dp))
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        amount,
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = amountColor ?: MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                    )
+                    if (amountCaption != null) {
+                        Text(
+                            amountCaption,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = amountCaptionColor ?: MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                        )
+                    }
+                }
+            }
+            if (trailing != null) {
+                Spacer(Modifier.width(6.dp))
+                trailing()
+            }
+        }
+        if (divider) ThinDivider()
+    }
+}
+
+/** One card holding a whole list of [ListRow]s, as the web app draws a list. */
+@Composable
+fun ListCard(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = softCardColors(),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+    ) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
+            content()
+        }
+    }
+}
+
+/**
+ * One row's slice of a card that runs down a LazyColumn.
+ *
+ * A lazy list cannot put one Card around many items, so each item draws
+ * its own piece: the first rounds its top corners, the last its bottom,
+ * and every row but the last carries the hairline. Put together with no
+ * gap between items (or `gap` set to the list's spacing), they read as
+ * the web app's single list card.
+ */
+@Composable
+fun ListSegment(index: Int, count: Int, gap: Dp = 0.dp, content: @Composable () -> Unit) {
+    val first = index == 0
+    val last = index == count - 1
+    val radius = 20.dp
+    Surface(
+        // In a list spaced with Arrangement.spacedBy, every row after the
+        // first reports itself `gap` shorter and draws `gap` higher, closing
+        // the space the list leaves above it. The screen keeps its spacing
+        // between cards; the rows of this one card still touch.
+        modifier = Modifier
+            .fillMaxWidth()
+            .layout { measurable, constraints ->
+                val placeable = measurable.measure(constraints)
+                val pull = if (first) 0 else gap.roundToPx()
+                layout(placeable.width, placeable.height - pull) { placeable.place(0, -pull) }
+            },
+        shape = RoundedCornerShape(
+            topStart = if (first) radius else 0.dp,
+            topEnd = if (first) radius else 0.dp,
+            bottomStart = if (last) radius else 0.dp,
+            bottomEnd = if (last) radius else 0.dp,
+        ),
+        color = MaterialTheme.colorScheme.surface,
+    ) {
+        Column(
+            Modifier.fillMaxWidth().padding(
+                start = 16.dp, end = 16.dp,
+                top = if (first) 4.dp else 0.dp,
+                bottom = if (last) 4.dp else 0.dp,
+            ),
+        ) {
+            content()
+            if (!last) ThinDivider()
+        }
+    }
+}
+
+/**
+ * The web app's back button: a small white rounded square lifted off
+ * the page, rather than a bare arrow floating in the bar.
+ */
+@Composable
+fun BackButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Surface(
+        onClick = onClick,
+        modifier = modifier.padding(start = 12.dp, end = 4.dp).size(38.dp),
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surface,
+        shadowElevation = 1.dp,
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(
+                Icons.Filled.ChevronLeft,
+                contentDescription = "Back",
+                modifier = Modifier.size(24.dp),
+            )
+        }
     }
 }
 
