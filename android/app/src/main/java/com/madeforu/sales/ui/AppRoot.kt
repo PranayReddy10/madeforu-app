@@ -24,6 +24,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -40,6 +41,8 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.madeforu.sales.core.ServiceLocator
+import com.madeforu.sales.data.WebGate
+import com.madeforu.sales.ui.components.BotCheckDialog
 import com.madeforu.sales.ui.screens.BillScreen
 import com.madeforu.sales.ui.screens.BillsScreen
 import com.madeforu.sales.ui.screens.CatalogScreen
@@ -392,6 +395,20 @@ fun AppRoot(signedIn: Boolean) {
                 }
             }
         }
+    }
+
+    // Cloudflare stopped a request to check for a bot. Whichever screen it
+    // was, the fix is the same one-off pass in a WebView, so it is offered
+    // here once rather than by every screen that can make a call.
+    val botCheckNeeded by WebGate.needed.collectAsState()
+    if (botCheckNeeded) {
+        BotCheckDialog(
+            onPassed = {
+                WebGate.clear()
+                notify("Connection checked. Try that again.")
+            },
+            onDismiss = { WebGate.clear() },
+        )
     }
 
     // A session that expired while the app was in the background should
