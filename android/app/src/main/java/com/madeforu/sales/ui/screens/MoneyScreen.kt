@@ -41,8 +41,6 @@ import com.madeforu.sales.core.Dates
 import com.madeforu.sales.core.Money
 import com.madeforu.sales.core.isAuthFailure
 import com.madeforu.sales.data.FinanceOverview
-import com.madeforu.sales.data.Movement
-import com.madeforu.sales.data.MovementTotals
 import com.madeforu.sales.data.PartnerFinance
 import com.madeforu.sales.data.Repository
 import com.madeforu.sales.ui.components.ChipRow
@@ -71,14 +69,11 @@ import kotlinx.coroutines.launch
 @Composable
 fun MoneyScreen(
     repository: Repository,
-    onOpenMovements: () -> Unit,
     onSessionExpired: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
 
     var overview by remember { mutableStateOf<FinanceOverview?>(null) }
-    var movements by remember { mutableStateOf<List<Movement>>(emptyList()) }
-    var movementTotals by remember { mutableStateOf(MovementTotals()) }
     var loading by remember { mutableStateOf(true) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -94,12 +89,6 @@ fun MoneyScreen(
                 is ApiResult.Success -> { overview = result.value; error = null }
                 is ApiResult.Failure ->
                     if (result.isAuthFailure()) onSessionExpired() else error = result.message
-            }
-            repository.movements().let {
-                if (it is ApiResult.Success) {
-                    movements = it.value.movements.take(12)
-                    movementTotals = it.value.totals
-                }
             }
             loading = false
         }
@@ -319,65 +308,6 @@ fun MoneyScreen(
 
                 item { SectionHeader("Expenses by category") }
                 item { ExpensesByCategory(data) }
-
-                // ── Recent ledger ──────────────────────────────────
-                item {
-                    SectionHeader(
-                        "Recent movements",
-                        action = {
-                            TextButton(onClick = onOpenMovements) { Text("Open ledger") }
-                        },
-                    )
-                }
-                item {
-                    // The same three figures movements.php heads its
-                    // ledger with, for the whole set rather than the
-                    // twelve rows shown.
-                    Row(
-                        Modifier.fillMaxWidth().padding(bottom = 4.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
-                        Text(
-                            "In " + Money.short(movementTotals.credits) +
-                                " · out " + Money.short(movementTotals.debits) +
-                                " · across " + movementTotals.count + " movements",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        Text(
-                            (if (movementTotals.net >= 0) "+" else "-") +
-                                Money.short(kotlin.math.abs(movementTotals.net)),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = if (movementTotals.net >= 0) positiveColor() else negativeColor(),
-                        )
-                    }
-                }
-                if (movements.isNotEmpty()) {
-                    item {
-                        // Adding and correcting happens on the ledger page,
-                        // where the whole set is visible and filterable;
-                        // this card is a summary, so a tap goes there.
-                        ListCard {
-                            movements.forEachIndexed { index, movement ->
-                                val credit = movement.direction == "credit"
-                                // A settle-up row carries amount 0 and an
-                                // invest_adjust instead; showing "₹0" would
-                                // look like a bug, so show what actually moved.
-                                val shown = if (movement.amount > 0.001) movement.amount else movement.investAdjust
-                                ListRow(
-                                    title = movement.partner + " · " + movement.source,
-                                    subtitle = Dates.pretty(movement.date) +
-                                        (movement.note?.takeIf { it.isNotBlank() }?.let { " · $it" } ?: ""),
-                                    amount = (if (credit) "+" else "-") + Money.short(kotlin.math.abs(shown)),
-                                    amountColor = if (credit) positiveColor() else negativeColor(),
-                                    leading = { IconTile(label = movement.partner, size = 42.dp) },
-                                    divider = index < movements.lastIndex,
-                                    onClick = onOpenMovements,
-                                )
-                            }
-                        }
-                    }
-                }
 
                 item { Spacer(Modifier.height(32.dp)) }
             }

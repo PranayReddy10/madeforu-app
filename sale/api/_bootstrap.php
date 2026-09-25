@@ -44,7 +44,7 @@ set_exception_handler(function (Throwable $t) {
 });
 
 // ── API-wide constants ─────────────────────────────────────────────
-define('API_VERSION',      '1.7.0');
+define('API_VERSION',      '1.8.0');
 
 /**
  * What this build of the API can do, for the apps to check against.
@@ -68,6 +68,7 @@ define('API_FEATURES', [
     'movement_edit',       // finance.php: update_movement, and the pocket/revenue split basis
     'reprice_open',        // catalog.php: carry a new price onto orders that are still open
     'wholesale',           // wholesale.php: the wholesale buyers notebook (no revenue, no stock)
+    'activity_feed',       // activity.php: what changed since a cursor, for notifications
 ]);
 define('TOKEN_TTL_DAYS',   90);     // a partner phone stays signed in for a quarter
 define('MAX_PAGE_SIZE',    200);

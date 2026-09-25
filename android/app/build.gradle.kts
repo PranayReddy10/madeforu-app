@@ -70,6 +70,7 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.zxing.core)          // UPI QR on the bill
     implementation(libs.coil.compose)        // product photos from the WordPress media library
+    implementation(libs.androidx.work.runtime.ktx)  // background check for new activity
 
     debugImplementation(libs.androidx.ui.tooling)
     testImplementation(libs.junit)

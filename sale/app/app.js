@@ -24,10 +24,10 @@ const DEFAULT_API = new URL('../api/', location.href).href;
  * browser, the server or the app is the stale one. It must match the
  * CACHE name in sw.js.
  */
-const BUILD = '2026-09-25.2';
+const BUILD = '2026-09-26.1';
 
 /** What this build of the app expects the server to be able to do. */
-const NEEDS_FEATURES = ['revenue_breakdown', 'expense_create', 'price_history',
+const NEEDS_FEATURES = ['revenue_breakdown', 'expense_create', 'activity_feed', 'price_history',
                         'all_channel_revenue', 'reprice_open', 'wholesale'];
 
 const store = {
@@ -386,6 +386,7 @@ async function render() {
   const [name, ...rest] = hash.split('/');
 
   if (!store.token) { screenLogin(); return; }
+  startActivity();
 
   const handler = routes[name] || routes.home;
   paintTabs(name);
@@ -2439,6 +2440,8 @@ route('settings', async () => {
       <p class="muted" style="margin-top:10px" id="themeHint"></p>
     </div></section>
 
+    <section><h2 class="section">Notifications</h2><div class="card" id="notify"></div></section>
+
     <section><h2 class="section">Server</h2><div class="card">
       <label class="field"><span>API address</span><input id="api" value="${esc(store.api)}"></label>
       <button class="btn ghost small" id="saveApi" style="margin-top:12px">Save and test</button>
@@ -2458,6 +2461,7 @@ route('settings', async () => {
   </div>`);
 
   paintVersions();
+  paintNotifySettings();
 
   const themeBox = document.getElementById('themes');
   const themeHint = document.getElementById('themeHint');
@@ -2498,6 +2502,7 @@ route('settings', async () => {
     try { await api('auth.php', 'logout', { body: {} }); } catch (e) { /* sign out locally regardless */ }
     store.token = '';
     store.name = '';
+    activity.cursor = '';   // the next person starts from "now"
     go('home');
     render();
   };
@@ -2570,9 +2575,100 @@ async function paintVersions() {
   };
 }
 
+/* ── Activity notifications ───────────────────────────────────── */
+
+/*
+ * New sales, payments, order changes, expenses and movements, from the
+ * website, the Android app or another phone, read from api/activity.php.
+ *
+ * A web app cannot run while it is closed, so this checks every 30
+ * seconds while it is open. When the tab or home-screen app is in the
+ * background the result is a system notification; when it is on screen,
+ * a toast. The cursor is per device, so each phone hears about each
+ * change once.
+ */
+const ACTIVITY_EVERY = 30000;
+let activityTimer = null;
+
+const activity = {
+  get cursor() { return localStorage.getItem('mfu.activity') || ''; },
+  set cursor(v) { if (v) localStorage.setItem('mfu.activity', v); else localStorage.removeItem('mfu.activity'); },
+  get on() { return localStorage.getItem('mfu.notify') !== 'off'; },
+  set on(v) { localStorage.setItem('mfu.notify', v ? 'on' : 'off'); },
+  get supported() { return 'Notification' in window && 'serviceWorker' in navigator; },
+};
+
+async function checkActivity() {
+  if (!store.token) return;
+  let d;
+  try {
+    d = await api('activity.php', 'feed', { params: { after: activity.cursor } });
+  } catch (e) { return; }             // offline, or an older server: try again next time
+  const first = !activity.cursor;
+  if (d.now) activity.cursor = d.now;
+  if (first || !activity.on) return;  // the first answer only sets the cursor
+  const items = (d.items || []).filter((i) => !i.mine);
+  if (!items.length) return;
+
+  if (document.hidden && activity.supported && Notification.permission === 'granted') {
+    const reg = await navigator.serviceWorker.ready;
+    const shown = items.length > 3
+      ? [{ title: items.length + ' updates', body: items.slice(-4).map((i) => i.title).join('\n'),
+           tag: 'mfu-burst', order_id: null }]
+      : items.map((i) => ({ title: i.title, body: i.body, tag: i.kind + ':' + i.id, order_id: i.order_id }));
+    shown.forEach((n) => reg.showNotification(n.title, {
+      body: n.body, tag: n.tag, icon: 'icons/icon-192.png', badge: 'icons/icon-192.png',
+      data: { hash: n.order_id ? '#order/' + n.order_id : '#home' },
+    }));
+  } else {
+    toast(items.length === 1
+      ? items[0].title + ' · ' + items[0].body.split('\n')[0]
+      : items.length + ' updates · latest: ' + items[items.length - 1].title);
+  }
+}
+
+function startActivity() {
+  if (activityTimer) return;
+  checkActivity();
+  activityTimer = setInterval(checkActivity, ACTIVITY_EVERY);
+}
+
+/** The Notifications card in Settings. */
+function paintNotifySettings() {
+  const box = document.getElementById('notify');
+  if (!box) return;
+  if (!activity.supported) {
+    box.innerHTML = `<p class="muted">This browser cannot show notifications. On iPhone, add the
+      app to the Home Screen first (iOS 16.4 or later). New activity still appears as a message
+      while the app is open.</p>`;
+    return;
+  }
+  const perm = Notification.permission;
+  box.innerHTML = `
+    <div class="row" style="border:none;padding-top:0">
+      <div class="grow"><div class="t">New activity</div>
+        <div class="s wrap">Sales, payments, order changes, expenses and movements from anywhere.
+          Checked every 30 seconds while this app is open.</div></div>
+      <button class="chip" id="notifyToggle" aria-pressed="${activity.on}">${activity.on ? 'On' : 'Off'}</button>
+    </div>
+    ${activity.on && perm !== 'granted' ? (perm === 'denied'
+      ? '<p class="muted warn">Notifications are blocked for this site. Allow them in the browser\'s site settings; until then they show as messages inside the app.</p>'
+      : '<button class="btn small" id="notifyAllow">Allow notifications on this device</button>') : ''}`;
+  document.getElementById('notifyToggle').onclick = () => { activity.on = !activity.on; paintNotifySettings(); };
+  const allow = document.getElementById('notifyAllow');
+  if (allow) allow.onclick = async () => {
+    try { await Notification.requestPermission(); } catch (e) { /* older Safari: callback form only */ }
+    paintNotifySettings();
+  };
+}
+
 /* ── Boot ─────────────────────────────────────────────────────── */
 
 if ('serviceWorker' in navigator) {
+  // A notification tapped while the app is already open.
+  navigator.serviceWorker.addEventListener('message', (event) => {
+    if (event.data && event.data.go) location.hash = event.data.go;
+  });
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('sw.js').catch(() => { /* http, or blocked — the app still works */ });
   });

@@ -21,6 +21,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.Alignment
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -73,6 +77,7 @@ fun SettingsScreen(
     var adminName by remember { mutableStateOf("") }
     var baseUrl by remember { mutableStateOf("") }
     var theme by remember { mutableStateOf("system") }
+    var notificationsOn by remember { mutableStateOf(true) }
     var settings by remember { mutableStateOf(Settings()) }
     var error by remember { mutableStateOf<String?>(null) }
     var message by remember { mutableStateOf<String?>(null) }
@@ -98,6 +103,7 @@ fun SettingsScreen(
         adminName = prefs.adminName.first()
         baseUrl = prefs.currentBaseUrl()
         theme = prefs.theme.first()
+        notificationsOn = prefs.notificationsOn.first()
         // Asked on open, not on a button: the whole point is that someone
         // who thinks the app did not update finds the answer already on
         // the screen. A failure here is not worth an error banner — the
@@ -186,6 +192,36 @@ fun SettingsScreen(
                     },
                     contentPadding = PaddingValues(0.dp),
                 )
+            }
+
+            item { SectionHeader("Notifications") }
+            item {
+                Card(shape = RoundedCornerShape(20.dp), colors = softCardColors()) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text("New activity", style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                "Sales, payments, order changes, expenses and movements from the " +
+                                    "website, the web app or another phone. Checked every 30 " +
+                                    "seconds while the app is open, and about every 15 minutes " +
+                                    "when it is closed.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Switch(
+                            checked = notificationsOn,
+                            onCheckedChange = {
+                                notificationsOn = it
+                                scope.launch { prefs.setNotificationsOn(it) }
+                            },
+                        )
+                    }
+                }
             }
 
             item { SectionHeader("What appears on bills") }

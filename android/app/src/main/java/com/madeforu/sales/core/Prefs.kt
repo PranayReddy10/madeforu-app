@@ -26,6 +26,8 @@ class Prefs(private val context: Context) {
         val ADMIN_NAME = stringPreferencesKey("admin_name")
         val ADMIN_PHONE = stringPreferencesKey("admin_phone")
         val THEME = stringPreferencesKey("theme")
+        val ACTIVITY_CURSOR = stringPreferencesKey("activity_cursor")
+        val NOTIFY = stringPreferencesKey("notify")
     }
 
     val baseUrl: Flow<String> = context.dataStore.data.map {
@@ -57,6 +59,24 @@ class Prefs(private val context: Context) {
     suspend fun currentBaseUrl(): String = normaliseBaseUrl(baseUrl.first())
     suspend fun currentToken(): String? = token.first()
 
+    /**
+     * The server time of the last activity this phone has seen, exactly
+     * as activity.php returned it. Empty until the first check.
+     */
+    suspend fun activityCursor(): String =
+        context.dataStore.data.map { it[Keys.ACTIVITY_CURSOR] ?: "" }.first()
+
+    suspend fun setActivityCursor(value: String) {
+        context.dataStore.edit { it[Keys.ACTIVITY_CURSOR] = value }
+    }
+
+    /** Whether new sales, expenses and movements raise a notification. On by default. */
+    val notificationsOn: Flow<Boolean> = context.dataStore.data.map { it[Keys.NOTIFY] != "off" }
+
+    suspend fun setNotificationsOn(on: Boolean) {
+        context.dataStore.edit { it[Keys.NOTIFY] = if (on) "on" else "off" }
+    }
+
     suspend fun saveSession(token: String, name: String, phone: String) {
         context.dataStore.edit {
             it[Keys.TOKEN] = token
@@ -73,6 +93,9 @@ class Prefs(private val context: Context) {
             it.remove(Keys.TOKEN)
             it.remove(Keys.ADMIN_NAME)
             it.remove(Keys.ADMIN_PHONE)
+            // The next person to sign in starts from "now", not from
+            // wherever the last session stopped reading.
+            it.remove(Keys.ACTIVITY_CURSOR)
         }
     }
 
