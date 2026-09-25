@@ -200,6 +200,7 @@ fun AppRoot(signedIn: Boolean) {
                         onOpenExpenses = { navController.navigate(Routes.EXPENSES) },
                         onOpenWholesale = { navController.navigate(Routes.WHOLESALE) },
                         onOpenEvents = { navController.navigate(Routes.EVENTS) },
+                        onOpenMovements = { navController.navigate(Routes.MOVEMENTS) },
                         onOpenCatalog = { navController.navigate(Routes.CATALOG) },
                         onSessionExpired = signOut,
                     )
@@ -367,8 +368,27 @@ fun AppRoot(signedIn: Boolean) {
                     EventsScreen(
                         repository = repository,
                         onBack = { navController.popBackStack() },
-                        onOpenOrder = { id -> navController.navigate(Routes.orderDetail(id)) },
+                        onOpenEvent = { event -> navController.navigate(Routes.eventOrders(event.id, event.name)) },
                         onSessionExpired = signOut,
+                    )
+                }
+
+                composable(
+                    route = Routes.EVENT_ORDERS,
+                    arguments = listOf(
+                        navArgument("id") { type = NavType.IntType },
+                        navArgument("name") { type = NavType.StringType; defaultValue = "" },
+                    ),
+                ) { entry ->
+                    OrdersScreen(
+                        repository = repository,
+                        initialPayFilter = "all",
+                        onOpenOrder = { id -> navController.navigate(Routes.orderDetail(id)) },
+                        onNewOrder = { navController.navigate(Routes.NEW_ORDER) },
+                        onSessionExpired = signOut,
+                        eventId = (entry.arguments?.getInt("id") ?: 0).toString(),
+                        title = entry.arguments?.getString("name")?.takeIf { it.isNotBlank() } ?: "Event orders",
+                        onBack = { navController.popBackStack() },
                     )
                 }
 

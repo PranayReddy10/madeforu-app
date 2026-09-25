@@ -11,6 +11,7 @@ import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.filled.Sell
 import androidx.compose.material.icons.filled.Storefront
+import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.ui.text.style.TextOverflow
 import com.madeforu.sales.ui.components.IconTile
 import androidx.compose.foundation.layout.Arrangement
@@ -113,6 +114,7 @@ fun HomeScreen(
     onOpenBills: () -> Unit,
     onOpenExpenses: () -> Unit,
     onOpenEvents: () -> Unit,
+    onOpenMovements: () -> Unit,
     onOpenCatalog: () -> Unit,
     onSessionExpired: () -> Unit,
 ) {
@@ -269,6 +271,7 @@ fun HomeScreen(
                     QuickActions(
                         onExpenses = onOpenExpenses,
                         onEvents = onOpenEvents,
+                        onMovements = onOpenMovements,
                         onCatalog = onOpenCatalog,
                         onBills = onOpenBills,
                         onSettings = onOpenSettings,
@@ -442,6 +445,7 @@ private fun greeting(): String {
 private fun QuickActions(
     onExpenses: () -> Unit,
     onEvents: () -> Unit,
+    onMovements: () -> Unit,
     onCatalog: () -> Unit,
     onBills: () -> Unit,
     onSettings: () -> Unit,
@@ -454,6 +458,9 @@ private fun QuickActions(
         QuickAction("Wholesale buyers", Icons.Filled.Inventory2, onWholesale),
         QuickAction("Expenses", Icons.Filled.Payments, onExpenses),
         QuickAction("Events & stalls", Icons.Filled.Storefront, onEvents),
+        // The partner ledger: every credit, draw and settle-up. It was
+        // only reachable from the bottom of Money.
+        QuickAction("Movements", Icons.Filled.SwapHoriz, onMovements),
         QuickAction("Products & prices", Icons.Filled.Sell, onCatalog),
         QuickAction("Bill book", Icons.Filled.ReceiptLong, onBills),
         QuickAction("Settings", Icons.Filled.Settings, onSettings),

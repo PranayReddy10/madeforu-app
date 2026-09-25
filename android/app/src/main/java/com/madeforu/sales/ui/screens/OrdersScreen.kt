@@ -37,6 +37,8 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -59,6 +61,7 @@ import com.madeforu.sales.core.isAuthFailure
 import com.madeforu.sales.data.Order
 import com.madeforu.sales.data.OrderSummary
 import com.madeforu.sales.data.Repository
+import com.madeforu.sales.ui.components.BackButton
 import com.madeforu.sales.ui.components.ChipRow
 import com.madeforu.sales.ui.components.EmptyState
 import com.madeforu.sales.ui.components.ErrorBanner
@@ -77,6 +80,11 @@ import kotlinx.coroutines.launch
 
 private const val PAGE_SIZE = 30
 
+/**
+ * The Orders tab, and also one event's orders: given `eventId`, `title`
+ * and `onBack`, it is the same search, filters and rows limited to that
+ * event, with a title bar and a way back instead of the New sale button.
+ */
 @OptIn(FlowPreview::class)
 @Composable
 fun OrdersScreen(
@@ -85,6 +93,9 @@ fun OrdersScreen(
     onOpenOrder: (Int) -> Unit,
     onNewOrder: () -> Unit,
     onSessionExpired: () -> Unit,
+    eventId: String = "all",
+    title: String? = null,
+    onBack: (() -> Unit)? = null,
 ) {
     val scope = rememberCoroutineScope()
 
@@ -108,6 +119,7 @@ fun OrdersScreen(
                 query = query,
                 payFilter = payFilter,
                 statusFilter = statusFilter,
+                event = eventId,
                 limit = PAGE_SIZE,
                 offset = nextOffset,
             )
@@ -140,12 +152,28 @@ fun OrdersScreen(
     LaunchedEffect(payFilter, statusFilter) { load(append = false) }
 
     Scaffold(
+        topBar = {
+            if (onBack != null) {
+                TopAppBar(
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.background,
+                    ),
+                    title = {
+                        Text(title ?: "Orders", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    },
+                    navigationIcon = { BackButton(onClick = onBack) },
+                )
+            }
+        },
         floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = onNewOrder,
-                icon = { Icon(Icons.Filled.Add, contentDescription = null) },
-                text = { Text("New sale") },
-            )
+            // A new sale is taken from the tab, where it picks its own event.
+            if (onBack == null) {
+                ExtendedFloatingActionButton(
+                    onClick = onNewOrder,
+                    icon = { Icon(Icons.Filled.Add, contentDescription = null) },
+                    text = { Text("New sale") },
+                )
+            }
         },
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
@@ -203,9 +231,10 @@ fun OrdersScreen(
                 orders.isEmpty() -> EmptyState(
                     title = "No orders here",
                     body = if (query.isNotBlank()) "Nothing matches \"$query\". Try a shorter search."
+                    else if (onBack != null) "No orders at this event match these filters."
                     else "Nothing matches these filters yet.",
-                    actionLabel = "Take a new order",
-                    onAction = onNewOrder,
+                    actionLabel = if (onBack == null) "Take a new order" else null,
+                    onAction = if (onBack == null) onNewOrder else null,
                 )
 
                 else -> LazyColumn(
@@ -304,12 +333,13 @@ internal fun OrderRow(order: Order, onClick: () -> Unit) {
         "partial" -> "Part paid" to warnColor()
         else -> "Unpaid" to negativeColor()
     }
+    val items = splitItems(order.itemsText)
     Row(
         Modifier
             .fillMaxWidth()
             .clickable { onClick() }
             .padding(vertical = 11.dp),
-        verticalAlignment = Alignment.CenterVertically,
+        verticalAlignment = Alignment.Top,
     ) {
         // The tile carries the state, so a glance down the list reads as
         // work-to-do rather than a wall of text.
@@ -355,6 +385,14 @@ internal fun OrderRow(order: Order, onClick: () -> Unit) {
                     )
                 }
             }
+            if (!order.isWalkIn && order.phone.isNotBlank()) {
+                Text(
+                    order.phone,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                )
+            }
             Text(
                 order.orderNo + " · " + Dates.relativeDay(order.createdAt) + " · " + state +
                     (order.eventName?.let { " · $it" } ?: ""),
@@ -363,13 +401,24 @@ internal fun OrderRow(order: Order, onClick: () -> Unit) {
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            if (!order.itemsText.isNullOrBlank()) {
+            // One item per line, two at most; the rest are counted.
+            if (items.isNotEmpty()) Spacer(Modifier.height(3.dp))
+            items.take(2).forEach { line ->
                 Text(
-                    order.itemsText,
+                    "• $line",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
+                )
+            }
+            if (items.size > 2) {
+                val more = items.size - 2
+                Text(
+                    "+$more more item" + if (more == 1) "" else "s",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.primary,
                 )
             }
         }
@@ -387,4 +436,17 @@ internal fun OrderRow(order: Order, onClick: () -> Unit) {
             )
         }
     }
+}
+
+/**
+ * "Round Magnet x2, Keychain x1" -> ["Round Magnet x2", "Keychain x1"].
+ *
+ * The server joins an order's lines with ", ", and a product name may
+ * carry a comma of its own, so a split only counts where it follows a
+ * quantity. The web app's splitItems() does the same.
+ */
+internal fun splitItems(text: String?): List<String> {
+    if (text.isNullOrBlank()) return emptyList()
+    val found = Regex(".*? x\\d+(?=, |$)").findAll(text).map { it.value.removePrefix(", ") }.toList()
+    return found.ifEmpty { listOf(text) }
 }

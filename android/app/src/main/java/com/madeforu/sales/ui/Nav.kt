@@ -32,6 +32,10 @@ object Routes {
     fun expenseDetail(id: Int) = "expense/$id"
     const val CATALOG = "catalog"
     const val EVENTS = "events"
+
+    /** One event's orders: the Orders screen, limited to that event. */
+    const val EVENT_ORDERS = "event/{id}?name={name}"
+    fun eventOrders(id: Int, name: String) = "event/$id?name=" + android.net.Uri.encode(name)
     const val SETTINGS = "settings"
 
     /** The wholesale notebook. Nothing here is an order. */

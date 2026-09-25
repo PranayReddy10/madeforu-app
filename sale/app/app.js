@@ -24,7 +24,7 @@ const DEFAULT_API = new URL('../api/', location.href).href;
  * browser, the server or the app is the stale one. It must match the
  * CACHE name in sw.js.
  */
-const BUILD = '2026-09-25.1';
+const BUILD = '2026-09-25.2';
 
 /** What this build of the app expects the server to be able to do. */
 const NEEDS_FEATURES = ['revenue_breakdown', 'expense_create', 'price_history',
@@ -703,17 +703,36 @@ async function loadOrders() {
       : '<p class="muted center" style="margin-top:30px">Nothing matches these filters.</p>'}`;
 }
 
+/**
+ * "Round Magnet x2, Keychain x1" -> ["Round Magnet x2", "Keychain x1"].
+ *
+ * The server joins lines with ", ", and a product name may carry a comma
+ * of its own, so a split only counts where it follows a quantity.
+ */
+function splitItems(text) {
+  if (!text) return [];
+  const found = String(text).match(/.*? x\d+(?=, |$)/g);
+  return found ? found.map((x) => x.replace(/^, /, '')) : [String(text)];
+}
+
 function orderRow(o) {
   const glyph = o.is_delivered ? '✓' : o.is_ready ? '▣' : '◷';
   const state = o.is_delivered ? 'Delivered' : o.is_ready ? 'Ready' : 'To make';
   const payTone = o.pay_status === 'paid' ? 'pos' : o.pay_status === 'partial' ? 'warn' : 'neg';
   const payLabel = o.pay_status === 'paid' ? 'Paid' : o.pay_status === 'partial' ? 'Part paid' : 'Unpaid';
-  return `<button class="row" data-go="order/${o.id}" style="width:100%;text-align:left">
+  // One item per line, two at most; the rest are counted rather than
+  // squeezed onto a line nobody can read.
+  const items = splitItems(o.items_text);
+  const shown = items.slice(0, 2);
+  const more = items.length - shown.length;
+  return `<button class="row" data-go="order/${o.id}" style="width:100%;text-align:left;align-items:flex-start">
     ${tile(o.is_walk_in ? 'Walk in' : o.name, glyph)}
     <div class="grow">
       <div class="t">${esc(o.is_walk_in ? 'Walk-in' : o.name)}</div>
+      ${!o.is_walk_in && o.phone ? `<div class="s">${esc(o.phone)}</div>` : ''}
       <div class="s">${esc(o.order_no)} · ${esc(relativeDay(o.created_at))} · ${esc(state)}</div>
-      ${o.items_text ? `<div class="s">${esc(o.items_text)}</div>` : ''}
+      ${shown.length ? `<div class="items">${shown.map((i) => `<div>• ${esc(i)}</div>`).join('')}${
+        more > 0 ? `<div class="more">+${more} more item${more === 1 ? '' : 's'}</div>` : ''}</div>` : ''}
     </div>
     <div class="amt">${moneyShort(o.total)}
       <div class="s ${payTone}">${o.balance > 0.5 ? moneyShort(o.balance) + ' due' : payLabel}</div></div>
@@ -793,6 +812,27 @@ async function paintOrder(id) {
       <div class="row"><div class="grow t">Total</div><div class="amt">${money(o.total)}</div></div>
     </div></section>
 
+    ${o.event_id ? '' : `<section><h2 class="section">Shipping</h2><div class="card">
+      ${o.awb ? `
+        ${detailRow('Tracking number', o.awb)}
+        ${o.dispatch_date ? detailRow('Dispatched', prettyDate(o.dispatch_date)) : ''}
+        ${o.track_url ? `<div class="row"><div class="grow"><div class="s">Tracking link</div>
+          <a href="${esc(o.track_url)}" target="_blank" rel="noopener" style="word-break:break-all;font-size:13px">${esc(o.track_url)}</a></div></div>
+          <div class="btnrow">
+            <a class="btn small" href="${esc(o.track_url)}" target="_blank" rel="noopener" style="flex:1">Track parcel</a>
+            <button class="btn small ghost" id="copyTrack" style="flex:1">Copy link</button>
+          </div>` : ''}`
+        : '<p class="muted">Not shipped yet. Add the Delhivery tracking number (AWB) once the parcel is booked.</p>'}
+      <label class="field"><span>Tracking number (AWB)</span>
+        <input id="awb" value="${esc(o.awb || '')}" placeholder="e.g. 1234567890123" autocapitalize="characters"></label>
+      <label class="field"><span>Dispatch date</span>
+        <input id="awbDate" type="date" value="${esc(o.dispatch_date || today())}"></label>
+      <div class="btnrow">
+        <button class="btn small" id="saveAwb" style="flex:1">${o.awb ? 'Update tracking' : 'Save tracking'}</button>
+        ${o.awb ? '<button class="btn small danger" id="clearAwb" style="flex:1">Clear</button>' : ''}
+      </div>
+    </div></section>`}
+
     <section><h2 class="section">Payments</h2><div class="card">
       ${o.payments.length ? o.payments.map((p) => `
         <div class="row"><div class="grow">
@@ -810,6 +850,31 @@ async function paintOrder(id) {
 
   const pay = document.getElementById('pay');
   if (pay) pay.onclick = () => takePayment(o);
+  const copyTrack = document.getElementById('copyTrack');
+  if (copyTrack) copyTrack.onclick = async () => {
+    try { await navigator.clipboard.writeText(o.track_url); toast('Tracking link copied.'); }
+    catch (e) { prompt('Copy the tracking link:', o.track_url); }
+  };
+  const saveAwb = document.getElementById('saveAwb');
+  if (saveAwb) {
+    const send = async (awb, button) => {
+      button.disabled = true;
+      try {
+        const r = await api('orders.php', 'dispatch', {
+          body: { id: o.id, is_online: awb !== '', awb, dispatch_date: document.getElementById('awbDate').value || today() },
+        });
+        toast(r.message || 'Tracking saved.');
+        await paintOrder(o.id);
+      } catch (e) { toast(e.message); button.disabled = false; }
+    };
+    saveAwb.onclick = () => {
+      const awb = document.getElementById('awb').value.trim().toUpperCase();
+      if (!awb) { toast('Enter the tracking number first.'); return; }
+      send(awb, saveAwb);
+    };
+    const clearAwb = document.getElementById('clearAwb');
+    if (clearAwb) clearAwb.onclick = () => { if (confirm('Clear the tracking number?')) send('', clearAwb); };
+  }
   document.getElementById('toggleReady').onclick = () => toggleOrder(o.id, 'is_ready');
   document.getElementById('toggleDelivered').onclick = () => toggleOrder(o.id, 'is_delivered');
   document.querySelectorAll('[data-pay-delete]').forEach((b) => {

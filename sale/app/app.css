@@ -140,6 +140,10 @@ h2.section .hint { font-weight: 400; font-size: 12px; color: var(--muted); }
    is only a hint. It is wrong where the line IS the information — a
    price range and when it was last taken — so that case opts out. */
 .row .s.wrap { white-space: normal; overflow: visible; text-overflow: clip; }
+/* An order's items under its name: one per line, two at most. */
+.row .items { font-size: 12px; color: var(--ink); margin-top: 3px; line-height: 1.45; }
+.row .items > div { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row .items .more { color: var(--rose); font-weight: 600; }
 .row .amt { font-weight: 700; text-align: right; white-space: nowrap; }
 .row .amt .s { font-weight: 400; }
 
