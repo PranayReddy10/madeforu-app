@@ -46,8 +46,8 @@ import com.madeforu.sales.core.Money
 import com.madeforu.sales.core.isAuthFailure
 import com.madeforu.sales.data.Repository
 import com.madeforu.sales.data.WholesaleCustomer
+import com.madeforu.sales.ui.components.IconTile
 import com.madeforu.sales.ui.components.LoadingBox
-import com.madeforu.sales.ui.components.ProductThumb
 import com.madeforu.sales.ui.components.errorBannerItem
 import com.madeforu.sales.ui.components.softCardColors
 import kotlinx.coroutines.launch
@@ -177,7 +177,7 @@ fun WholesaleScreen(
                         Modifier.fillMaxWidth().padding(14.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        ProductThumb(c.name, null)
+                        IconTile(label = c.name)
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
                             Text(
