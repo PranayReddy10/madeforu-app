@@ -25,48 +25,46 @@ app every 30 seconds while open and about every 15 minutes while closed.
      appId).
    - Click the **Android** icon. Package name: `com.madeforu.sales`
      (a debug build is `com.madeforu.sales.debug`; add that too if you
-     test with one). Skip downloading `google-services.json`. The app
-     does not need it. Copy the **App ID** (`1:…:android:…`).
+     test with one). Download the `google-services.json` it offers. The
+     Notifications page reads the App ID out of it (the app itself does
+     not need the file).
 3. **Project settings** → **Cloud Messaging** → **Web Push certificates** →
    **Generate key pair**. Copy the key. This is `vapidKey`.
 4. **Project settings** → **Service accounts** → **Generate new private
    key**. A `.json` file downloads. Treat it like a password.
 
-### 2. Put the key on the server, outside public_html
+### 2. Enter it all on the website
 
-In Hostinger hPanel → **File Manager**, go to your home folder, the one
-*above* `public_html`. Upload the `.json` file there and rename it
-`firebase-service-account.json`.
+Sign in to the website → **Notifications** (in the sidebar, under Admins):
 
-It must not be inside `public_html`. Anything in there can be downloaded
-by anyone who guesses the URL.
+1. **Service-account key**: upload the `.json` from step 1.4. It is stored
+   in the database, never in a folder a URL can reach, and only the account
+   it belongs to is shown back.
+2. **Web app**: paste the whole `firebaseConfig` block from step 1.2, and
+   the Web Push key from step 1.3.
+3. **Android app**: upload the `google-services.json` Firebase offers for
+   the Android app, or type its App ID.
 
-### 3. Fill in firebase-config.php
+The top of the page shows a tick for each part, and how many phones and
+browsers are registered.
 
-Copy `firebase-config.example.php` to `firebase-config.php`, next to
-`config.php` in `public_html`, and fill in:
+(For anyone who prefers a file instead: `firebase-config.example.php`
+copied to `firebase-config.php` takes priority over the page. It is
+gitignored; never commit it or the key.)
 
-- `FIREBASE_SERVICE_ACCOUNT`: the full path of the key from step 2, e.g.
-  `/home/u291217659/firebase-service-account.json` (File Manager shows
-  your home folder's path).
-- `FIREBASE_WEB`: the web values from step 1.2, plus `vapidKey` from
-  step 1.3.
-- `FIREBASE_ANDROID`: the Android App ID from step 1.2, with the same
-  apiKey, projectId and messagingSenderId.
+### 3. Upload the code (do this before step 2)
 
-`firebase-config.php` is in `.gitignore`. Never commit it, or the key.
+Upload `lib_activity.php`, `lib_push.php`, `push_settings.php`,
+`push_cron.php`, `layout.php`, the changed website pages, and the `api/`
+and `app/` folders. The `push_devices` table creates itself the first time
+it is needed.
 
-### 4. Upload the code
-
-Upload `lib_activity.php`, `lib_push.php`, `push_cron.php`, the changed
-website pages, and the `api/` and `app/` folders. The `push_devices`
-table creates itself the first time it is needed.
-
-### 5. Turn it on in each app
+### 4. Turn it on in each app
 
 - **PWA**: Settings → Notifications → **Allow notifications on this
   device**. It then says *Real time*. **Send a test notification** checks
-  the whole path. On iPhone, this only works from the app added to the
+  the whole path; so does the button at the top of the website's
+  Notifications page. On iPhone, this only works from the app added to the
   Home Screen (iOS 16.4 or later).
 - **Android**: open the app once after signing in and allow notifications.
   Settings → Notifications → **Send a test notification**.
@@ -81,10 +79,10 @@ Cron Jobs, every minute:
 
 ## If a test notification does not arrive
 
-- **Settings says push is not set up**: `firebase-config.php` is missing,
-  or the path in `FIREBASE_SERVICE_ACCOUNT` is wrong.
+- **Settings says push is not set up**: the key has not been uploaded on
+  the Notifications page yet.
 - **"Google refused the service account"** in the PHP error log: the key
-  file is not the one from step 1.4, or it was revoked.
+  is not the one from step 1.4, or it was revoked. Upload a fresh one.
 - **Nothing on an Android phone**: the phone needs Google Play services.
   Also check that notifications are allowed for the app in Android's
   settings.

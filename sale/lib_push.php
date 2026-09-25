@@ -13,8 +13,9 @@
  * sends it. Nothing in any save handler had to change, and nothing that
  * saves waits for Google.
  *
- * Setup lives in firebase-config.php (see firebase-config.example.php).
- * Without it, this file does nothing at all.
+ * Setup is the website's Notifications page (push_settings.php): paste
+ * the Firebase settings, upload the service-account key. Until a key is
+ * saved, this file does nothing at all.
  *
  * Who hears what
  * --------------
@@ -40,17 +41,47 @@ function push_actor(): ?int {
     return null;
 }
 
-/** True once firebase-config.php names a readable service-account file. */
-function push_configured(): bool {
-    return defined('FIREBASE_SERVICE_ACCOUNT')
-        && (defined('PUSH_DRY_RUN') || is_readable((string)FIREBASE_SERVICE_ACCOUNT));
+/**
+ * The Firebase settings: the service-account key, and the public web and
+ * Android settings the apps register with.
+ *
+ * Normally entered on the website's Notifications page (push_settings.php)
+ * and kept in app_settings; the key is stored there, never under
+ * public_html where a URL could serve it. A firebase-config.php, if one
+ * exists, still wins, for anyone who prefers a file.
+ */
+function push_settings(mysqli $conn): array {
+    static $cache = null;
+    if ($cache !== null) return $cache;
+
+    $sa = null;
+    if (defined('FIREBASE_SERVICE_ACCOUNT') && is_readable((string)FIREBASE_SERVICE_ACCOUNT)) {
+        $sa = json_decode((string)file_get_contents((string)FIREBASE_SERVICE_ACCOUNT), true);
+    }
+    if (!is_array($sa)) $sa = json_decode((string)push_state_get($conn, 'push_service_account'), true);
+    $web = defined('FIREBASE_WEB') ? (array)FIREBASE_WEB
+        : (json_decode((string)push_state_get($conn, 'push_web'), true) ?: []);
+    $android = defined('FIREBASE_ANDROID') ? (array)FIREBASE_ANDROID
+        : (json_decode((string)push_state_get($conn, 'push_android'), true) ?: []);
+
+    return $cache = [
+        'sa'      => is_array($sa) && !empty($sa['private_key']) && !empty($sa['client_email']) ? $sa : null,
+        'web'     => $web,
+        'android' => $android,
+    ];
+}
+
+/** True once a service-account key is in place. */
+function push_configured(mysqli $conn): bool {
+    return defined('PUSH_DRY_RUN') || push_settings($conn)['sa'] !== null;
 }
 
 /** What the apps need to register: the public halves of the Firebase setup. */
-function push_client_config(): array {
-    if (!push_configured()) return ['enabled' => false];
-    $web = defined('FIREBASE_WEB') ? (array)FIREBASE_WEB : [];
-    $android = defined('FIREBASE_ANDROID') ? (array)FIREBASE_ANDROID : [];
+function push_client_config(mysqli $conn): array {
+    if (!push_configured($conn)) return ['enabled' => false];
+    $settings = push_settings($conn);
+    $web = $settings['web'];
+    $android = $settings['android'];
     return [
         'enabled' => true,
         'web'     => ($web['apiKey'] ?? '') !== '' && ($web['vapidKey'] ?? '') !== '' ? $web : null,
@@ -132,7 +163,7 @@ function push_state_set(mysqli $conn, string $key, string $value): void {
  * turns rather than send the same change twice.
  */
 function push_flush(mysqli $conn, ?int $actor): int {
-    if (!push_configured()) return 0;
+    if (!push_configured($conn)) return 0;
     $got = $conn->query("SELECT GET_LOCK('madeforu_push', 10) l")->fetch_assoc();
     if ((int)($got['l'] ?? 0) !== 1) return 0;
     try {
@@ -272,9 +303,9 @@ function push_fcm(mysqli $conn, array $jobs): int {
         return count($jobs);
     }
 
-    $sa = json_decode((string)file_get_contents((string)FIREBASE_SERVICE_ACCOUNT), true);
+    $sa = push_settings($conn)['sa'];
     if (!is_array($sa) || empty($sa['project_id'])) {
-        throw new RuntimeException('FIREBASE_SERVICE_ACCOUNT is not a service-account JSON file.');
+        throw new RuntimeException('No Firebase service-account key is saved. Upload one on the Notifications page.');
     }
     $url = 'https://fcm.googleapis.com/v1/projects/' . rawurlencode($sa['project_id']) . '/messages:send';
     $auth = 'Authorization: Bearer ' . push_access_token($conn, $sa);
@@ -342,13 +373,13 @@ function push_fcm(mysqli $conn, array $jobs): int {
  * sale is saved either way.
  */
 function push_after_request(): void {
-    if (!push_configured() || !defined('DB_HOST')) return;
+    if (!defined('DB_HOST')) return;
     $actor = push_actor();
     if (function_exists('fastcgi_finish_request')) fastcgi_finish_request();
     try {
         $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
         $conn->set_charset('utf8mb4');
-        push_flush($conn, $actor);
+        push_flush($conn, $actor);   // does nothing until a key is saved
         $conn->close();
     } catch (Throwable $e) {
         error_log('MadeForU push: ' . $e->getMessage());
