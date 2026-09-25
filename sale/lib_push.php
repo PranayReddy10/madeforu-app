@@ -244,14 +244,61 @@ function push_send(mysqli $conn, array $items, ?int $actor): int {
 
 // ── Firebase Cloud Messaging (HTTP v1) ─────────────────────────────
 
+/**
+ * Every call to Google: IPv4, because a shared host with a half-working
+ * IPv6 route hangs for the whole timeout on every request; and short
+ * timeouts, because nobody saving a sale should wait on Google.
+ */
+const PUSH_CURL = [
+    CURLOPT_CONNECTTIMEOUT => 5,
+    CURLOPT_TIMEOUT        => 10,
+    CURLOPT_IPRESOLVE      => CURL_IPRESOLVE_V4,
+];
+
+/**
+ * The last thing that went wrong, with when, for the Notifications page.
+ * A push fails after the response has gone, where nobody sees it; this
+ * is where it becomes visible.
+ */
+function push_note_error(mysqli $conn, string $why): void {
+    error_log('MadeForU push: ' . $why);
+    try {
+        push_state_set($conn, 'push_last_error', json_encode(['at' => date('Y-m-d H:i:s'), 'why' => $why]));
+    } catch (Throwable $e) { /* the log line above still has it */ }
+}
+
+/** Firebase's own sentence out of an error body, not the whole JSON. */
+function push_fcm_reason(string $body): string {
+    $j = json_decode($body, true);
+    $msg = $j['error']['message'] ?? substr($body, 0, 200);
+    $status = $j['error']['status'] ?? '';
+    return trim($status . ' ' . $msg);
+}
+
+/**
+ * Check the whole server side against Google, now: the key signs, Google
+ * accepts it, and FCM is reachable. Returns null when all is well, or the
+ * reason it is not.
+ */
+function push_check(mysqli $conn): ?string {
+    $settings = push_settings($conn);
+    if ($settings['sa'] === null) return 'No service-account key is saved yet.';
+    try {
+        push_access_token($conn, $settings['sa'], true);
+    } catch (Throwable $e) {
+        return $e->getMessage();
+    }
+    return null;
+}
+
 function push_b64url(string $raw): string {
     return rtrim(strtr(base64_encode($raw), '+/', '-_'), '=');
 }
 
 /** An OAuth access token for FCM, from the service account, cached for its hour. */
-function push_access_token(mysqli $conn, array $sa): string {
+function push_access_token(mysqli $conn, array $sa, bool $fresh = false): string {
     $cached = json_decode((string)push_state_get($conn, 'push_oauth'), true);
-    if (is_array($cached) && ($cached['exp'] ?? 0) > time() + 120) return (string)$cached['token'];
+    if (!$fresh && is_array($cached) && ($cached['exp'] ?? 0) > time() + 120) return (string)$cached['token'];
 
     $iat = time();
     $jwt = push_b64url(json_encode(['alg' => 'RS256', 'typ' => 'JWT'])) . '.'
@@ -275,12 +322,19 @@ function push_access_token(mysqli $conn, array $sa): string {
             'assertion'  => $jwt,
         ]),
         CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_TIMEOUT => 10,
-    ]);
-    $reply = json_decode((string)curl_exec($ch), true);
+    ] + PUSH_CURL);
+    $raw = curl_exec($ch);
+    $curlError = curl_error($ch);
     curl_close($ch);
+    if ($raw === false) {
+        throw new RuntimeException('The server could not reach Google (' . $curlError . '). '
+            . 'The hosting may be blocking outgoing connections.');
+    }
+    $reply = json_decode((string)$raw, true);
     if (empty($reply['access_token'])) {
-        throw new RuntimeException('Google refused the service account: ' . json_encode($reply));
+        throw new RuntimeException('Google refused the service-account key: '
+            . ($reply['error_description'] ?? $reply['error'] ?? substr((string)$raw, 0, 200))
+            . '. Upload a freshly generated key.');
     }
     push_state_set($conn, 'push_oauth', json_encode([
         'token' => $reply['access_token'],
@@ -327,8 +381,7 @@ function push_fcm(mysqli $conn, array $jobs): int {
             CURLOPT_HTTPHEADER => [$auth, 'Content-Type: application/json'],
             CURLOPT_POSTFIELDS => json_encode(['message' => $message], JSON_UNESCAPED_UNICODE),
             CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT => 10,
-        ]);
+        ] + PUSH_CURL);
         curl_multi_add_handle($multi, $ch);
         $handles[$n] = $ch;
     }
@@ -348,7 +401,9 @@ function push_fcm(mysqli $conn, array $jobs): int {
                   || ($code === 400 && strpos($body, 'registration token') !== false)) {
             $dead[(int)$jobs[$n]['device']['id']] = true;
         } else {
-            error_log('MadeForU push: FCM answered ' . $code . ': ' . substr($body, 0, 300));
+            $why = $code === 0 ? 'no answer from Firebase (' . curl_error($ch) . ')'
+                : 'Firebase answered ' . $code . ': ' . push_fcm_reason($body);
+            push_note_error($conn, $why);
         }
         curl_multi_remove_handle($multi, $ch);
         curl_close($ch);
@@ -375,14 +430,20 @@ function push_fcm(mysqli $conn, array $jobs): int {
 function push_after_request(): void {
     if (!defined('DB_HOST')) return;
     $actor = push_actor();
-    if (function_exists('fastcgi_finish_request')) fastcgi_finish_request();
+    // Answer the person who saved first, then talk to Google. Hostinger
+    // runs LiteSpeed, which has its own name for this; without it, every
+    // save would wait for the push to go out.
+    ignore_user_abort(true);
+    if (function_exists('litespeed_finish_request')) litespeed_finish_request();
+    elseif (function_exists('fastcgi_finish_request')) fastcgi_finish_request();
     try {
         $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
         $conn->set_charset('utf8mb4');
         push_flush($conn, $actor);   // does nothing until a key is saved
         $conn->close();
     } catch (Throwable $e) {
-        error_log('MadeForU push: ' . $e->getMessage());
+        if (isset($conn) && $conn instanceof mysqli) push_note_error($conn, $e->getMessage());
+        else error_log('MadeForU push: ' . $e->getMessage());
     }
 }
 

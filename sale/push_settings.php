@@ -140,6 +140,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($sent === 0) throw new Exception('Firebase did not accept the message for any device. See the PHP error log for its answer.');
             flash("Test sent to $sent of your " . count($devices) . ' device(s). It should arrive within seconds.');
 
+        } elseif ($action === 'check') {
+            $problem = push_check($conn);
+            if ($problem !== null) throw new Exception('Not working: ' . $problem);
+            push_state_set($conn, 'push_last_error', '');
+            flash('Google accepted the key and the server can reach Firebase. The server side is working.');
+
         } elseif ($action === 'remove_device') {
             push_ensure_table($conn);
             $id = (int)($_POST['id'] ?? 0);
@@ -173,6 +179,7 @@ $devices = $conn->query(
 )->fetch_all(MYSQLI_ASSOC);
 
 $webReady = ($web['apiKey'] ?? '') !== '' && ($web['vapidKey'] ?? '') !== '';
+$lastError = json_decode((string)push_state_get($conn, 'push_last_error'), true);
 $androidReady = ($android['appId'] ?? '') !== '';
 $flash = flash();
 ?>
@@ -241,10 +248,16 @@ $flash = flash();
         priority over what is saved here.</p>
     <?php endif; ?>
     <?php if ($sa): ?>
-      <form method="post" style="margin-top:14px">
-        <?= csrf_field() ?><input type="hidden" name="action" value="test">
-        <button class="primary">Send a test notification to my devices</button>
-      </form>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">
+        <form method="post"><?= csrf_field() ?><input type="hidden" name="action" value="check">
+          <button>Check connection to Google</button></form>
+        <form method="post"><?= csrf_field() ?><input type="hidden" name="action" value="test">
+          <button class="primary">Send a test notification to my devices</button></form>
+      </div>
+    <?php endif; ?>
+    <?php if (is_array($lastError) && !empty($lastError['why'])): ?>
+      <div class="flash f-error" style="margin:14px 0 0">Last problem sending
+        (<?= e(date('j M, g:i a', strtotime((string)$lastError['at']))) ?>): <?= e($lastError['why']) ?></div>
     <?php endif; ?>
   </div>
 

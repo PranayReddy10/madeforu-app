@@ -61,6 +61,12 @@ class Repository(private val api: ApiClient, private val prefs: Prefs) {
             },
         ).map { it["message"]?.let { m -> (m as? JsonPrimitive)?.content } ?: "Registered." }
 
+    /** What the server says is missing for push, or null when nothing is. */
+    suspend fun pushStatus(): ApiResult<String?> =
+        api.get("push.php", "status").map { obj ->
+            (obj["problem"] as? JsonPrimitive)?.takeIf { it.isString }?.content
+        }
+
     /** Sends a test push to this partner's own devices. */
     suspend fun pushTest(): ApiResult<String> =
         api.post("push.php", "test").map { it["message"]?.let { m -> (m as? JsonPrimitive)?.content } ?: "Sent." }

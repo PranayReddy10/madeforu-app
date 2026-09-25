@@ -35,9 +35,13 @@ object PushSetup {
     private const val PROJECT_ID = "project_id"
     private const val SENDER_ID = "sender_id"
     private const val ACTIVE = "active"
+    private const val PROBLEM = "problem"
 
     private fun store(context: Context) =
         context.applicationContext.getSharedPreferences(FILE, Context.MODE_PRIVATE)
+
+    /** Why this phone is not on real-time push, in words; empty when it is. */
+    fun problem(context: Context): String = store(context).getString(PROBLEM, "").orEmpty()
 
     /** True once this phone is registered with the server for push. */
     fun isActive(context: Context): Boolean = store(context).getBoolean(ACTIVE, false)
@@ -62,8 +66,15 @@ object PushSetup {
         )
     }
 
-    private fun configure(context: Context, c: AndroidPushConfig): Boolean {
-        if (FirebaseApp.getApps(context).isNotEmpty()) return true
+    /** Null when Firebase is configured, or why it could not be. */
+    private fun configure(context: Context, c: AndroidPushConfig): String? {
+        if (FirebaseApp.getApps(context).isNotEmpty()) {
+            // Firebase starts once per launch. New settings from the website
+            // only take effect after the app is closed and opened again.
+            val running = FirebaseApp.getInstance().options
+            return if (running.applicationId == c.appId && running.apiKey == c.apiKey) null
+            else "The Firebase settings changed on the website. Close the app fully (swipe it away) and open it again."
+        }
         return try {
             FirebaseApp.initializeApp(
                 context,
@@ -74,25 +85,39 @@ object PushSetup {
                     .setGcmSenderId(c.messagingSenderId)
                     .build(),
             )
-            true
+            null
         } catch (e: Exception) {
-            false
+            "Firebase would not start with the Android settings saved on the website " +
+                "(${e.message}). Check the App ID, apiKey and projectId on the Notifications page."
         }
     }
 
     /**
      * Ask the server whether it pushes, and if so register this phone.
-     * Returns whether push is now active. Any failure leaves the app on
-     * its polling fallback; nothing here is worth an error on screen.
+     * Returns null when push is now active, or the reason it is not, in
+     * words Settings can show. Any failure leaves the app on its polling
+     * fallback.
      */
-    suspend fun setup(context: Context): Boolean {
+    suspend fun setup(context: Context): String? {
         val app = context.applicationContext
+        val problem = trySetup(app)
+        store(app).edit()
+            .putBoolean(ACTIVE, problem == null)
+            .putString(PROBLEM, problem.orEmpty())
+            .apply()
+        return problem
+    }
+
+    private suspend fun trySetup(app: Context): String? {
         val repository = ServiceLocator.repository(app)
-        val config = (repository.pushConfig() as? ApiResult.Success)?.value
-        val android = config?.android
-        if (config == null || !config.enabled || android == null || android.appId.isBlank()) {
-            reset(app)
-            return false
+        val config = when (val r = repository.pushConfig()) {
+            is ApiResult.Success -> r.value
+            is ApiResult.Failure -> return "Could not ask the server about push: " + r.message
+        }
+        val android = config.android
+        if (!config.enabled || android == null || android.appId.isBlank()) {
+            return (repository.pushStatus() as? ApiResult.Success)?.value
+                ?: "Push is not set up on the server yet (website → Notifications)."
         }
         store(app).edit()
             .putString(API_KEY, android.apiKey)
@@ -100,23 +125,44 @@ object PushSetup {
             .putString(PROJECT_ID, android.projectId)
             .putString(SENDER_ID, android.messagingSenderId)
             .apply()
-        if (!configure(app, android)) return false
+        configure(app, android)?.let { return it }
 
         val token = try {
             FirebaseMessaging.getInstance().token.await()
         } catch (e: Exception) {
-            return false
+            return tokenHint(e, app.packageName)
         }
         return register(app, token)
     }
 
-    /** Tell the server this token is this phone. Also used when Firebase rotates it. */
-    suspend fun register(context: Context, token: String): Boolean {
+    /** Firebase's refusal, with what to change for the common ones. */
+    private fun tokenHint(e: Exception, pkg: String): String {
+        val msg = generateSequence<Throwable>(e) { it.cause }.mapNotNull { it.message }.joinToString(" / ")
+        val fix = when {
+            msg.contains("SERVICE_NOT_AVAILABLE") ->
+                "This phone could not reach Google. Check the connection, and that Google Play services is installed and up to date."
+            msg.contains("AUTHENTICATION_FAILED") || msg.contains("INVALID_SENDER") ->
+                "The Android settings do not match this project. Save the Android app again on the website (App ID and messagingSenderId from the same Firebase project)."
+            msg.contains("API key", ignoreCase = true) || msg.contains("403") || msg.contains("PERMISSION_DENIED") ->
+                "Google refused the apiKey. On the website's Notifications page, upload google-services.json for the Android app so its own apiKey is used."
+            msg.contains("MISSING_INSTANCEID_SERVICE") || msg.contains("Play", ignoreCase = true) ->
+                "Google Play services is missing or out of date on this phone."
+            else -> null
+        }
+        val debugNote = if (pkg.endsWith(".debug")) {
+            " This is a debug build ($pkg): add an Android app with that package in Firebase too, " +
+                "and save its App ID on the website."
+        } else ""
+        return "Firebase refused this phone. " + (fix?.let { "$it " } ?: "") + "Details: " + msg.take(200) + debugNote
+    }
+
+    /** Tell the server this token is this phone. Also used when Firebase rotates it. Null when accepted. */
+    suspend fun register(context: Context, token: String): String? {
         val app = context.applicationContext
-        val result = ServiceLocator.repository(app).pushRegister(token, Build.MANUFACTURER + " " + Build.MODEL)
-        val ok = result is ApiResult.Success
-        store(app).edit().putBoolean(ACTIVE, ok).apply()
-        return ok
+        return when (val r = ServiceLocator.repository(app).pushRegister(token, Build.MANUFACTURER + " " + Build.MODEL)) {
+            is ApiResult.Success -> null
+            is ApiResult.Failure -> "The server did not accept this phone: " + r.message
+        }
     }
 
     private suspend fun <T> Task<T>.await(): T = suspendCancellableCoroutine { cont ->
