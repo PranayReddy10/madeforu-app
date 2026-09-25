@@ -12,10 +12,12 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.Response
 import java.io.IOException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
@@ -46,6 +48,23 @@ class ApiClient(private val prefs: Prefs) {
         .readTimeout(30, TimeUnit.SECONDS)
         .writeTimeout(30, TimeUnit.SECONDS)
         .retryOnConnectionFailure(true)
+        // Shared hosting sits behind a web firewall that decides what to
+        // answer partly on who is asking, and OkHttp's own "okhttp/4.x" is
+        // on more than one blocklist. A request carrying it is refused with
+        // a 403 HTML page before PHP ever runs -- which is exactly what it
+        // looks like when the very same address opens fine in the browser
+        // and fails in the app. So ask the way a phone browser asks.
+        .addInterceptor(
+            object : Interceptor {
+                override fun intercept(chain: Interceptor.Chain): Response =
+                    chain.proceed(
+                        chain.request().newBuilder()
+                            .header("User-Agent", USER_AGENT)
+                            .header("Accept-Language", "en-IN,en;q=0.9")
+                            .build(),
+                    )
+            },
+        )
         .build()
 
     private val jsonMedia = "application/json; charset=utf-8".toMediaType()
@@ -132,9 +151,18 @@ class ApiClient(private val prefs: Prefs) {
         if (raw.isBlank()) {
             return ApiResult.Failure(
                 "empty",
-                "$url returned HTTP $code with an empty reply. That is usually a PHP " +
-                    "fatal error with error display switched off — a file that is missing " +
-                    "or half-uploaded. Re-upload the api/ folder.",
+                if (code == 403) {
+                    // A refusal with nothing in the body is still a refusal,
+                    // and blaming a half-finished upload for it would send
+                    // somebody to re-upload files that are already there.
+                    "$url was refused by the server (HTTP 403) with an empty reply. " +
+                        "That is the host's firewall or the permissions on api/, not the " +
+                        "address and not the app."
+                } else {
+                    "$url returned HTTP $code with an empty reply. That is usually a PHP " +
+                        "fatal error with error display switched off — a file that is missing " +
+                        "or half-uploaded. Re-upload the api/ folder."
+                },
             )
         }
         val element: JsonElement = try {
@@ -152,6 +180,17 @@ class ApiClient(private val prefs: Prefs) {
                     body.startsWith("<") && code == 404 ->
                         "$url is not on the server (HTTP 404). Upload the api/ folder again — " +
                             "that file is missing from it."
+                    // 403 is the server refusing to run the file at all, so
+                    // nothing the app sent is at fault and the address is
+                    // not the thing to go and check. Quoting the page is
+                    // the whole point: a host firewall, mod_security and a
+                    // plain file permission all return 403 and read quite
+                    // differently, and the words are what say which.
+                    code == 403 ->
+                        "$url was refused by the server (HTTP 403) before it reached the app. " +
+                            "The address is right — the browser opens the same one. This is the " +
+                            "host's firewall, or the permissions on the api/ folder. The page " +
+                            "says: " + pageText(body)
                     body.startsWith("<") ->
                         "$url returned a web page instead of data (HTTP $code). " +
                             "Either the address is wrong or that file is not on the server."
@@ -178,9 +217,37 @@ class ApiClient(private val prefs: Prefs) {
         )
     }
 
+    /**
+     * The readable sentence out of an HTML error page.
+     *
+     * A 403 from a host's bot firewall, one from mod_security and one from
+     * plain file permissions are the same status code and three different
+     * sentences — and the sentence is the part that says which of the
+     * three to go and fix.
+     */
+    private fun pageText(html: String): String {
+        val stripped = html
+            .replace(Regex("(?is)<(script|style)[^>]*>.*?</\\1>"), " ")
+            .replace(Regex("<[^>]*>"), " ")
+            .replace(Regex("\\s+"), " ")
+            .trim()
+        return if (stripped.isEmpty()) "(nothing readable)" else stripped.take(200)
+    }
+
     private fun encode(v: String): String = java.net.URLEncoder.encode(v, "UTF-8")
 
     companion object {
+        /**
+         * What the app calls itself on the wire.
+         *
+         * Browser-shaped on purpose, with the app's own name on the end so
+         * the access log still shows which requests are ours. The default
+         * OkHttp agent is what a shared host's firewall blocks.
+         */
+        private const val USER_AGENT =
+            "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) " +
+                "Chrome/122.0.0.0 Mobile Safari/537.36 MadeForU/1.0"
+
         /** Small helper so call sites read as `body { "id" to 4 }`. */
         fun body(build: MutableMap<String, JsonElement>.() -> Unit): JsonObject {
             val map = LinkedHashMap<String, JsonElement>()
