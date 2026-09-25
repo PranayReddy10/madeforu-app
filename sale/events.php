@@ -1,5 +1,6 @@
 <?php
 require 'config.php';
+require_once __DIR__ . '/lib_push.php';   // tells the other partners' phones
 $me = require_login();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {

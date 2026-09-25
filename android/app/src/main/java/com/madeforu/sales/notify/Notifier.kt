@@ -38,7 +38,7 @@ object Notifier {
         val manager = context.getSystemService(NotificationManager::class.java) ?: return
         if (manager.getNotificationChannel(CHANNEL_ID) != null) return
         manager.createNotificationChannel(
-            NotificationChannel(CHANNEL_ID, "Sales, expenses and movements", NotificationManager.IMPORTANCE_DEFAULT)
+            NotificationChannel(CHANNEL_ID, "Sales, expenses and movements", NotificationManager.IMPORTANCE_HIGH)
                 .apply {
                     description = "New sales, payments, order changes, expenses and account " +
                         "movements, whether made on the website, the web app or this app."
@@ -85,6 +85,24 @@ object Notifier {
                     .build(),
             )
         }
+    }
+
+    /** One pushed message, as lib_push.php sent it. */
+    @SuppressLint("MissingPermission") // checked in canPost()
+    fun showPush(context: Context, title: String, body: String, tag: String, orderId: Int?) {
+        if (!canPost(context)) return
+        ensureChannel(context)
+        NotificationManagerCompat.from(context).notify(
+            // Stable per change, so a repeat replaces rather than stacks.
+            (tag.ifBlank { title + body }).hashCode(),
+            base(context, orderId)
+                .setContentTitle(title)
+                .setContentText(body.lineSequence().firstOrNull().orEmpty())
+                .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setGroup(GROUP)
+                .build(),
+        )
     }
 
     private fun base(context: Context, orderId: Int?): NotificationCompat.Builder {

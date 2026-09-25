@@ -24,7 +24,11 @@ class ActivityWorker(context: Context, params: WorkerParameters) : CoroutineWork
 
     override suspend fun doWork(): Result {
         val items = ActivitySync.check(applicationContext)
-        if (ServiceLocator.prefs(applicationContext).notificationsOn.first()) {
+        // With push active the server has already announced these; the
+        // check still runs so the cursor stays current for a fallback.
+        if (!PushSetup.isActive(applicationContext) &&
+            ServiceLocator.prefs(applicationContext).notificationsOn.first()
+        ) {
             Notifier.show(applicationContext, items)
         }
         return Result.success()

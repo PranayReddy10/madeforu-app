@@ -71,6 +71,11 @@ dependencies {
     implementation(libs.zxing.core)          // UPI QR on the bill
     implementation(libs.coil.compose)        // product photos from the WordPress media library
     implementation(libs.androidx.work.runtime.ktx)  // background check for new activity
+    // Real-time push. No google-services plugin: the app is configured at
+    // run time from the server (api/push.php), so the build needs no
+    // google-services.json and works before Firebase is set up.
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.messaging)
 
     debugImplementation(libs.androidx.ui.tooling)
     testImplementation(libs.junit)

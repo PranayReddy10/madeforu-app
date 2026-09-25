@@ -4,3 +4,8 @@ config.php
 
 # Customer receipts and product photos uploaded through the site.
 uploads/
+
+# Firebase: the settings file and, above all, the service-account key.
+# The key must live outside public_html anyway; this is the second lock.
+firebase-config.php
+*service-account*.json

@@ -48,6 +48,23 @@ class Repository(private val api: ApiClient, private val prefs: Prefs) {
 
     // ── Activity (notifications) ───────────────────────────────────
 
+    suspend fun pushConfig(): ApiResult<PushConfig> =
+        api.get("push.php", "config").map { api.decode<PushConfigResponse>(it).push }
+
+    suspend fun pushRegister(token: String, device: String): ApiResult<String> =
+        api.post(
+            "push.php", "register",
+            ApiClient.body {
+                put("token", JsonPrimitive(token))
+                put("platform", JsonPrimitive("android"))
+                put("device", JsonPrimitive(device))
+            },
+        ).map { it["message"]?.let { m -> (m as? JsonPrimitive)?.content } ?: "Registered." }
+
+    /** Sends a test push to this partner's own devices. */
+    suspend fun pushTest(): ApiResult<String> =
+        api.post("push.php", "test").map { it["message"]?.let { m -> (m as? JsonPrimitive)?.content } ?: "Sent." }
+
     /** What changed after `after` (a cursor activity.php handed out); "" asks for the cursor only. */
     suspend fun activity(after: String): ApiResult<ActivityFeed> =
         api.get("activity.php", "feed", mapOf("after" to after))

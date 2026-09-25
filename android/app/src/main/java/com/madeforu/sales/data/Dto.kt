@@ -539,7 +539,7 @@ data class ServerInfo(
 ) {
     companion object {
         /** What this build of the app needs the server to be able to do. */
-        val NEEDED = listOf("revenue_breakdown", "expense_create", "activity_feed")
+        val NEEDED = listOf("revenue_breakdown", "expense_create", "activity_feed", "push")
     }
 
     val missing: List<String> get() = NEEDED.filter { it !in features }
@@ -861,4 +861,22 @@ data class ActivityItem(
     val mine: Boolean = false,
     val title: String = "",
     val body: String = "",
+)
+
+/** push.php?action=config — the public half of the server's Firebase setup. */
+@Serializable
+data class PushConfigResponse(val push: PushConfig = PushConfig())
+
+@Serializable
+data class PushConfig(
+    val enabled: Boolean = false,
+    val android: AndroidPushConfig? = null,
+)
+
+@Serializable
+data class AndroidPushConfig(
+    val apiKey: String = "",
+    val appId: String = "",
+    val projectId: String = "",
+    val messagingSenderId: String = "",
 )

@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.width
 import androidx.compose.ui.Alignment
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -45,6 +46,7 @@ import com.madeforu.sales.core.ServiceLocator
 import com.madeforu.sales.data.Repository
 import com.madeforu.sales.data.ServerInfo
 import com.madeforu.sales.data.Settings
+import com.madeforu.sales.notify.PushSetup
 import com.madeforu.sales.ui.components.BackButton
 import com.madeforu.sales.ui.components.ChipRow
 import com.madeforu.sales.ui.components.DetailRow
@@ -78,6 +80,7 @@ fun SettingsScreen(
     var baseUrl by remember { mutableStateOf("") }
     var theme by remember { mutableStateOf("system") }
     var notificationsOn by remember { mutableStateOf(true) }
+    var pushActive by remember { mutableStateOf(PushSetup.isActive(context)) }
     var settings by remember { mutableStateOf(Settings()) }
     var error by remember { mutableStateOf<String?>(null) }
     var message by remember { mutableStateOf<String?>(null) }
@@ -205,9 +208,11 @@ fun SettingsScreen(
                             Text("New activity", style = MaterialTheme.typography.titleMedium)
                             Text(
                                 "Sales, payments, order changes, expenses and movements from the " +
-                                    "website, the web app or another phone. Checked every 30 " +
-                                    "seconds while the app is open, and about every 15 minutes " +
-                                    "when it is closed.",
+                                    "website, the web app or another phone. " +
+                                    if (pushActive) "Real time: each arrives the moment it is saved."
+                                    else "Real-time push is not set up on the server yet, so the " +
+                                        "app checks every 30 seconds while open and about every " +
+                                        "15 minutes when closed.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -220,6 +225,25 @@ fun SettingsScreen(
                                 scope.launch { prefs.setNotificationsOn(it) }
                             },
                         )
+                    }
+                    if (notificationsOn) {
+                        TextButton(
+                            onClick = {
+                                scope.launch {
+                                    pushActive = PushSetup.setup(context)
+                                    message = if (!pushActive) {
+                                        "Real-time push is not available yet: firebase-config.php is " +
+                                            "not on the server, or Google Play services is missing."
+                                    } else {
+                                        when (val r = repository.pushTest()) {
+                                            is ApiResult.Success -> r.value
+                                            is ApiResult.Failure -> r.message
+                                        }
+                                    }
+                                }
+                            },
+                            modifier = Modifier.padding(start = 8.dp, bottom = 8.dp),
+                        ) { Text(if (pushActive) "Send a test notification" else "Try real-time push") }
                     }
                 }
             }

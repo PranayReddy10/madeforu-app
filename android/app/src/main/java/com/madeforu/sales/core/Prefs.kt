@@ -97,6 +97,9 @@ class Prefs(private val context: Context) {
             // wherever the last session stopped reading.
             it.remove(Keys.ACTIVITY_CURSOR)
         }
+        // The server stops pushing to a signed-out sign-in on its own;
+        // this makes the app fall back to checking until the next one.
+        com.madeforu.sales.notify.PushSetup.reset(context)
     }
 
     suspend fun setBaseUrl(url: String) {
