@@ -1,10 +1,12 @@
 <?php
 /**
- * Real-time notifications through Firebase Cloud Messaging.
+ * OPTIONAL. The normal way to set up notifications is the website's
+ * Notifications page (push_settings.php): paste the Firebase settings and
+ * upload the key there, nothing to edit on the server.
  *
- * Copy this file to firebase-config.php, next to config.php, and fill it
- * in. Until firebase-config.php exists, nothing is pushed and both apps
- * carry on exactly as before. Step-by-step: docs/PUSH.md.
+ * This file is for anyone who would rather keep the settings in a file.
+ * Copied to firebase-config.php, its values take priority over the ones
+ * saved on that page.
  */
 
 /*

@@ -18,8 +18,8 @@ require __DIR__ . '/_bootstrap.php';
 $me = api_require_auth($conn);
 
 api_dispatch([
-    'config' => function () {
-        api_ok(['push' => push_client_config()]);
+    'config' => function () use ($conn) {
+        api_ok(['push' => push_client_config($conn)]);
     },
 
     'register' => function () use ($conn, $me) {
@@ -39,7 +39,7 @@ api_dispatch([
     },
 
     'test' => function () use ($conn, $me) {
-        if (!push_configured()) throw new ApiInputError('Push is not set up on the server yet (firebase-config.php).');
+        if (!push_configured($conn)) throw new ApiInputError('Push is not set up on the server yet: open Notifications on the website and upload the Firebase key.');
         push_ensure_table($conn);
         $s = $conn->prepare(
             'SELECT d.id, d.token, d.platform FROM push_devices d
