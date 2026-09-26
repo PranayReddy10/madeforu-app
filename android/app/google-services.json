@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "595722632902",
+    "project_id": "madeforu-f3cd0",
+    "storage_bucket": "madeforu-f3cd0.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:595722632902:android:d70dede92756d0fe1061c7",
+        "android_client_info": {
+          "package_name": "com.madeforu.sales"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBY0eJIO1t2p1Hu5GP33O9NJ1P4XS4veyk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:595722632902:android:dd342a56fbd192191061c7",
+        "android_client_info": {
+          "package_name": "com.madeforu.sales.debug"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBY0eJIO1t2p1Hu5GP33O9NJ1P4XS4veyk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

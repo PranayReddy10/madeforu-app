@@ -5,3 +5,9 @@ sale/config.php
 
 # Receipts and photos uploaded by customers and partners.
 sale/uploads/
+
+# Android generated files
+android/.gradle/
+android/.idea/
+android/**/build/
+android/local.properties
