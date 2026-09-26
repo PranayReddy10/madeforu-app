@@ -5,4 +5,6 @@
     <!-- From the logo: the rose of the gift mark, the navy of the wordmark. -->
     <color name="brand">#F54A77</color>
     <color name="brand_dark">#202946</color>
+    <!-- The logo rose, for the notification icon tint. -->
+    <color name="notification_accent">#F54A77</color>
 </resources>

@@ -25,7 +25,11 @@ import com.madeforu.sales.data.ActivityItem
  */
 object Notifier {
 
-    const val CHANNEL_ID = "activity"
+    // "updates", not the first build's "activity": Android fixes a
+    // channel's importance when it is created, and pushes need HIGH to
+    // pop up. The server names this channel in each push (lib_push.php).
+    const val CHANNEL_ID = "updates"
+    private const val OLD_CHANNEL_ID = "activity"
     private const val GROUP = "com.madeforu.sales.ACTIVITY"
     private const val SUMMARY_ID = 1
     private const val BURST = 4
@@ -33,9 +37,16 @@ object Notifier {
     /** Tapping an order's notification opens that order. */
     const val EXTRA_ORDER_ID = "open_order_id"
 
+    /**
+     * The same, for a notification Android drew itself from a push: its
+     * tap starts the app with the push's data as string extras.
+     */
+    const val PUSH_ORDER_ID = "order_id"
+
     fun ensureChannel(context: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val manager = context.getSystemService(NotificationManager::class.java) ?: return
+        manager.deleteNotificationChannel(OLD_CHANNEL_ID)
         if (manager.getNotificationChannel(CHANNEL_ID) != null) return
         manager.createNotificationChannel(
             NotificationChannel(CHANNEL_ID, "Sales, expenses and movements", NotificationManager.IMPORTANCE_HIGH)

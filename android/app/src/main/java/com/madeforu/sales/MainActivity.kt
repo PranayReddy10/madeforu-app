@@ -42,6 +42,7 @@ class MainActivity : ComponentActivity() {
 
     private fun orderFrom(intent: Intent?): Int? =
         intent?.getIntExtra(Notifier.EXTRA_ORDER_ID, 0)?.takeIf { it > 0 }
+            ?: intent?.getStringExtra(Notifier.PUSH_ORDER_ID)?.toIntOrNull()?.takeIf { it > 0 }
 }
 
 @Composable

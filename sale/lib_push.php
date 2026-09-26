@@ -262,6 +262,9 @@ function push_send(mysqli $conn, array $items, ?int $actor): int {
 
 // ── Firebase Cloud Messaging (HTTP v1) ─────────────────────────────
 
+/** The Android notification channel pushes go to; the app creates it (Notifier.CHANNEL_ID). */
+const PUSH_ANDROID_CHANNEL = 'updates';
+
 /**
  * Every call to Google: IPv4, because a shared host with a half-working
  * IPv6 route hangs for the whole timeout on every request; and short
@@ -385,14 +388,40 @@ function push_fcm(mysqli $conn, array $jobs): int {
     $multi = curl_multi_init();
     $handles = [];
     foreach ($jobs as $n => $j) {
-        // Data-only: the app and the service worker draw the notification
-        // themselves, so a tap can open the order it is about.
-        $message = [
-            'token'   => $j['device']['token'],
-            'data'    => $j['data'],
-            'android' => ['priority' => 'HIGH', 'ttl' => '86400s'],
-            'webpush' => ['headers' => ['Urgency' => 'high', 'TTL' => '86400']],
-        ];
+        $d = $j['data'];
+        if ($j['device']['platform'] === 'android') {
+            // A notification Android draws itself. A data-only message
+            // needs the app started to show anything, and Xiaomi, Oppo,
+            // Vivo and others block that for an app that is not running,
+            // so the push arrived and nothing appeared. The data rides
+            // along, and a tap opens the order (MainActivity reads it).
+            $message = [
+                'token'        => $j['device']['token'],
+                'notification' => ['title' => $d['title'], 'body' => $d['body']],
+                'data'         => $d,
+                'android'      => [
+                    'priority'     => 'HIGH',
+                    'ttl'          => '86400s',
+                    'notification' => [
+                        'channel_id'            => PUSH_ANDROID_CHANNEL,
+                        'tag'                   => $d['tag'],
+                        'icon'                  => 'ic_stat_notify',
+                        'color'                 => '#F54A77',
+                        'default_sound'         => true,
+                        'notification_priority' => 'PRIORITY_HIGH',
+                        'visibility'            => 'PRIVATE',
+                    ],
+                ],
+            ];
+        } else {
+            // Data-only: the service worker draws it, so a tap can open
+            // the order it is about.
+            $message = [
+                'token'   => $j['device']['token'],
+                'data'    => $d,
+                'webpush' => ['headers' => ['Urgency' => 'high', 'TTL' => '86400']],
+            ];
+        }
         $ch = curl_init($url);
         curl_setopt_array($ch, [
             CURLOPT_POST => true,

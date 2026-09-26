@@ -222,9 +222,19 @@ fun SettingsScreen(
                         Spacer(Modifier.width(12.dp))
                         Switch(
                             checked = notificationsOn,
-                            onCheckedChange = {
-                                notificationsOn = it
-                                scope.launch { prefs.setNotificationsOn(it) }
+                            onCheckedChange = { on ->
+                                notificationsOn = on
+                                scope.launch {
+                                    prefs.setNotificationsOn(on)
+                                    if (on) {
+                                        val problem = PushSetup.setup(context)
+                                        pushActive = problem == null
+                                        pushProblem = problem.orEmpty()
+                                    } else {
+                                        PushSetup.turnOff(context)
+                                        pushActive = false
+                                    }
+                                }
                             },
                         )
                     }
