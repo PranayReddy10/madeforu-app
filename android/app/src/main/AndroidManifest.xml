@@ -40,6 +40,18 @@
             </intent-filter>
         </activity>
 
+        <!-- For a push Android draws itself: the status-bar icon, colour and
+             channel to use if a message does not name them. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_stat_notify" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_color"
+            android:resource="@color/notification_accent" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="updates" />
+
         <!-- Real-time push from the server (lib_push.php) via Firebase. -->
         <service
             android:name=".notify.PushService"

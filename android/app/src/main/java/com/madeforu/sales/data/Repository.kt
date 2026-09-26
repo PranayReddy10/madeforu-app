@@ -61,6 +61,9 @@ class Repository(private val api: ApiClient, private val prefs: Prefs) {
             },
         ).map { it["message"]?.let { m -> (m as? JsonPrimitive)?.content } ?: "Registered." }
 
+    suspend fun pushUnregister(token: String): ApiResult<JsonObject> =
+        api.post("push.php", "unregister", ApiClient.body { put("token", JsonPrimitive(token)) })
+
     /** What the server says is missing for push, or null when nothing is. */
     suspend fun pushStatus(): ApiResult<String?> =
         api.get("push.php", "status").map { obj ->

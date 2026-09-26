@@ -9,6 +9,7 @@ import com.google.firebase.messaging.FirebaseMessaging
 import com.madeforu.sales.core.ApiResult
 import com.madeforu.sales.core.ServiceLocator
 import com.madeforu.sales.data.AndroidPushConfig
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
@@ -36,6 +37,7 @@ object PushSetup {
     private const val SENDER_ID = "sender_id"
     private const val ACTIVE = "active"
     private const val PROBLEM = "problem"
+    private const val TOKEN = "token"
 
     private fun store(context: Context) =
         context.applicationContext.getSharedPreferences(FILE, Context.MODE_PRIVATE)
@@ -49,6 +51,17 @@ object PushSetup {
     /** Signed out: fall back to checking until the next sign-in registers again. */
     fun reset(context: Context) {
         store(context).edit().putBoolean(ACTIVE, false).apply()
+    }
+
+    /**
+     * The Settings switch turned off. Android draws pushes itself while
+     * the app is closed, so the app cannot quietly drop them; instead the
+     * server is told to stop sending to this phone.
+     */
+    suspend fun turnOff(context: Context) {
+        val app = context.applicationContext
+        store(app).getString(TOKEN, null)?.let { ServiceLocator.repository(app).pushUnregister(it) }
+        store(app).edit().putBoolean(ACTIVE, false).remove(TOKEN).apply()
     }
 
     /** From Application.onCreate: configure Firebase from the last settings the server gave. */
@@ -111,6 +124,7 @@ object PushSetup {
     }
 
     private suspend fun trySetup(app: Context): String? {
+        if (!ServiceLocator.prefs(app).notificationsOn.first()) return "Notifications are turned off in Settings."
         val repository = ServiceLocator.repository(app)
         val config = when (val r = repository.pushConfig()) {
             is ApiResult.Success -> r.value
@@ -173,7 +187,7 @@ object PushSetup {
     suspend fun register(context: Context, token: String): String? {
         val app = context.applicationContext
         return when (val r = ServiceLocator.repository(app).pushRegister(token, Build.MANUFACTURER + " " + Build.MODEL)) {
-            is ApiResult.Success -> null
+            is ApiResult.Success -> { store(app).edit().putString(TOKEN, token).apply(); null }
             is ApiResult.Failure -> "The server did not accept this phone: " + r.message
         }
     }

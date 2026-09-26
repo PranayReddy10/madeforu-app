@@ -11,10 +11,13 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 
 /**
- * Where Firebase delivers a push: the server's data-only message (see
- * lib_push.php) becomes a notification, which opens the order it is
- * about when tapped. Runs whether the app is open, in the background or
- * closed.
+ * Where Firebase delivers a push.
+ *
+ * With the app in the background or closed, Android draws the push's
+ * notification itself (lib_push.php sends one), which works even on
+ * phones that stop closed apps from starting, and a tap opens the order.
+ * With the app open, Android hands the message here instead, and this
+ * draws the same notification.
  */
 class PushService : FirebaseMessagingService() {
 
