@@ -363,7 +363,11 @@ function app_settings(mysqli $conn): array {
     try {
         $res = $conn->query('SELECT skey, sval FROM app_settings');
         while ($res && ($r = $res->fetch_assoc())) {
-            $out[$r['skey']] = (string)$r['sval'];
+            // Only the business settings. The same table also holds the
+            // push setup (push_*), including the Firebase private key, and
+            // this array is sent to every app at sign-in; nothing outside
+            // this list may ever ride along with it.
+            if (array_key_exists($r['skey'], APP_SETTING_DEFAULTS)) $out[$r['skey']] = (string)$r['sval'];
         }
     } catch (mysqli_sql_exception $e) {
         // Table not migrated yet — defaults keep bills printable.

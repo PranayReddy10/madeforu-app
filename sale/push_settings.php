@@ -73,6 +73,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
     $action = $_POST['action'] ?? '';
     try {
+        // A firebase-config.php on the server wins over this page. Saving
+        // here would say "saved" and change nothing, so refuse and say why.
+        $overridden = ['key' => 'FIREBASE_SERVICE_ACCOUNT', 'remove_key' => 'FIREBASE_SERVICE_ACCOUNT',
+                       'web' => 'FIREBASE_WEB', 'android' => 'FIREBASE_ANDROID'][$action] ?? null;
+        if ($overridden !== null && defined($overridden)) {
+            throw new Exception('Not saved: firebase-config.php on the server sets ' . $overridden
+                . ', which overrides this page. Delete firebase-config.php from public_html (File Manager), '
+                . 'then save here again.');
+        }
         if ($action === 'key') {
             $raw = push_uploaded('key');
             if ($raw === null) throw new Exception('Choose the service-account .json file first.');
@@ -97,7 +106,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $web = [];
             foreach (PUSH_WEB_KEYS as $k) $web[$k] = trim((string)($_POST[$k] ?? ''));
             $pasted = trim((string)($_POST['snippet'] ?? ''));
-            if ($pasted !== '') {
+            // The box is filled with what is already saved. Left as it was,
+            // it must not override a value changed in the fields below.
+            // (Browsers send a textarea's line breaks as \r\n; compare without them.)
+            $flat = fn($t) => preg_replace('/\s+/', ' ', trim((string)$t));
+            $unchanged = $flat($pasted) === $flat($_POST['snippet_saved'] ?? '');
+            if ($pasted !== '' && !$unchanged) {
                 $found = push_parse_snippet($pasted);
                 if (!$found) throw new Exception('No Firebase settings found in what was pasted. Paste the whole firebaseConfig block.');
                 $web = array_merge($web, $found);
@@ -198,6 +212,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     } catch (Throwable $ex) {
         flash($ex->getMessage(), 'error');
+        // Give back what was typed, so a mistake in one field does not
+        // wipe the other five and the pasted block along with it.
+        $_SESSION['push_old'] = array_diff_key($_POST, ['csrf' => 1, 'action' => 1]);
     }
     header('Location: push_settings.php');
     exit;
@@ -209,6 +226,24 @@ $sa = $settings['sa'];
 $web = $settings['web'];
 $android = $settings['android'];
 $fromFile = defined('FIREBASE_SERVICE_ACCOUNT') || defined('FIREBASE_WEB') || defined('FIREBASE_ANDROID');
+$webFromFile = defined('FIREBASE_WEB');
+$androidFromFile = defined('FIREBASE_ANDROID');
+$old = $_SESSION['push_old'] ?? [];
+unset($_SESSION['push_old']);
+
+/** A field's value: what was just typed if the save failed, else what is saved. */
+function push_val(array $old, string $name, $saved): string {
+    return (string)($old[$name] ?? $saved ?? '');
+}
+
+/** The saved web settings, written back as the block Firebase shows, so the box is never blank. */
+function push_snippet(array $web): string {
+    $lines = [];
+    foreach (PUSH_WEB_KEYS as $k) {
+        if (($web[$k] ?? '') !== '') $lines[] = '  ' . $k . ': "' . $web[$k] . '"';
+    }
+    return $lines ? "const firebaseConfig = {\n" . implode(",\n", $lines) . "\n};" : '';
+}
 
 push_ensure_table($conn);
 $devices = $conn->query(
@@ -252,6 +287,7 @@ $flash = flash();
   .steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
   .step{border:1px solid #dfe1e5;border-radius:8px;padding:10px 12px;font-size:14px;overflow-wrap:anywhere;min-width:0}
   .ok{color:#1a7f4b;font-weight:600} .no{color:#9a6300;font-weight:600}
+  p.hint.ok{font-weight:400}
   table{width:100%;border-collapse:collapse;font-size:14px}
   th{text-align:left;padding:8px;border-bottom:2px solid #dfe1e5;font-size:12px;text-transform:uppercase;color:#65676b}
   td{padding:9px 8px;border-bottom:1px solid #eceef0;vertical-align:middle}
@@ -285,8 +321,10 @@ $flash = flash();
         <span class="<?= $devices ? 'ok' : 'no' ?>"><?= count($devices) ?></span></div>
     </div>
     <?php if ($fromFile): ?>
-      <p class="hint" style="margin-top:12px">A <code>firebase-config.php</code> file is on the server; its values take
-        priority over what is saved here.</p>
+      <div class="flash f-error" style="margin:14px 0 0">A <b>firebase-config.php</b> file is on the server, and its
+        values override this page<?= $webFromFile ? ' (web app)' : '' ?><?= $androidFromFile ? ' (Android app)' : '' ?><?=
+        defined('FIREBASE_SERVICE_ACCOUNT') ? ' (key)' : '' ?>. Edits here to those parts will not take effect.
+        Delete firebase-config.php from the server to manage everything from this page.</div>
     <?php endif; ?>
     <?php if ($sa): ?>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">
@@ -314,7 +352,8 @@ $flash = flash();
       <button class="primary"><?= $sa ? 'Replace key' : 'Upload key' ?></button>
     </form>
     <?php if ($sa): ?>
-      <p class="hint" style="margin-top:12px">Saved: <b><?= e($sa['client_email']) ?></b> · project <b><?= e($sa['project_id']) ?></b></p>
+      <p class="hint ok" style="margin-top:12px">✓ Saved: <b><?= e($sa['client_email']) ?></b> · project <b><?= e($sa['project_id']) ?></b>.
+        The file box above is empty again after saving; that is normal, the key is kept.</p>
       <form method="post" onsubmit="return confirm('Remove the key? Notifications stop until a new one is uploaded.')">
         <?= csrf_field() ?><input type="hidden" name="action" value="remove_key">
         <button class="danger">Remove key</button>
@@ -330,23 +369,28 @@ $flash = flash();
     <form method="post">
       <?= csrf_field() ?><input type="hidden" name="action" value="web">
       <label for="snippet">Paste the firebaseConfig block</label>
+      <?php $snippet = push_val($old, 'snippet', $webReady ? push_snippet($web) : ''); ?>
+      <input type="hidden" name="snippet_saved" value="<?= e($webReady ? push_snippet($web) : '') ?>">
       <textarea id="snippet" name="snippet" placeholder='const firebaseConfig = {
   apiKey: "AIza…",
   authDomain: "madeforu.firebaseapp.com",
   projectId: "madeforu",
   messagingSenderId: "1234567890",
   appId: "1:1234567890:web:abc123"
-};'></textarea>
-      <details <?= $webReady ? 'open' : '' ?>><summary>…or check and edit each value</summary>
+};'><?= e($snippet) ?></textarea>
+      <p class="hint" style="margin-top:6px">Showing what is saved. Paste a new block over it to change it.</p>
+      <details <?= ($webReady || $old) ? 'open' : '' ?>><summary>…or check and edit each value</summary>
         <div class="grid" style="margin-top:10px">
           <?php foreach (PUSH_WEB_KEYS as $k): ?>
             <div><label for="w_<?= $k ?>"><?= $k ?></label>
-              <input id="w_<?= $k ?>" name="<?= $k ?>" value="<?= e($web[$k] ?? '') ?>"></div>
+              <input id="w_<?= $k ?>" name="<?= $k ?>" value="<?= e(push_val($old, $k, $web[$k] ?? '')) ?>"></div>
           <?php endforeach; ?>
         </div>
       </details>
       <div class="grid" style="margin-top:12px"><div><label for="vapidKey">Web Push key (vapidKey)</label>
-        <input id="vapidKey" name="vapidKey" value="<?= e($web['vapidKey'] ?? '') ?>" placeholder="B…" required></div></div>
+        <input id="vapidKey" name="vapidKey" value="<?= e(push_val($old, 'vapidKey', $web['vapidKey'] ?? '')) ?>" placeholder="B…" required></div></div>
+      <?php if ($webReady): ?><p class="hint ok" style="margin:0 0 10px">✓ Saved: project <?= e($web['projectId'] ?? '') ?>,
+        app <?= e($web['appId'] ?? '') ?>, Web Push key <?= e(substr((string)$web['vapidKey'], 0, 10)) ?>…</p><?php endif; ?>
       <button class="primary">Save web app</button>
     </form>
   </div>
@@ -364,14 +408,17 @@ $flash = flash();
       <div class="or">— or —</div>
       <div class="grid">
         <div><label for="a_appId">App ID</label>
-          <input id="a_appId" name="a_appId" value="<?= e($android['appId'] ?? '') ?>" placeholder="1:1234567890:android:abc123"></div>
+          <input id="a_appId" name="a_appId" value="<?= e(push_val($old, 'a_appId', $android['apps']['com.madeforu.sales'] ?? $android['appId'] ?? '')) ?>" placeholder="1:1234567890:android:abc123"></div>
         <div><label for="a_apiKey">apiKey <small>(empty = same as web)</small></label>
-          <input id="a_apiKey" name="a_apiKey" value="<?= e($android['apiKey'] ?? '') ?>"></div>
+          <input id="a_apiKey" name="a_apiKey" value="<?= e(push_val($old, 'a_apiKey', $android['apiKey'] ?? '')) ?>"></div>
         <div><label for="a_projectId">projectId <small>(empty = same as web)</small></label>
-          <input id="a_projectId" name="a_projectId" value="<?= e($android['projectId'] ?? '') ?>"></div>
+          <input id="a_projectId" name="a_projectId" value="<?= e(push_val($old, 'a_projectId', $android['projectId'] ?? '')) ?>"></div>
         <div><label for="a_debug">Debug build App ID <small>(com.madeforu.sales.debug, optional)</small></label>
-          <input id="a_debug" name="a_debugAppId" value="<?= e($android['apps']['com.madeforu.sales.debug'] ?? '') ?>" placeholder="1:1234567890:android:…"></div>
+          <input id="a_debug" name="a_debugAppId" value="<?= e(push_val($old, 'a_debugAppId', $android['apps']['com.madeforu.sales.debug'] ?? '')) ?>" placeholder="1:1234567890:android:…"></div>
       </div>
+      <?php if ($androidReady): ?><p class="hint ok" style="margin:0 0 10px">✓ Saved:
+        <?php foreach (($android['apps'] ?? ['com.madeforu.sales' => $android['appId']]) as $pkg => $id): ?>
+          <br><code><?= e($pkg) ?></code> → <?= e($id) ?><?php endforeach; ?></p><?php endif; ?>
       <button class="primary">Save Android app</button>
     </form>
   </div>
