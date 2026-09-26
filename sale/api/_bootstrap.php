@@ -324,7 +324,7 @@ function api_require_auth(mysqli $conn): array {
     $u->execute();
     $u->close();
 
-    push_set_actor((int)$row['id']);   // their own changes are not pushed back to them
+    push_set_actor((int)$row['id'], (int)$row['token_id']);   // this device is not told about its own change
     return ['id' => (int)$row['id'], 'name' => $row['name'], 'phone' => $row['phone'],
             'token_id' => (int)$row['token_id']];
 }
