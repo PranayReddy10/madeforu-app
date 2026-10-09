@@ -389,7 +389,8 @@ private fun ExpenseBreakdown(expense: Expense) {
                             // Whole quantities read as "5", not "5.0" — a
                             // fractional quantity is rare and only shown
                             // when it is real.
-                            qtyText(line.qty) + " × " + Money.full(line.unitCost),
+                            qtyText(line.qty) + " × " + Money.full(line.unitCost) +
+                                (if (line.gstPct > 0.001) " + " + qtyText(line.gstPct) + "% GST" else ""),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )

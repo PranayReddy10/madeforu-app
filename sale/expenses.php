@@ -107,22 +107,39 @@ function category_list(mysqli $conn): array {
     return $out ?: ['Other'];
 }
 
-/** Posted line items -> [descr, qty, unit, line]; [] if none entered. */
+/**
+ * GST on a line is optional: a percentage (5, 12, 18, 28…) on top of
+ * qty × unit cost. Added to expense_items the first time this page runs
+ * on a database that does not have it yet, so nothing has to be run by
+ * hand (api/migrations/2026-10-expense-gst.sql has the same statement).
+ */
+function ensure_gst_column(mysqli $conn): void {
+    $has = $conn->query("SHOW COLUMNS FROM expense_items LIKE 'gst_pct'");
+    if ($has && $has->num_rows === 0) {
+        $conn->query('ALTER TABLE expense_items ADD COLUMN gst_pct DECIMAL(5,2) NOT NULL DEFAULT 0.00 AFTER unit_cost');
+    }
+}
+try { ensure_gst_column($conn); } catch (Throwable $e) { /* no expense_items table yet */ }
+
+/** Posted line items -> [descr, qty, unit, gst, line]; [] if none entered. */
 function read_line_items(): array {
     $descr = $_POST['li_descr'] ?? [];
     $qty   = $_POST['li_qty']   ?? [];
     $unit  = $_POST['li_unit']  ?? [];
+    $gst   = $_POST['li_gst']   ?? [];
     if (!is_array($descr)) return [];
     $items = [];
     for ($i = 0, $n = count($descr); $i < $n; $i++) {
         $d = trim((string)($descr[$i] ?? ''));
         $q = round((float)($qty[$i]  ?? 0), 2);
         $u = round((float)($unit[$i] ?? 0), 2);
+        $g = round((float)($gst[$i]  ?? 0), 2);   // left blank = no GST
         if ($d === '' && $q == 0 && $u == 0) continue;
         if ($d === '') throw new Exception('Every line item needs a description.');
         if ($q <= 0)   throw new Exception('Line "' . $d . '" needs a quantity above zero.');
         if ($u < 0)    throw new Exception('Line "' . $d . '" has a negative unit cost.');
-        $items[] = ['descr'=>$d, 'qty'=>$q, 'unit'=>$u, 'line'=>round($q * $u, 2)];
+        if ($g < 0 || $g > 100) throw new Exception('Line "' . $d . '": GST is a percentage between 0 and 100.');
+        $items[] = ['descr'=>$d, 'qty'=>$q, 'unit'=>$u, 'gst'=>$g, 'line'=>round($q * $u * (1 + $g / 100), 2)];
     }
     return $items;
 }
@@ -148,9 +165,9 @@ function write_line_items(mysqli $conn, int $expenseId, array $items): void {
     $d = $conn->prepare('DELETE FROM expense_items WHERE expense_id = ?');
     $d->bind_param('i', $expenseId); $d->execute(); $d->close();
     if (!$items) return;
-    $s = $conn->prepare('INSERT INTO expense_items (expense_id, descr, qty, unit_cost, line_total, sort_order) VALUES (?,?,?,?,?,?)');
+    $s = $conn->prepare('INSERT INTO expense_items (expense_id, descr, qty, unit_cost, gst_pct, line_total, sort_order) VALUES (?,?,?,?,?,?,?)');
     foreach ($items as $i => $it) {
-        $s->bind_param('isdddi', $expenseId, $it['descr'], $it['qty'], $it['unit'], $it['line'], $i);
+        $s->bind_param('isddddi', $expenseId, $it['descr'], $it['qty'], $it['unit'], $it['gst'], $it['line'], $i);
         $s->execute();
     }
     $s->close();
@@ -468,7 +485,7 @@ function expense_pay_status(float $netOwed, float $paid): array {
         <h3>Breakdown (optional)</h3>
         <div class="scroll">
           <table class="li-tbl" data-li>
-            <thead><tr><th style="width:44%">Description</th><th class="r" style="width:16%">Qty</th><th class="r" style="width:18%">Unit cost ₹</th><th class="r" style="width:16%">Line total</th><th style="width:6%"></th></tr></thead>
+            <thead><tr><th style="width:38%">Description</th><th class="r" style="width:12%">Qty</th><th class="r" style="width:16%">Unit cost ₹</th><th class="r" style="width:12%">GST %</th><th class="r" style="width:16%">Line total</th><th style="width:6%"></th></tr></thead>
             <tbody></tbody>
           </table>
         </div>
@@ -572,9 +589,12 @@ function expense_pay_status(float $netOwed, float $paid): array {
                 <div class="li-break"><?php
                   $bits = [];
                   foreach ($myLines as $k => $li) {
+                      $g = (float)($li['gst_pct'] ?? 0);
                       $bits[] = ($k+1) . '. ' . $li['descr'] . ' — '
                               . rtrim(rtrim(number_format((float)$li['qty'],2,'.',''), '0'),'.') . ' × '
-                              . money($li['unit_cost']) . ' = ' . money($li['line_total']);
+                              . money($li['unit_cost'])
+                              . ($g > 0 ? ' + ' . rtrim(rtrim(number_format($g,2,'.',''), '0'),'.') . '% GST' : '')
+                              . ' = ' . money($li['line_total']);
                   }
                   echo e(implode("\n", $bits));
                 ?></div>
@@ -672,7 +692,7 @@ function expense_pay_status(float $netOwed, float $paid): array {
                   <div class="sect"><h3>Breakdown (optional)</h3>
                     <div class="scroll">
                       <table class="li-tbl" data-li>
-                        <thead><tr><th style="width:44%">Description</th><th class="r" style="width:16%">Qty</th><th class="r" style="width:18%">Unit cost ₹</th><th class="r" style="width:16%">Line total</th><th style="width:6%"></th></tr></thead>
+                        <thead><tr><th style="width:38%">Description</th><th class="r" style="width:12%">Qty</th><th class="r" style="width:16%">Unit cost ₹</th><th class="r" style="width:12%">GST %</th><th class="r" style="width:16%">Line total</th><th style="width:6%"></th></tr></thead>
                         <tbody></tbody>
                       </table>
                     </div>
@@ -680,7 +700,7 @@ function expense_pay_status(float $netOwed, float $paid): array {
                       <button type="button" class="btn" onclick="addLine(this)">+ Add line</button>
                       <div class="li-sum">Gross from lines: <span class="liGrand">₹0.00</span></div>
                     </div>
-                    <script type="application/json" class="li-seed"><?= json_encode(array_map(fn($li)=>['descr'=>$li['descr'],'qty'=>(float)$li['qty'],'unit'=>(float)$li['unit_cost']], $myLines), JSON_UNESCAPED_UNICODE|JSON_HEX_TAG|JSON_HEX_APOS|JSON_HEX_QUOT|JSON_HEX_AMP) ?></script>
+                    <script type="application/json" class="li-seed"><?= json_encode(array_map(fn($li)=>['descr'=>$li['descr'],'qty'=>(float)$li['qty'],'unit'=>(float)$li['unit_cost'],'gst'=>(float)($li['gst_pct'] ?? 0)], $myLines), JSON_UNESCAPED_UNICODE|JSON_HEX_TAG|JSON_HEX_APOS|JSON_HEX_QUOT|JSON_HEX_AMP) ?></script>
                   </div>
 
                   <div class="grid" style="margin-top:14px">
@@ -735,30 +755,38 @@ function expense_pay_status(float $netOwed, float $paid): array {
   foreach ($partners as $id=>$p) if ($p['is_active']) $partnerJs[] = ['id'=>(int)$id,'name'=>$p['name']];
 ?>
 <script>
+document.body.insertAdjacentHTML('beforeend',
+  '<datalist id="gstRates"><option value="0"><option value="5"><option value="12"><option value="18"><option value="28"></datalist>');
 const PARTNERS = <?= json_encode($partnerJs, JSON_HEX_TAG|JSON_HEX_APOS|JSON_HEX_QUOT|JSON_HEX_AMP) ?>;
 function moneyFmt(n){ return '₹' + (isFinite(n)?n:0).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2}); }
 
 // ── Line items ──────────────────────────────────────────────────────
-function lineRowHtml(d,q,u){
-  d=d||''; q=(q===0||q)?q:''; u=(u===0||u)?u:'';
+function lineRowHtml(d,q,u,g){
+  d=d||''; q=(q===0||q)?q:''; u=(u===0||u)?u:''; g=g?g:'';   // GST blank = 0
   return '<tr>'
     +'<td><input name="li_descr[]" maxlength="200" placeholder="e.g. Fridge Magnet 2x2" value="'+String(d).replace(/"/g,'&quot;')+'"></td>'
     +'<td><input name="li_qty[]" type="number" step="0.01" min="0" class="r" value="'+q+'" oninput="recalcLine(this)"></td>'
     +'<td><input name="li_unit[]" type="number" step="0.01" min="0" class="r" value="'+u+'" oninput="recalcLine(this)"></td>'
+    +'<td><input name="li_gst[]" type="number" step="0.01" min="0" max="100" class="r" list="gstRates" placeholder="0" value="'+g+'" oninput="recalcLine(this)"></td>'
     +'<td class="r liTotal">₹0.00</td>'
     +'<td class="r"><button type="button" class="btn li-x" onclick="delLine(this)">✕</button></td></tr>';
 }
-function addLine(btn,d,q,u){
+/** qty × unit cost, plus GST % on top when entered. */
+function lineTotal(tr){
+  const q=parseFloat(tr.querySelector('[name="li_qty[]"]').value)||0;
+  const u=parseFloat(tr.querySelector('[name="li_unit[]"]').value)||0;
+  const g=parseFloat(tr.querySelector('[name="li_gst[]"]').value)||0;
+  return Math.round(q*u*(1+g/100)*100)/100;
+}
+function addLine(btn,d,q,u,g){
   const tb=btn.closest('form').querySelector('table[data-li] tbody');
-  tb.insertAdjacentHTML('beforeend', lineRowHtml(d,q,u));
+  tb.insertAdjacentHTML('beforeend', lineRowHtml(d,q,u,g));
   recalcLine(tb.lastElementChild.querySelector('input'));
 }
 function delLine(btn){ const f=btn.closest('form'); btn.closest('tr').remove(); recalcMoney(f); }
 function recalcLine(input){
   const tr=input.closest('tr');
-  const q=parseFloat(tr.querySelector('[name="li_qty[]"]').value)||0;
-  const u=parseFloat(tr.querySelector('[name="li_unit[]"]').value)||0;
-  tr.querySelector('.liTotal').textContent=moneyFmt(q*u);
+  tr.querySelector('.liTotal').textContent=moneyFmt(lineTotal(tr));
   recalcMoney(input.closest('form'));
 }
 
@@ -788,7 +816,7 @@ function recalcMoney(form){
     const u=parseFloat(tr.querySelector('[name="li_unit[]"]').value)||0;
     const d=tr.querySelector('[name="li_descr[]"]').value.trim();
     if(d!==''||q||u) anyLine=true;
-    lineSum+=q*u;
+    lineSum+=lineTotal(tr);
   });
   const grand=form.querySelector('.liGrand'); if(grand) grand.textContent=moneyFmt(lineSum);
   const amt=form.querySelector('.amtField'), hint=form.querySelector('.amtHint');
@@ -835,7 +863,7 @@ function syncBeforeSubmit(form){
 document.querySelectorAll('script.li-seed').forEach(seed=>{
   let data=[]; try{data=JSON.parse(seed.textContent||'[]');}catch(e){}
   const form=seed.closest('form'); const btn=form.querySelector('button[onclick^="addLine"]');
-  data.forEach(it=>addLine(btn,it.descr,it.qty,it.unit));
+  data.forEach(it=>addLine(btn,it.descr,it.qty,it.unit,it.gst));
   recalcMoney(form);
 });
 document.querySelectorAll('script.pay-seed').forEach(seed=>{

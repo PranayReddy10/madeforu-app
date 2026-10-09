@@ -24,7 +24,7 @@ const DEFAULT_API = new URL('../api/', location.href).href;
  * browser, the server or the app is the stale one. It must match the
  * CACHE name in sw.js.
  */
-const BUILD = '2026-09-26.4';
+const BUILD = '2026-10-09.1';
 
 /** What this build of the app expects the server to be able to do. */
 const NEEDS_FEATURES = ['revenue_breakdown', 'expense_create', 'activity_feed', 'push', 'price_history',
@@ -2326,7 +2326,7 @@ route('expense', async (id) => {
     ${(e.items && e.items.length) ? `<section><h2 class="section">What was in it</h2><div class="card">
       ${e.items.map((i) => `<div class="row"><div class="grow">
         <div class="t" style="font-weight:500">${esc(i.descr)}</div>
-        <div class="s">${qtyText(i.qty)} × ${money(i.unit_cost)}</div></div>
+        <div class="s">${qtyText(i.qty)} × ${money(i.unit_cost)}${i.gst_pct > 0 ? ' + ' + i.gst_pct + '% GST' : ''}</div></div>
         <div class="amt">${money(i.line_total)}</div></div>`).join('')}
       <div class="row"><div class="grow t">${e.items.length} item${e.items.length === 1 ? '' : 's'}</div>
         <div class="amt">${money(linesTotal)}</div></div>

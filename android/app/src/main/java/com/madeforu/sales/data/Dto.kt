@@ -707,6 +707,8 @@ data class ExpenseLine(
     val descr: String = "",
     val qty: Double = 0.0,
     @SerialName("unit_cost") val unitCost: Double = 0.0,
+    /** GST on top of qty × unit cost, as a percentage; 0 when none was entered. */
+    @SerialName("gst_pct") val gstPct: Double = 0.0,
     @SerialName("line_total") val lineTotal: Double = 0.0,
 )
 

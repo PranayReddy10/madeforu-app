@@ -167,13 +167,17 @@ api_dispatch([
 
         $items = [];
         try {
-            $s = $conn->prepare('SELECT descr, qty, unit_cost, line_total FROM expense_items WHERE expense_id = ? ORDER BY sort_order, id');
+            // gst_pct arrives when the website's Expenses page first runs
+            // after the upgrade; until then every line reads as 0% GST.
+            $gst = db_has_column($conn, 'expense_items', 'gst_pct') ? 'gst_pct' : '0 AS gst_pct';
+            $s = $conn->prepare("SELECT descr, qty, unit_cost, $gst, line_total FROM expense_items WHERE expense_id = ? ORDER BY sort_order, id");
             $s->bind_param('i', $id);
             $s->execute();
             $res = $s->get_result();
             while ($r = $res->fetch_assoc()) {
                 $items[] = ['descr' => $r['descr'], 'qty' => (float)$r['qty'],
-                            'unit_cost' => (float)$r['unit_cost'], 'line_total' => (float)$r['line_total']];
+                            'unit_cost' => (float)$r['unit_cost'], 'gst_pct' => (float)$r['gst_pct'],
+                            'line_total' => (float)$r['line_total']];
             }
             $s->close();
         } catch (mysqli_sql_exception $e) { /* optional table */ }
