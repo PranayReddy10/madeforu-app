@@ -165,6 +165,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $s->execute(); $s->close();
                 $conn->commit();
                 delete_receipt_file($oldReceipt);   // after commit, so a rollback keeps the old file
+            } elseif ($action === 'edit' && !empty($_POST['remove_receipt'])) {
+                // The edit form's "remove the receipt" box, with no new file chosen.
+                $oldReceipt = receipt_of($conn, $id);
+                $s = $conn->prepare('UPDATE expenses SET receipt_path = NULL WHERE id = ?');
+                $s->bind_param('i', $id);
+                $s->execute(); $s->close();
+                $conn->commit();
+                delete_receipt_file($oldReceipt);
             } else {
                 $conn->commit();
             }
@@ -572,7 +580,7 @@ function expense_pay_status(float $netOwed, float $paid): array {
 
               <details>
                 <summary>Edit</summary>
-                <form method="post" style="margin-top:10px" onsubmit="return syncBeforeSubmit(this)">
+                <form method="post" enctype="multipart/form-data" style="margin-top:10px" onsubmit="return syncBeforeSubmit(this)">
                   <?= csrf_field() ?>
                   <input type="hidden" name="action" value="edit">
                   <input type="hidden" name="id" value="<?= (int)$r['id'] ?>">
@@ -628,6 +636,21 @@ function expense_pay_status(float $netOwed, float $paid): array {
 
                   <label>Details</label>
                   <textarea name="details" maxlength="500"><?= e($r['details']) ?></textarea>
+
+                  <div class="sect"><h3>Receipt</h3>
+                    <?php if ($rcpt): ?>
+                      <p style="margin-bottom:6px"><a href="receipt.php?id=<?= (int)$r['id'] ?>" target="_blank" rel="noopener">View the current receipt</a></p>
+                      <label>Replace with another photo or PDF <small>(optional)</small></label>
+                    <?php else: ?>
+                      <label>Attach a photo or PDF <small>(optional, up to 5 MB)</small></label>
+                    <?php endif; ?>
+                    <input type="file" name="receipt" accept="image/jpeg,image/png,image/webp,application/pdf">
+                    <?php if ($rcpt): ?>
+                      <label style="display:flex;align-items:center;gap:6px;margin-top:8px;color:#1c1e21">
+                        <input type="checkbox" name="remove_receipt" value="1" style="width:auto"> Remove the current receipt
+                        <small style="color:#65676b">(ignored if a new file is chosen)</small></label>
+                    <?php endif; ?>
+                  </div>
                   <button class="primary" style="margin-top:10px">Save changes</button>
                 </form>
               </details>
