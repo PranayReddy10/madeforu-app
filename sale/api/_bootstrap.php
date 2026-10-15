@@ -45,7 +45,7 @@ set_exception_handler(function (Throwable $t) {
 });
 
 // ── API-wide constants ─────────────────────────────────────────────
-define('API_VERSION',      '1.9.0');
+define('API_VERSION',      '1.10.0');
 
 /**
  * What this build of the API can do, for the apps to check against.
@@ -71,6 +71,7 @@ define('API_FEATURES', [
     'wholesale',           // wholesale.php: the wholesale buyers notebook (no revenue, no stock)
     'activity_feed',       // activity.php: what changed since a cursor, for notifications
     'push',                // push.php: real-time Firebase push registration
+    'expense_receipts',    // expenses.php: line items with GST on create/update, receipt upload/view
 ]);
 define('TOKEN_TTL_DAYS',   90);     // a partner phone stays signed in for a quarter
 define('MAX_PAGE_SIZE',    200);

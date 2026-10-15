@@ -33,6 +33,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material.icons.filled.Receipt
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -51,6 +54,7 @@ import com.madeforu.sales.core.Money
 import com.madeforu.sales.core.isAuthFailure
 import com.madeforu.sales.data.Expense
 import com.madeforu.sales.data.Partner
+import com.madeforu.sales.data.ReceiptFiles
 import com.madeforu.sales.data.Repository
 import com.madeforu.sales.ui.components.BackButton
 import com.madeforu.sales.ui.components.DetailRow
@@ -84,6 +88,7 @@ fun ExpenseDetailScreen(
     onSessionExpired: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
 
     var expense by remember { mutableStateOf<Expense?>(null) }
     var partners by remember { mutableStateOf<List<Partner>>(emptyList()) }
@@ -251,12 +256,23 @@ fun ExpenseDetailScreen(
 
             if (current.hasReceipt) {
                 item {
-                    Text(
-                        "A receipt is attached to this expense. Receipts are uploaded and viewed " +
-                            "on the website — the app does not fetch them yet.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                    // Downloaded and handed to the phone's own viewer for
+                    // photos or PDFs, so it can be zoomed, shared or saved.
+                    OutlinedButton(
+                        onClick = {
+                            busy = true
+                            scope.launch {
+                                ReceiptFiles.open(context, repository, expenseId)?.let { error = it }
+                                busy = false
+                            }
+                        },
+                        enabled = !busy,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Icon(Icons.Filled.Receipt, contentDescription = null, Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("View receipt")
+                    }
                 }
             }
 
@@ -293,18 +309,8 @@ fun ExpenseDetailScreen(
                 editing = false
                 busy = true
                 scope.launch {
-                    val result = repository.saveExpense(
-                        id = expenseId,
-                        date = form.date,
-                        item = form.item,
-                        amount = form.amount,
-                        discount = form.discount,
-                        paidBy = form.paidBy,
-                        category = form.category,
-                        paidTo = form.paidTo,
-                        details = form.details,
-                        split = form.split,
-                    )
+                    // Saves the expense, then attaches or removes its receipt.
+                    val result = ReceiptFiles.saveWithReceipt(context, repository, expenseId, form)
                     when (result) {
                         is ApiResult.Success -> { onChanged(result.value); load() }
                         is ApiResult.Failure -> error = result.message

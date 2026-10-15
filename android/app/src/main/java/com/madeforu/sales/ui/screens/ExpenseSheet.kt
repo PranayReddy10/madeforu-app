@@ -2,6 +2,16 @@
 
 package com.madeforu.sales.ui.screens
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.ui.platform.LocalContext
+import com.madeforu.sales.data.ExpenseLineInput
+import com.madeforu.sales.data.ReceiptFiles
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -52,7 +62,29 @@ data class ExpenseForm(
     val details: String,
     /** Empty means the whole net amount against [paidBy]. */
     val split: List<Pair<Int, Double>>,
+    /** The breakdown; empty when none is used. The amount is its total when it is. */
+    val lines: List<ExpenseLineInput> = emptyList(),
+    /** A photo or PDF chosen to attach, replacing any receipt already there. */
+    val receipt: Uri? = null,
+    /** Remove the receipt the expense already has. */
+    val removeReceipt: Boolean = false,
 )
+
+/** One breakdown line as typed: text, so a half-typed number is never lost. */
+private data class LineDraft(
+    val descr: String = "",
+    val qty: String = "",
+    val unit: String = "",
+    val gst: String = "",
+) {
+    val qtyValue get() = qty.toDoubleOrNull() ?: 0.0
+    val unitValue get() = unit.toDoubleOrNull() ?: 0.0
+    /** GST left blank counts as 0. */
+    val gstValue get() = gst.toDoubleOrNull() ?: 0.0
+    /** qty × unit cost, plus GST % on top — the same sum the server does. */
+    val total get() = Math.round(qtyValue * unitValue * (1 + gstValue / 100) * 100) / 100.0
+    val isBlank get() = descr.isBlank() && qtyValue == 0.0 && unitValue == 0.0
+}
 
 /**
  * Add or edit an expense. One sheet for both, because the fields and the
@@ -74,6 +106,31 @@ fun ExpenseSheet(
     onSubmit: (ExpenseForm) -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val context = LocalContext.current
+
+    // ── Breakdown ──────────────────────────────────────────────────
+    var lines by remember {
+        mutableStateOf(
+            existing?.items.orEmpty().map {
+                LineDraft(it.descr, plain(it.qty), plain(it.unitCost), if (it.gstPct > 0) plain(it.gstPct) else "")
+            },
+        )
+    }
+    val usedLines = lines.filterNot { it.isBlank }
+    val linesTotal = Math.round(usedLines.sumOf { it.total } * 100) / 100.0
+    val linesOk = usedLines.all { it.descr.isNotBlank() && it.qtyValue > 0 && it.gstValue in 0.0..100.0 }
+
+    // ── Receipt ────────────────────────────────────────────────────
+    var receipt by remember { mutableStateOf<Uri?>(null) }
+    var receiptName by remember { mutableStateOf("") }
+    var removeReceipt by remember { mutableStateOf(false) }
+    var pendingPhoto by remember { mutableStateOf<Uri?>(null) }
+    val takePhoto = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
+        if (ok) { receipt = pendingPhoto; receiptName = "Photo just taken"; removeReceipt = false }
+    }
+    val pickFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) { receipt = uri; receiptName = ReceiptFiles.displayName(context, uri); removeReceipt = false }
+    }
 
     var date by remember { mutableStateOf(existing?.date ?: Dates.today()) }
     var item by remember { mutableStateOf(existing?.item ?: "") }
@@ -103,7 +160,8 @@ fun ExpenseSheet(
         )
     }
 
-    val amount = amountText.toDoubleOrNull() ?: 0.0
+    // With a breakdown, the amount is what its lines add up to.
+    val amount = if (usedLines.isNotEmpty()) linesTotal else amountText.toDoubleOrNull() ?: 0.0
     val discount = discountText.toDoubleOrNull() ?: 0.0
     val net = (amount - discount).coerceAtLeast(0.0)
     val splitRows = splitAmounts.mapNotNull { (id, text) ->
@@ -112,7 +170,7 @@ fun ExpenseSheet(
     }
     val splitTotal = splitRows.sumOf { it.second }
     val splitBalances = !splitting || kotlin.math.abs(splitTotal - net) < 0.01
-    val valid = item.isNotBlank() && amount > 0 && discount <= amount &&
+    val valid = item.isNotBlank() && amount > 0 && discount <= amount && linesOk &&
         (if (splitting) splitRows.isNotEmpty() && splitBalances else paidBy > 0)
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
@@ -137,9 +195,10 @@ fun ExpenseSheet(
             )
             Row {
                 OutlinedTextField(
-                    value = amountText,
+                    value = if (usedLines.isNotEmpty()) plain(linesTotal) else amountText,
                     onValueChange = { amountText = it.filter { c -> c.isDigit() || c == '.' } },
-                    label = { Text("Amount") },
+                    label = { Text(if (usedLines.isNotEmpty()) "Amount (from lines)" else "Amount") },
+                    readOnly = usedLines.isNotEmpty(),
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier = Modifier.weight(1f),
@@ -155,6 +214,61 @@ fun ExpenseSheet(
                     modifier = Modifier.weight(1f),
                 )
             }
+            // ── Breakdown (optional) ───────────────────────────────
+            Text("Breakdown (optional)", style = MaterialTheme.typography.titleSmall)
+            lines.forEachIndexed { index, line ->
+                fun update(change: LineDraft) { lines = lines.toMutableList().also { it[index] = change } }
+                val number: (String) -> String = { raw -> raw.filter { c -> c.isDigit() || c == '.' } }
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        OutlinedTextField(
+                            value = line.descr,
+                            onValueChange = { update(line.copy(descr = it)) },
+                            label = { Text("Description") },
+                            singleLine = true,
+                            modifier = Modifier.weight(1f),
+                        )
+                        IconButton(onClick = { lines = lines.toMutableList().also { it.removeAt(index) } }) {
+                            Icon(Icons.Filled.Close, contentDescription = "Remove this line")
+                        }
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        OutlinedTextField(
+                            value = line.qty, onValueChange = { update(line.copy(qty = number(it))) },
+                            label = { Text("Qty") }, singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            modifier = Modifier.weight(0.8f),
+                        )
+                        OutlinedTextField(
+                            value = line.unit, onValueChange = { update(line.copy(unit = number(it))) },
+                            label = { Text("Unit cost ₹") }, singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            modifier = Modifier.weight(1.1f),
+                        )
+                        OutlinedTextField(
+                            value = line.gst, onValueChange = { update(line.copy(gst = number(it))) },
+                            label = { Text("GST %") }, placeholder = { Text("0") }, singleLine = true,
+                            isError = line.gstValue > 100,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            modifier = Modifier.weight(0.9f),
+                        )
+                    }
+                    Text(
+                        "Line total " + Money.full(line.total) +
+                            (if (line.gstValue > 0) " (incl. " + plain(line.gstValue) + "% GST)" else ""),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                TextButton(onClick = { lines = lines + LineDraft() }) { Text("+ Add line") }
+                Spacer(Modifier.weight(1f))
+                if (usedLines.isNotEmpty()) {
+                    Text("Total " + Money.full(linesTotal), style = MaterialTheme.typography.titleSmall)
+                }
+            }
+
             if (discount > 0 && amount > 0) {
                 Text(
                     "Net " + Money.full(net),
@@ -259,6 +373,33 @@ fun ExpenseSheet(
                 modifier = Modifier.fillMaxWidth(),
             )
 
+            // ── Receipt ────────────────────────────────────────────
+            Text("Receipt (optional)", style = MaterialTheme.typography.titleSmall)
+            val hasOld = existing?.hasReceipt == true && !removeReceipt
+            Text(
+                when {
+                    receipt != null -> "📎 $receiptName — attached when you save"
+                    hasOld -> "A receipt is attached. Choosing another replaces it."
+                    existing?.hasReceipt == true -> "The receipt will be removed when you save."
+                    else -> "A photo or PDF of the bill, up to 5 MB. Photos are shrunk before uploading."
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(onClick = {
+                    val uri = ReceiptFiles.newPhotoUri(context)
+                    pendingPhoto = uri
+                    takePhoto.launch(uri)
+                }) { Text("Take photo") }
+                TextButton(onClick = { pickFile.launch(arrayOf("image/*", "application/pdf")) }) { Text("Choose file") }
+                if (receipt != null || hasOld) {
+                    TextButton(onClick = {
+                        if (receipt != null) { receipt = null; receiptName = "" } else removeReceipt = true
+                    }) { Text("Remove", color = negativeColor()) }
+                }
+            }
+
             Button(
                 onClick = {
                     onSubmit(
@@ -277,6 +418,11 @@ fun ExpenseSheet(
                             paidTo = paidTo.trim(),
                             details = details.trim(),
                             split = if (splitting) splitRows else emptyList(),
+                            lines = usedLines.map {
+                                ExpenseLineInput(it.descr.trim(), it.qtyValue, it.unitValue, it.gstValue)
+                            },
+                            receipt = receipt,
+                            removeReceipt = removeReceipt && receipt == null,
                         ),
                     )
                 },
@@ -284,11 +430,6 @@ fun ExpenseSheet(
                 modifier = Modifier.fillMaxWidth().height(50.dp),
             ) { Text(if (existing == null) "Save expense" else "Save changes") }
 
-            Text(
-                "Receipts are uploaded on the website — this sheet does not attach files yet.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
             Spacer(Modifier.height(24.dp))
         }
     }

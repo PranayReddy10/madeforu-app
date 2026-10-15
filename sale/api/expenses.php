@@ -12,6 +12,7 @@
  */
 declare(strict_types=1);
 require __DIR__ . '/_bootstrap.php';
+require_once __DIR__ . '/../lib_expenses.php';   // receipts, GST column, line totals
 
 $me = api_require_auth($conn);
 
@@ -63,6 +64,61 @@ function expense_split(float $net, int $paidBy): array {
         throw new ApiInputError('The split adds up to ' . money($sum) . ' but the expense is ' . money($net) . '.');
     }
     return $split;
+}
+
+/**
+ * The optional breakdown: items:[{descr, qty, unit_cost, gst_pct}]. Null
+ * when the request leaves it out (an edit then keeps the lines it has);
+ * an empty list clears them. Each line total is worked out here, not
+ * taken from the app: qty × unit cost, plus GST % on top.
+ */
+function expense_lines_in(): ?array {
+    $raw = api_in('items', null);
+    if ($raw === null) return null;
+    if (!is_array($raw)) throw new ApiInputError('items must be a list.');
+    $out = [];
+    foreach ($raw as $row) {
+        if (!is_array($row)) continue;
+        $d = mb_substr(trim((string)($row['descr'] ?? '')), 0, 200);
+        $q = round((float)($row['qty'] ?? 0), 2);
+        $u = round((float)($row['unit_cost'] ?? 0), 2);
+        $g = round((float)($row['gst_pct'] ?? 0), 2);
+        if ($d === '' && $q == 0 && $u == 0) continue;
+        if ($d === '') throw new ApiInputError('Every line needs a description.');
+        if ($q <= 0) throw new ApiInputError('Line "' . $d . '" needs a quantity above zero.');
+        if ($u < 0) throw new ApiInputError('Line "' . $d . '" has a negative unit cost.');
+        if ($g < 0 || $g > 100) throw new ApiInputError('Line "' . $d . '": GST is a percentage between 0 and 100.');
+        $out[] = [$d, $q, $u, $g, expense_line_total($q, $u, $g)];
+    }
+    return $out;
+}
+
+function expense_lines_write(mysqli $conn, int $expenseId, array $lines): void {
+    ensure_gst_column($conn);
+    $s = $conn->prepare('DELETE FROM expense_items WHERE expense_id = ?');
+    $s->bind_param('i', $expenseId);
+    $s->execute();
+    $s->close();
+    if (!$lines) return;
+    $s = $conn->prepare('INSERT INTO expense_items (expense_id, descr, qty, unit_cost, gst_pct, line_total, sort_order) VALUES (?,?,?,?,?,?,?)');
+    foreach ($lines as $i => [$d, $q, $u, $g, $t]) {
+        $s->bind_param('isddddi', $expenseId, $d, $q, $u, $g, $t, $i);
+        $s->execute();
+    }
+    $s->close();
+}
+
+/** The expense's id from the request, after checking it exists. */
+function expense_id_in(mysqli $conn): int {
+    $id = api_int('id');
+    if ($id < 1) throw new ApiInputError('Invalid expense.');
+    $s = $conn->prepare('SELECT id FROM expenses WHERE id = ?');
+    $s->bind_param('i', $id);
+    $s->execute();
+    $found = $s->get_result()->fetch_assoc();
+    $s->close();
+    if (!$found) api_fail(404, 'not_found', 'That expense no longer exists.');
+    return $id;
 }
 
 api_dispatch([
@@ -212,7 +268,9 @@ api_dispatch([
     'create' => function () use ($conn) {
         $date   = api_date('exp_date', date('Y-m-d'));
         $item   = api_str('item');
-        $amount = api_float('amount', 0);
+        $lines  = expense_lines_in() ?? [];
+        // With a breakdown, the amount is what its lines add up to.
+        $amount = $lines ? round(array_sum(array_column($lines, 4)), 2) : api_float('amount', 0);
         $disc   = api_float('discount', 0);
         $paidBy = api_int('paid_by');
 
@@ -259,6 +317,7 @@ api_dispatch([
                 $s->execute();
             }
             $s->close();
+            if ($lines) expense_lines_write($conn, $eid, $lines);
             $conn->commit();
         } catch (Exception $ex) { $conn->rollback(); throw $ex; }
 
@@ -285,7 +344,8 @@ api_dispatch([
 
         $date   = api_date('exp_date', date('Y-m-d'));
         $item   = mb_substr(api_str('item'), 0, 200);
-        $amount = api_float('amount', 0);
+        $lines  = expense_lines_in();   // null: leave the existing lines alone
+        $amount = $lines ? round(array_sum(array_column($lines, 4)), 2) : api_float('amount', 0);
         $disc   = api_float('discount', 0);
         $paidBy = api_int('paid_by');
 
@@ -326,6 +386,7 @@ api_dispatch([
                 $s->execute();
             }
             $s->close();
+            if ($lines !== null) expense_lines_write($conn, $id, $lines);
             $conn->commit();
         } catch (Exception $ex) { $conn->rollback(); throw $ex; }
 
@@ -369,6 +430,64 @@ api_dispatch([
         }
 
         api_ok(['message' => 'Expense deleted.']);
+    },
+
+    /**
+     * POST upload_receipt (multipart: id, receipt) — attach or replace the
+     * expense's receipt. The same checks as the website: the real type
+     * read from the bytes (JPEG, PNG, WebP or PDF), at most 5 MB, stored
+     * under a random name outside anything a URL can reach.
+     */
+    'upload_receipt' => function () use ($conn) {
+        $id = expense_id_in($conn);
+        if (empty($_FILES['receipt'])) throw new ApiInputError('No file was sent.');
+        try {
+            $name = store_receipt($_FILES['receipt']);
+        } catch (Exception $e) {
+            throw new ApiInputError($e->getMessage());
+        }
+        $old = receipt_of($conn, $id);
+        $s = $conn->prepare('UPDATE expenses SET receipt_path = ? WHERE id = ?');
+        $s->bind_param('si', $name, $id);
+        $s->execute();
+        $s->close();
+        if ($old !== null && $old !== $name) delete_receipt_file($old);
+        api_ok(['message' => 'Receipt attached.']);
+    },
+
+    // ── POST remove_receipt {id} ───────────────────────────────────
+    'remove_receipt' => function () use ($conn) {
+        $id = expense_id_in($conn);
+        $old = receipt_of($conn, $id);
+        $s = $conn->prepare("UPDATE expenses SET receipt_path = NULL WHERE id = ?");
+        $s->bind_param('i', $id);
+        $s->execute();
+        $s->close();
+        delete_receipt_file($old);
+        api_ok(['message' => 'Receipt removed.']);
+    },
+
+    /**
+     * GET receipt&id= — the file itself, to a signed-in app. Served the
+     * way receipt.php serves it to the website: by the stored name only,
+     * through basename(), with a type taken from the saved extension.
+     */
+    'receipt' => function () use ($conn) {
+        $id = expense_id_in($conn);
+        $name = receipt_of($conn, $id);
+        if ($name === null) api_fail(404, 'no_receipt', 'This expense has no receipt.');
+        $path = RECEIPT_DIR . '/' . basename($name);
+        if (!is_file($path)) api_fail(404, 'missing', 'The receipt file is missing on the server.');
+        $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+        $types = ['jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg', 'png' => 'image/png',
+                  'webp' => 'image/webp', 'pdf' => 'application/pdf'];
+        header('Content-Type: ' . ($types[$ext] ?? 'application/octet-stream'));
+        header('Content-Length: ' . filesize($path));
+        header('Content-Disposition: inline; filename="receipt-' . $id . '.' . $ext . '"');
+        header('X-Content-Type-Options: nosniff');
+        header('Cache-Control: private, no-store');
+        readfile($path);
+        exit;
     },
 
     'categories' => function () use ($conn) {

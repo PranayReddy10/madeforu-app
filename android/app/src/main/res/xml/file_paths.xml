@@ -4,4 +4,7 @@
          from the server, so there is nothing to lose if Android reclaims
          the space. -->
     <cache-path name="bills" path="bills/" />
+    <!-- Receipts: a photo the camera takes for a new expense, and a copy of
+         one downloaded to view. Both can be fetched or taken again. -->
+    <cache-path name="receipts" path="receipts/" />
 </paths>

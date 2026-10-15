@@ -14,6 +14,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -97,6 +98,64 @@ class ApiClient(private val prefs: Prefs) {
                 .applyAuth()
                 .build()
             execute(request)
+        }
+
+    /**
+     * POST endpoint.php?action=… as multipart: plain fields plus one file,
+     * the way a browser form uploads. Used for receipts.
+     */
+    suspend fun upload(
+        endpoint: String,
+        action: String,
+        fields: Map<String, String>,
+        fileField: String,
+        fileName: String,
+        mimeType: String,
+        bytes: ByteArray,
+    ): ApiResult<JsonObject> =
+        withContext(Dispatchers.IO) {
+            val base = prefs.currentBaseUrl()
+            val form = MultipartBody.Builder().setType(MultipartBody.FORM)
+            fields.forEach { (k, v) -> form.addFormDataPart(k, v) }
+            form.addFormDataPart(fileField, fileName, bytes.toRequestBody(mimeType.toMediaType()))
+            val request = Request.Builder()
+                .url("$base$endpoint?action=${encode(action)}")
+                .post(form.build())
+                .applyAuth()
+                .build()
+            execute(request)
+        }
+
+    /**
+     * GET endpoint.php?action=… for a file rather than JSON: the bytes and
+     * their content type. An error still comes back as the usual envelope,
+     * so its message reads the same as any other failure.
+     */
+    suspend fun download(endpoint: String, action: String, params: Map<String, String>): ApiResult<Pair<ByteArray, String>> =
+        withContext(Dispatchers.IO) {
+            val base = prefs.currentBaseUrl()
+            val query = params.entries.joinToString("") { "&" + encode(it.key) + "=" + encode(it.value) }
+            val request = Request.Builder()
+                .url("$base$endpoint?action=${encode(action)}$query")
+                .get()
+                .applyAuth()
+                .build()
+            try {
+                http.newCall(request).execute().use { response ->
+                    val type = response.header("Content-Type").orEmpty()
+                    val bytes = response.body?.bytes() ?: ByteArray(0)
+                    if (response.isSuccessful && !type.startsWith("application/json")) {
+                        ApiResult.Success(bytes to type.substringBefore(';').trim())
+                    } else {
+                        when (val r = parseEnvelope(String(bytes), response.code, request.url.toString())) {
+                            is ApiResult.Failure -> r
+                            is ApiResult.Success -> ApiResult.Failure("bad_response", "The server sent no file.")
+                        }
+                    }
+                }
+            } catch (e: IOException) {
+                ApiResult.Failure(ApiResult.CODE_NETWORK, "Could not reach the server. Check the connection.")
+            }
         }
 
     /** Decode a successful envelope into a typed model. */
