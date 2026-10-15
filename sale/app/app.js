@@ -24,10 +24,10 @@ const DEFAULT_API = new URL('../api/', location.href).href;
  * browser, the server or the app is the stale one. It must match the
  * CACHE name in sw.js.
  */
-const BUILD = '2026-10-09.1';
+const BUILD = '2026-10-15.1';
 
 /** What this build of the app expects the server to be able to do. */
-const NEEDS_FEATURES = ['revenue_breakdown', 'expense_create', 'activity_feed', 'push', 'price_history',
+const NEEDS_FEATURES = ['revenue_breakdown', 'expense_create', 'activity_feed', 'push', 'expense_receipts', 'price_history',
                         'all_channel_revenue', 'reprice_open', 'wholesale'];
 
 const store = {
@@ -2178,6 +2178,137 @@ route('expenses', async () => {
  * rejects a split that does not add up; this form shows the running
  * remainder so it is obvious before saving.
  */
+/* ── Receipts ─────────────────────────────────────────────────── */
+
+/**
+ * A receipt ready to upload. Photos are scaled to 1600 px on the long
+ * side and saved as JPEG, so a phone camera shot (often 5–10 MB) fits
+ * the server's 5 MB limit; a PDF goes as it is.
+ */
+async function receiptForUpload(file) {
+  if (file.type === 'application/pdf') {
+    if (file.size > 5 * 1024 * 1024) throw new Error('That PDF is larger than 5 MB.');
+    return file;
+  }
+  if (!file.type.startsWith('image/')) throw new Error('Choose a photo or a PDF.');
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise((resolve, reject) => {
+      const i = new Image();
+      i.onload = () => resolve(i);
+      i.onerror = () => reject(new Error('That photo could not be read.'));
+      i.src = url;
+    });
+    const scale = Math.min(1, 1600 / Math.max(img.naturalWidth, img.naturalHeight));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(img.naturalWidth * scale);
+    canvas.height = Math.round(img.naturalHeight * scale);
+    canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.85));
+    if (!blob) throw new Error('That photo could not be prepared.');
+    return new File([blob], 'receipt.jpg', { type: 'image/jpeg' });
+  } finally { URL.revokeObjectURL(url); }
+}
+
+/** Attach (or replace) an expense's receipt. api() sends JSON; a file needs a form. */
+async function uploadReceipt(expenseId, file) {
+  const form = new FormData();
+  form.append('id', String(expenseId));
+  form.append('receipt', await receiptForUpload(file));
+  const url = new URL('expenses.php', store.api);
+  url.searchParams.set('action', 'upload_receipt');
+  let response;
+  try {
+    response = await fetch(url, { method: 'POST', body: form,
+      headers: { Accept: 'application/json', Authorization: 'Bearer ' + store.token } });
+  } catch (e) { throw new Error('No connection. The receipt was not attached.'); }
+  let data = {};
+  try { data = await response.json(); } catch (e) { /* not JSON */ }
+  if (!data.ok) throw new Error((data.error && data.error.message) || 'The receipt was not attached (HTTP ' + response.status + ').');
+  return data.message || 'Receipt attached.';
+}
+
+/**
+ * Show an expense's receipt. Fetched with the sign-in token (a plain link
+ * would not carry it), then opened in a tab that was opened inside the
+ * tap itself, so no pop-up blocker objects.
+ */
+async function viewReceipt(expenseId) {
+  const win = window.open('', '_blank');
+  if (win) win.document.write('<p style="font:16px system-ui;padding:20px">Loading the receipt…</p>');
+  try {
+    const url = new URL('expenses.php', store.api);
+    url.searchParams.set('action', 'receipt');
+    url.searchParams.set('id', String(expenseId));
+    const response = await fetch(url, { headers: { Authorization: 'Bearer ' + store.token } });
+    const type = response.headers.get('Content-Type') || '';
+    if (!response.ok || type.startsWith('application/json')) {
+      let msg = 'The receipt could not be loaded.';
+      try { const d = await response.json(); msg = (d.error && d.error.message) || msg; } catch (e) { /* ignore */ }
+      throw new Error(msg);
+    }
+    const blobUrl = URL.createObjectURL(await response.blob());
+    if (win) win.location.href = blobUrl; else window.location.href = blobUrl;
+  } catch (e) {
+    if (win) win.close();
+    toast(e.message || 'No connection.');
+  }
+}
+
+/**
+ * The breakdown rows of the expense form: Description, Qty, Unit cost and
+ * GST %. Each line total is qty × unit cost with GST on top (blank = 0),
+ * the same sum the server does. Returns what the form needs from it.
+ */
+function lineEditor(box, onChange) {
+  const rows = [];
+  const lineTotal = (r) => Math.round((Number(r.qty) || 0) * (Number(r.unit) || 0) * (1 + (Number(r.gst) || 0) / 100) * 100) / 100;
+  const used = () => rows.filter((r) => r.descr.trim() || Number(r.qty) || Number(r.unit));
+  function paint() {
+    box.innerHTML = rows.map((r, i) => `<div class="card" style="padding:12px;margin-top:8px">
+      <div style="display:flex;gap:8px;align-items:end">
+        <label class="field" style="flex:1;margin:0"><span>Description</span>
+          <input data-i="${i}" data-k="descr" value="${esc(r.descr)}" placeholder="Boxes, tape…"></label>
+        <button class="btn ghost small" data-del="${i}" aria-label="Remove line">✕</button></div>
+      <div style="display:grid;grid-template-columns:1fr 1.3fr 1fr;gap:8px">
+        <label class="field"><span>Qty</span><input data-i="${i}" data-k="qty" inputmode="decimal" value="${esc(r.qty)}"></label>
+        <label class="field"><span>Unit cost ₹</span><input data-i="${i}" data-k="unit" inputmode="decimal" value="${esc(r.unit)}"></label>
+        <label class="field"><span>GST %</span><input data-i="${i}" data-k="gst" inputmode="decimal" placeholder="0"
+          list="gstSlabs" value="${esc(r.gst)}"></label></div>
+      <p class="muted" style="margin-top:6px" data-total="${i}"></p></div>`).join('')
+      + '<datalist id="gstSlabs"><option value="0"><option value="5"><option value="12"><option value="18"><option value="28"></datalist>';
+    box.querySelectorAll('[data-k]').forEach((input) => input.addEventListener('input', () => {
+      const r = rows[Number(input.dataset.i)];
+      r[input.dataset.k] = input.dataset.k === 'descr' ? input.value : input.value.replace(/[^\d.]/g, '');
+      totals();
+    }));
+    box.querySelectorAll('[data-del]').forEach((b) => b.onclick = () => { rows.splice(Number(b.dataset.del), 1); paint(); });
+    totals();
+  }
+  function totals() {
+    rows.forEach((r, i) => {
+      const el = box.querySelector(`[data-total="${i}"]`);
+      if (el) el.textContent = 'Line total ' + money(lineTotal(r)) + (Number(r.gst) > 0 ? ' (incl. ' + Number(r.gst) + '% GST)' : '');
+    });
+    onChange();
+  }
+  return {
+    add() { rows.push({ descr: '', qty: '', unit: '', gst: '' }); paint(); },
+    used,
+    total: () => Math.round(used().reduce((t, r) => t + lineTotal(r), 0) * 100) / 100,
+    payload: () => used().map((r) => ({ descr: r.descr.trim(), qty: Number(r.qty) || 0,
+      unit_cost: Number(r.unit) || 0, gst_pct: Number(r.gst) || 0 })),
+    problem() {
+      for (const r of used()) {
+        if (!r.descr.trim()) return 'Every line needs a description.';
+        if (!(Number(r.qty) > 0)) return 'Line "' + r.descr.trim() + '" needs a quantity.';
+        if ((Number(r.gst) || 0) > 100) return 'GST is a percentage between 0 and 100.';
+      }
+      return '';
+    },
+  };
+}
+
 async function expenseSheet() {
   const sheet = openSheet('New expense', `<div id="expForm">${spinner()}</div>`);
   let boot;
@@ -2196,7 +2327,7 @@ async function expenseSheet() {
     <div class="card">
       <label class="field"><span>What was it for</span>
         <input id="xitem" placeholder="Vinyl roll, courier, stall fee…"></label>
-      <label class="field"><span>Amount (₹)</span>
+      <label class="field"><span id="xamountLabel">Amount (₹)</span>
         <input id="xamount" inputmode="decimal" placeholder="0.00"></label>
       <label class="field"><span>Discount (₹) — optional</span>
         <input id="xdisc" inputmode="decimal" placeholder="0.00"></label>
@@ -2210,19 +2341,40 @@ async function expenseSheet() {
       <label class="field"><span>Notes — optional</span><input id="xdetails"></label>
     </div>
 
+    <section><h2 class="section">Breakdown <span class="hint">— optional</span></h2>
+      <div id="xlines"></div>
+      <div class="btnrow" style="align-items:center"><button class="btn ghost small" id="xaddline">+ Add line</button>
+        <span class="muted" id="xlinesum"></span></div>
+    </section>
+
     <section><h2 class="section">Who paid, from pocket</h2><div class="card">
       <div class="chips" id="xpayer"></div>
       <div class="btnrow"><button class="btn ghost small" id="xsplit">Split between partners</button></div>
       <div id="xsplitbox"></div>
     </div></section>
 
-    <p class="muted" style="margin-top:12px">Receipts are attached on the website — this form does not
-      upload files yet.</p>
+    <section><h2 class="section">Receipt <span class="hint">— optional</span></h2><div class="card">
+      <label class="field" style="margin-top:0"><span>Photo or PDF of the bill (photos are shrunk before upload)</span>
+        <input id="xreceipt" type="file" accept="image/*,application/pdf"></label>
+    </div></section>
+
     <button class="btn" id="xsave" style="margin-top:12px">Save expense</button>`;
 
   const val = (id) => (document.getElementById(id).value || '').trim();
   const num = (id) => Number(val(id).replace(/[^\d.]/g, '')) || 0;
   const net = () => Math.round((num('xamount') - num('xdisc')) * 100) / 100;
+
+  // With a breakdown, the amount is what its lines add up to.
+  const lines = lineEditor(document.getElementById('xlines'), () => {
+    const amount = document.getElementById('xamount');
+    const using = lines && lines.used().length > 0;
+    amount.readOnly = !!using;
+    document.getElementById('xamountLabel').textContent = using ? 'Amount (₹) — from the lines' : 'Amount (₹)';
+    if (using) amount.value = lines.total().toFixed(2);
+    document.getElementById('xlinesum').textContent = using ? 'Total ' + money(lines.total()) : '';
+    if (typeof splitSum === 'function') splitSum();
+  });
+  document.getElementById('xaddline').onclick = () => lines.add();
 
   let paidBy = String(partners[0].id);
   function paintPayer() {
@@ -2264,6 +2416,8 @@ async function expenseSheet() {
   document.getElementById('xsave').onclick = async () => {
     const button = document.getElementById('xsave');
     if (!val('xitem')) { toast('What was the money spent on?'); return; }
+    const lineProblem = lines.problem();
+    if (lineProblem) { toast(lineProblem); return; }
     if (num('xamount') <= 0) { toast('Enter an amount greater than zero.'); return; }
     if (num('xdisc') > num('xamount')) { toast('The discount is more than the amount.'); return; }
 
@@ -2277,6 +2431,7 @@ async function expenseSheet() {
       details: val('xdetails'),
       paid_by: Number(split ? partners[0].id : paidBy),
     };
+    if (lines.used().length) payload.items = lines.payload();
     if (split) {
       const rows = [...splitBox.querySelectorAll('[data-split]')]
         .map((i) => ({ partner_id: Number(i.dataset.split),
@@ -2298,8 +2453,16 @@ async function expenseSheet() {
     button.disabled = true; button.textContent = 'Saving…';
     try {
       const r = await api('expenses.php', 'create', { body: payload });
+      // The expense is saved; the receipt follows. If it fails, say so
+      // rather than lose the expense: it can be attached from the expense.
+      let note = '';
+      const file = document.getElementById('xreceipt').files[0];
+      if (file && r.expense_id) {
+        try { await uploadReceipt(r.expense_id, file); note = ' Receipt attached.'; }
+        catch (err) { note = ' But the receipt was not attached: ' + err.message; }
+      }
       sheet.close();
-      toast(r.message || 'Expense recorded.');
+      toast((r.message || 'Expense recorded.') + note);
       routes.expenses();
     } catch (e) {
       toast(e.message);
@@ -2354,7 +2517,33 @@ route('expense', async (id) => {
         <div class="amt">${money(e.payers.reduce((s, p) => s + Number(p.amount || 0), 0))}</div></div>` : ''}
     </div></section>
 
-    ${e.has_receipt ? '<p class="muted">A receipt is attached — receipts are viewed on the website.</p>' : ''}`;
+    <section><h2 class="section">Receipt</h2><div class="card">
+      ${e.has_receipt ? `<div class="btnrow" style="margin-top:0">
+          <button class="btn" id="rview">View receipt</button>
+          <button class="btn ghost" id="rremove" style="color:var(--negative)">Remove</button></div>`
+        : '<p class="muted">No receipt attached.</p>'}
+      <label class="field"><span>${e.has_receipt ? 'Replace with another photo or PDF' : 'Attach a photo or PDF'}</span>
+        <input id="rfile" type="file" accept="image/*,application/pdf"></label>
+    </div></section>`;
+
+  const view = document.getElementById('rview');
+  if (view) view.onclick = () => viewReceipt(e.id);
+  const remove = document.getElementById('rremove');
+  if (remove) remove.onclick = async () => {
+    if (!confirm('Remove the receipt from this expense?')) return;
+    try {
+      const r = await api('expenses.php', 'remove_receipt', { body: { id: e.id } });
+      toast(r.message || 'Receipt removed.');
+      routes.expense(e.id);
+    } catch (err) { toast(err.message); }
+  };
+  document.getElementById('rfile').onchange = async (ev) => {
+    const file = ev.target.files[0];
+    if (!file) return;
+    toast('Uploading the receipt…');
+    try { toast(await uploadReceipt(e.id, file)); routes.expense(e.id); }
+    catch (err) { toast(err.message); ev.target.value = ''; }
+  };
 });
 
 function qtyText(q) {
