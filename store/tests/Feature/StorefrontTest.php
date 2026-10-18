@@ -196,6 +196,21 @@ class StorefrontTest extends TestCase
         $this->assertStringContainsString('<h1 class="sr">', $html);
     }
 
+    public function test_categories_without_published_products_stay_out_of_menus(): void
+    {
+        $hampers = Category::create(['name' => 'Hampers', 'slug' => 'hampers']);
+        $draft = Product::create(['name' => 'Diwali Hamper', 'slug' => 'diwali-hamper', 'price' => 840, 'is_active' => false]);
+        $draft->categories()->attach($hampers);
+
+        $this->get('/')->assertOk()->assertDontSee('product-category/hampers/');
+        $this->get('/categories/')->assertDontSee('Hampers');
+        $this->get('/product/diwali-hamper/')->assertNotFound();
+
+        $draft->update(['is_active' => true]);   // publishing refreshes the cached menu
+        $this->get('/')->assertSee('product-category/hampers/');
+        $this->get('/categories/')->assertSee('Hampers')->assertSee('1 product');
+    }
+
     public function test_admin_requires_admin(): void
     {
         $this->get('/admin')->assertRedirect('/login');

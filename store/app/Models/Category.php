@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\DB;
 
 class Category extends Model
 {
@@ -46,6 +47,35 @@ class Category extends Model
     public function scopeActive(Builder $q): Builder
     {
         return $q->where('is_active', true);
+    }
+
+    /**
+     * Ids of active categories that have at least one published product in them or below them.
+     * Empty categories (only drafts, or nothing yet) stay reachable by URL but are left out of menus.
+     *
+     * @return array<int, int>
+     */
+    public static function withShopProductsIds(): array
+    {
+        $direct = DB::table('category_product')
+            ->join('products', 'products.id', '=', 'category_product.product_id')
+            ->where('products.is_active', true)
+            ->distinct()->pluck('category_product.category_id')->all();
+        $parents = static::active()->pluck('parent_id', 'id')->all();
+        $keep = [];
+        foreach ($direct as $id) {
+            for ($c = $id; $c && array_key_exists($c, $parents) && ! isset($keep[$c]); $c = $parents[$c]) {
+                $keep[$c] = true;
+            }
+        }
+
+        return array_keys($keep);
+    }
+
+    /** Count only products customers can see. */
+    public function scopeWithShopCount(Builder $q): Builder
+    {
+        return $q->withCount(['products' => fn ($p) => $p->where('is_active', true)]);
     }
 
     /** This category and every category beneath it. */

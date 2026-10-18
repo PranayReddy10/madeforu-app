@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Cache;
 
 class Product extends Model
 {
@@ -21,6 +22,14 @@ class Product extends Model
         'noindex' => 'boolean',
         'faqs' => 'array',
     ];
+
+    protected static function booted(): void
+    {
+        // Publishing or hiding a product can add or empty a category in the menu.
+        $forget = fn () => Cache::forget('menu.categories');
+        static::saved($forget);
+        static::deleted($forget);
+    }
 
     public function primaryCategory(): BelongsTo
     {

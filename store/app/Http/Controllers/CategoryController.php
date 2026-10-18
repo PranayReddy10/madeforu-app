@@ -20,7 +20,7 @@ class CategoryController extends Controller
 
             return redirect($category->url(), 301);
         }
-        $category->load(['children' => fn ($q) => $q->active()->withCount('products')]);
+        $category->load(['children' => fn ($q) => $q->active()->whereIn('id', Category::withShopProductsIds())->withShopCount()]);
 
         $products = $this->filtered($request, Product::active()->whereHas('categories', fn ($q) => $q->whereIn('categories.id', $category->descendantIds())));
         $seo->forCategory($category, $products);
@@ -55,7 +55,8 @@ class CategoryController extends Controller
     {
         $seo->title('All Categories')->canonical(url('categories'));
         $categories = Category::active()->whereNull('parent_id')
-            ->with(['children' => fn ($q) => $q->active()->withCount('products')])->withCount('products')
+            ->whereIn('id', $shown = Category::withShopProductsIds())
+            ->with(['children' => fn ($q) => $q->active()->whereIn('id', $shown)->withShopCount()])->withShopCount()
             ->orderBy('position')->orderBy('name')->get();
 
         return view('categories', compact('categories'));
