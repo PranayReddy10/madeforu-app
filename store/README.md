@@ -219,6 +219,15 @@ Hi {{1}}, you left {{2}} in your MadeForU cart 💝 Your photos are saved — fi
 - **Review requests:** a couple of days after an order is delivered, the customer gets "How was your gift?" by email (and WhatsApp when set up) with a link to review every item on one page. Settings → Reviews: days to wait, and whether verified 4★/5★ reviews publish straight away (otherwise approve them in Admin → Reviews).
 - Optional WhatsApp template **review_request** (Utility): `Hi {{1}}, how was your MadeForU order {{2}}? 💝 We'd love a quick review — photos of your gift are extra special: {{3}}`
 
+## Options that change the number of photos
+
+Use this for choices like **Print side: One side / Two sides**. Each option can say how many photos it needs:
+
+- **Dropdown option**: write `Label|extra price|photos`, e.g. `One side|0|1` and `Two sides|30|2`.
+- **Picture option**: fill in the "photos" box next to its price.
+
+The product's photo field then shows that many upload boxes. When the customer switches back to fewer, the extra photos are removed. The cart refuses too few or too many photos, and the option's extra price is added as usual. Give the photo field one label per box (e.g. Front side / Back side). The ready-made setup **"Print side: one side (1 photo) or two sides (2 photos)"** under Products → Apply personalisation does all of this; just set the extra price for Two sides.
+
 ## Delivery charges and parcel sizes
 
 Each product has a packed weight in grams, a packed size (length × width × height in cm) and how it ships (flyer or carton box) under **Products → Edit → Basics**. These go to Delhivery with every shipment and show on the product page under Specifications.

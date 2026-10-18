@@ -34,6 +34,11 @@ class Personalisation
             'couple' => ['Couple (his & her photo + names)', [$photo(2, 'Upload your photos', ['His photo', 'Her photo']), $text('Names', 40, true, 'e.g. Ravi & Priya')]],
             'photo1_name_date' => ['1 photo + name + date', [$photo(1), $text('Name to print', 30), ['type' => 'date', 'label' => 'Special date', 'help' => 'Birthday, anniversary…', 'required' => false]]],
             'front_back' => ['Front & back photos', [$photo(2, 'Upload your photos', ['Front side', 'Back side'])]],
+            'print_side' => ['Print side: one side (1 photo) or two sides (2 photos)', [
+                ['type' => 'select', 'label' => 'Print side', 'help' => '', 'required' => true,
+                    'options' => [['label' => 'One side', 'price' => 0, 'photos' => 1], ['label' => 'Two sides', 'price' => 0, 'photos' => 2]]],
+                $photo(2, 'Upload your photos', ['Front side', 'Back side']),
+            ]],
             'text_only' => ['Name / text only', [$text('Name / text to print', 40)]],
             'none' => ['No personalisation', []],
         ];

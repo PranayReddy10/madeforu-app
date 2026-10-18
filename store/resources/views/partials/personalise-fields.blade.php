@@ -1,18 +1,20 @@
 {{-- Personalisation fields for one item. $prefix: input name (custom, or items[N][custom]); $suffix: makes ids unique. --}}
+@php($photoField = $product->photoFieldId())
 @foreach($product->customizationFields as $f)
     <div class="field" data-field="{{ $f->id }}">
         @if($f->type === 'images')
-            <div class="upload" data-upload data-min="{{ $f->min_files }}" data-max="{{ $f->max_files }}" data-name="{{ $prefix }}[{{ $f->id }}][]" data-required="{{ $f->required ? 1 : 0 }}">
+            @php($slots = $product->photoSlots($f))
+            <div class="upload" data-upload data-min="{{ $f->min_files }}" data-max="{{ $f->max_files }}" data-base-min="{{ $f->min_files }}" data-base-max="{{ $f->max_files }}" data-name="{{ $prefix }}[{{ $f->id }}][]" data-required="{{ $f->required ? 1 : 0 }}" @if($f->id === $photoField) data-photo-target @endif>
                 <div class="upload-head">
                     <label>{{ $f->label }} @if($f->required)<em>*</em>@endif</label>
-                    <span class="upload-count"><b data-count>0</b> / {{ $f->max_files }}</span>
+                    <span class="upload-count"><b data-count>0</b> / <span data-max-label>{{ $f->max_files }}</span></span>
                 </div>
                 @if($f->help)<p class="help">{{ $f->help }}</p>@endif
                 <div class="upload-slots">
-                    @for($i = 0; $i < $f->max_files; $i++)
-                        <label class="slot" data-slot>
-                            <input type="file" accept="image/*,.heic,.heif" @if($f->max_files > 1) multiple @endif hidden>
-                            <span class="slot-empty"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><small>{{ $f->options[$i]['label'] ?? ($f->max_files > 1 ? 'Photo '.($i + 1) : 'Add photo') }}</small></span>
+                    @for($i = 0; $i < $slots; $i++)
+                        <label class="slot" data-slot @if($i >= $f->max_files) hidden @endif>
+                            <input type="file" accept="image/*,.heic,.heif" @if($slots > 1) multiple @endif hidden>
+                            <span class="slot-empty"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><small>{{ $f->options[$i]['label'] ?? ($slots > 1 ? 'Photo '.($i + 1) : 'Add photo') }}</small></span>
                         </label>
                     @endfor
                 </div>
@@ -28,7 +30,7 @@
             <select id="cf{{ $f->id }}{{ $suffix }}" name="{{ $prefix }}[{{ $f->id }}]" @required($f->required) data-extra-select>
                 <option value="">Choose…</option>
                 @foreach($f->options ?? [] as $o)
-                    <option value="{{ $o['label'] }}" data-price="{{ (float) ($o['price'] ?? 0) }}">{{ $o['label'] }}@if(!empty($o['price']) && $o['price'] > 0) (+{{ money($o['price']) }})@endif</option>
+                    <option value="{{ $o['label'] }}" data-price="{{ (float) ($o['price'] ?? 0) }}" @if(! empty($o['photos'])) data-photos="{{ $o['photos'] }}" @endif>{{ $o['label'] }}@if(!empty($o['price']) && $o['price'] > 0) (+{{ money($o['price']) }})@endif @if(! empty($o['photos'])) · {{ $o['photos'] }} {{ \Illuminate\Support\Str::plural('photo', $o['photos']) }}@endif</option>
                 @endforeach
             </select>
         @elseif($f->type === 'choice')
@@ -36,7 +38,7 @@
             <div class="choice-tiles" role="radiogroup" aria-label="{{ $f->label }}">
                 @foreach($f->options ?? [] as $k => $o)
                     <label class="choice-tile">
-                        <input type="radio" name="{{ $prefix }}[{{ $f->id }}]" value="{{ $o['label'] }}" data-price="{{ (float) ($o['price'] ?? 0) }}" data-extra-choice @required($f->required) @checked(! $suffix && old('custom.'.$f->id) === $o['label'])>
+                        <input type="radio" name="{{ $prefix }}[{{ $f->id }}]" value="{{ $o['label'] }}" data-price="{{ (float) ($o['price'] ?? 0) }}" @if(! empty($o['photos'])) data-photos="{{ $o['photos'] }}" @endif data-extra-choice @required($f->required) @checked(! $suffix && old('custom.'.$f->id) === $o['label'])>
                         <span class="ct-box">
                             @if(! empty($o['image']))<img src="{{ media_url($o['image']) }}" alt="{{ $o['label'] }}" loading="lazy" width="120" height="120">@else<span class="ct-letter">{{ mb_substr($o['label'], 0, 1) }}</span>@endif
                         </span>

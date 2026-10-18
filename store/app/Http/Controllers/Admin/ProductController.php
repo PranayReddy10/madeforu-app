@@ -222,6 +222,7 @@ class ProductController extends Controller
             'fields.*.choices.*.label' => 'nullable|string|max:60',
             'fields.*.choices.*.price' => 'nullable|numeric|min:0',
             'fields.*.choices.*.image' => 'nullable|string|max:500',
+            'fields.*.choices.*.photos' => 'nullable|integer|min:1|max:50',
             'fields.*.label' => 'nullable|string|max:255',
             'fields.*.help' => 'nullable|string|max:255',
             'fields.*.min_files' => 'nullable|integer|min:0|max:50',
@@ -347,6 +348,11 @@ class ProductController extends Controller
 
             // Customisation fields: update by id so carts holding answers keyed by field id keep them
             $keepF = [];
+            // An option like "Two sides" (2 photos) can need more photo boxes, and labels, than the field's own max.
+            $optionPhotos = (int) collect($data['fields'] ?? [])->flatMap(fn ($f) => [
+                ...array_map(fn ($line) => self::photoCount(explode('|', $line)[2] ?? null), preg_split('/\r?\n/', (string) ($f['options'] ?? ''))),
+                ...array_map(fn ($c) => self::photoCount($c['photos'] ?? null), $f['choices'] ?? []),
+            ])->filter()->max();
             foreach (array_values($data['fields'] ?? []) as $i => $f) {
                 $label = trim((string) ($f['label'] ?? ''));
                 if ($label === '' || empty($f['type'])) {
@@ -357,14 +363,14 @@ class ProductController extends Controller
                 if ($f['type'] === 'select') {
                     $options = collect(preg_split('/\r?\n/', (string) ($f['options'] ?? '')))->map('trim')->filter()
                         ->map(function ($line) {
-                            [$l, $p] = array_pad(explode('|', $line, 2), 2, 0);
+                            [$l, $p, $n] = array_pad(explode('|', $line, 3), 3, '');
 
-                            return ['label' => trim($l), 'price' => (float) $p];
+                            return array_filter(['label' => trim($l), 'price' => (float) $p, 'photos' => self::photoCount($n)], fn ($v) => $v !== null);
                         })->values()->all();
                 }
                 if ($f['type'] === 'choice') {
                     $options = collect($f['choices'] ?? [])->filter(fn ($c) => trim((string) ($c['label'] ?? '')) !== '')
-                        ->map(fn ($c) => ['label' => trim($c['label']), 'price' => (float) ($c['price'] ?? 0), 'image' => ($c['image'] ?? '') ?: null])->values()->all();
+                        ->map(fn ($c) => array_filter(['label' => trim($c['label']), 'price' => (float) ($c['price'] ?? 0), 'image' => ($c['image'] ?? '') ?: null, 'photos' => self::photoCount($c['photos'] ?? null)], fn ($v, $k) => $v !== null || $k === 'image', ARRAY_FILTER_USE_BOTH))->values()->all();
                     foreach ($options as $o) {
                         if ($o['image']) {
                             Media::register($o['image'], 'options');
@@ -375,7 +381,7 @@ class ProductController extends Controller
                 $max = max($min, (int) ($f['max_files'] ?? 1));
                 if ($f['type'] === 'images') {
                     // One label per photo box, e.g. "His photo" / "Her photo"
-                    $slots = collect(preg_split('/\r?\n/', (string) ($f['slots'] ?? '')))->map('trim')->filter()->take($max)->values();
+                    $slots = collect(preg_split('/\r?\n/', (string) ($f['slots'] ?? '')))->map('trim')->filter()->take(max($max, $optionPhotos))->values();
                     $options = $slots->isNotEmpty() ? $slots->map(fn ($l) => ['label' => $l])->all() : null;
                 }
                 $row = [
@@ -408,6 +414,14 @@ class ProductController extends Controller
     }
 
     /** "Size=A4; Frame=Black" → ['Size' => 'A4', 'Frame' => 'Black'] */
+    /** "How many photos this option needs" (e.g. Two sides → 2); blank = the photo field's own count. */
+    private static function photoCount(mixed $v): ?int
+    {
+        $n = (int) trim((string) $v);
+
+        return $n >= 1 && $n <= 50 ? $n : null;
+    }
+
     public static function parseOptions(string $s): array
     {
         $out = [];
