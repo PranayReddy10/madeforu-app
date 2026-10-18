@@ -826,3 +826,8 @@ a.contact-card:hover { transform: translateY(-2px); box-shadow: var(--shadow); }
 .account-nudge li .ico { width: 16px; height: 16px; color: var(--mint); }
 .an-actions { display: flex; gap: 8px; margin-bottom: 6px; }
 .an-actions .btn { flex: 1; }
+
+/* Footer logo: a neat white badge sized to the logo (footer links are full-width blocks) */
+.site-footer a.footer-logo { display: inline-flex; align-items: center; width: auto; max-width: 100%; padding: 10px 16px; border-radius: 16px; background: #fff; box-shadow: 0 6px 18px rgba(0,0,0,.18); }
+.site-footer a.footer-logo picture { display: block; }
+.site-footer a.footer-logo img { height: 44px; width: auto; max-width: 200px; object-fit: contain; }

@@ -134,7 +134,7 @@
             <li>Go to <a href="https://console.cloud.google.com/" target="_blank" rel="noopener">Google Cloud Console</a> → create a project → enable <b>Google Analytics Data API</b> and <b>Google Search Console API</b>.</li>
             <li>IAM → Service accounts → Create → Keys → Add key → <b>JSON</b> (a file downloads).</li>
             <li>GA4 → Admin → Property access management → add the service account email as <b>Viewer</b>. Search Console → Settings → Users → add it with <b>Full</b> permission.</li>
-            <li>Paste the JSON file and your GA4 property ID in <a href="{{ route('admin.settings') }}#google">Settings → Google Analytics &amp; Search Console reports</a>.</li>
+            <li>Paste the JSON file and your GA4 property ID in <a href="{{ route('admin.settings') }}#google-analytics-search-console-reports">Settings → Google Analytics &amp; Search Console reports</a>.</li>
         </ol>
     </div>
 @endunless
