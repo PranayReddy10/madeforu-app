@@ -110,11 +110,12 @@
                 <button class="btn small">Send automatic message</button>
             </form>
         @endif
-        @php $logs = \App\Models\NotificationLog::where('order_id', $order->id)->latest('id')->take(10)->get(); @endphp
+        @php $logs = \App\Models\NotificationLog::where('order_id', $order->id)->latest('id')->take(20)->get(); @endphp
+        @if ($logs->isNotEmpty())<h3 class="small muted" style="margin:12px 0 0">Messages sent (email &amp; WhatsApp)</h3>@endif
         @if ($logs->isNotEmpty())
             <ul class="wa-log">
                 @foreach ($logs as $log)
-                    <li><span class="badge {{ $log->status === 'sent' ? 'ok' : '' }}">{{ $log->status }}</span> {{ $log->event }} → {{ $log->to }} <span class="muted small">{{ $log->created_at->format('d M, H:i') }}</span>@if ($log->error)<br><span class="err small">{{ $log->error }}</span>@endif</li>
+                    <li><span class="badge {{ $log->status === 'sent' ? 'ok' : '' }}">{{ $log->status }}</span> {{ $log->channel === 'email' ? '✉' : '💬' }} {{ str_replace('_', ' ', $log->event) }} → {{ $log->to }} <span class="muted small">{{ $log->created_at->format('d M, H:i') }}</span>@if ($log->error)<br><span class="err small">{{ $log->error }}</span>@endif</li>
                 @endforeach
             </ul>
         @endif

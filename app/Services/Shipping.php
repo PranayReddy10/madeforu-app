@@ -2,10 +2,8 @@
 
 namespace App\Services;
 
-use App\Mail\OrderShipped;
 use App\Models\Order;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Mail;
 
 /** Keeps an order and its Delhivery shipment in step. */
 class Shipping
@@ -23,6 +21,7 @@ class Shipping
         } catch (\Throwable $e) {
             Log::warning("Delhivery shipment for {$order->number}: ".$e->getMessage());
             $order->update(['shipment_error' => $e->getMessage()]);
+            app(OrderEmails::class)->shipmentFailed($order, $e->getMessage());
 
             return false;
         }
@@ -68,11 +67,7 @@ class Shipping
 
     public function notifyShipped(Order $order): void
     {
-        try {
-            Mail::to($order->email)->send(new OrderShipped($order));
-        } catch (\Throwable $e) {
-            Log::warning('Shipped mail failed: '.$e->getMessage());
-        }
+        // The "shipped" email goes out from Order's status watcher; this adds WhatsApp.
         $this->notifier->shipped($order);
     }
 }

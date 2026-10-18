@@ -73,7 +73,7 @@ class Stock
         });
         Product::flushMenuCache();
 
-        if ($low && ($to = config('store.email'))) {
+        if ($low && setting('notify.admin_low_stock', true) && ($to = OrderEmails::adminAddresses())) {
             try {
                 Mail::to($to)->send(new LowStock($low));
             } catch (\Throwable $e) {

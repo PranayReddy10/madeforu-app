@@ -97,10 +97,10 @@ class OrderController extends Controller
     {
         $event = $request->validate(['event' => 'required|in:confirmed,shipped,delivered'])['event'];
         abort_unless(WhatsApp::enabled(), 400, 'WhatsApp API is not set up.');
-        NotificationLog::where('order_id', $order->id)->where('event', $event)->where('status', 'sent')->delete();
+        NotificationLog::where('order_id', $order->id)->where('channel', 'whatsapp')->where('event', $event)->where('status', 'sent')->delete();
         $order->load('items');
         $notifier->{$event}($order);
-        $last = NotificationLog::where('order_id', $order->id)->where('event', $event)->latest('id')->first();
+        $last = NotificationLog::where('order_id', $order->id)->where('channel', 'whatsapp')->where('event', $event)->latest('id')->first();
 
         return $last?->status === 'sent'
             ? back()->with('status', 'WhatsApp "'.$event.'" message sent.')
