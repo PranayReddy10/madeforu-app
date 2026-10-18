@@ -47,7 +47,7 @@ class Personalisation
             'min_files' => $f->min_files, 'max_files' => $f->max_files, 'max_length' => $f->max_length,
             'extra_price' => (float) $f->extra_price,
             'slots' => $f->type === 'images' ? collect($f->options ?? [])->pluck('label')->all() : [],
-            'options' => $f->type === 'select' ? $f->options : null,
+            'options' => in_array($f->type, ['select', 'choice'], true) ? $f->options : null,
         ])->all();
     }
 

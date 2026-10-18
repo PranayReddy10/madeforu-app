@@ -12,6 +12,6 @@
     @elseif($d->type === 'color')
         <p class="small line-opt">{{ $d->label }}: <span class="swatch" style="background: {{ $d->value }}"></span></p>
     @elseif($d->type !== 'images')
-        <p class="small line-opt">{{ $d->label }}: <b>{{ \Illuminate\Support\Str::limit($d->value, ! empty($compact) ? 40 : 80) }}</b></p>
+        <p class="small line-opt">@if(! empty($d->image))<img src="{{ $d->image }}" alt="" class="opt-thumb">@endif{{ $d->label }}: <b>{{ \Illuminate\Support\Str::limit($d->value, ! empty($compact) ? 40 : 80) }}</b></p>
     @endif
 @endforeach

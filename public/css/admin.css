@@ -382,3 +382,13 @@ input[type=file][hidden] { display: none; }
 .hb-del { margin-top: 10px; }
 .hb-add { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .hb-add select { width: auto; margin: 0; }
+
+/* Picture options of a "Choose a design" field */
+.choice-editor { border: 1px dashed var(--line); border-radius: 8px; padding: 10px; margin: 8px 0; }
+.choice-editor .lbl { display: block; font-weight: 600; margin-bottom: 8px; }
+.choice-list { display: grid; gap: 6px; margin-bottom: 8px; }
+.choice-row { display: grid; grid-template-columns: 44px auto 1fr 90px auto; gap: 8px; align-items: center; }
+.choice-row .preview { width: 44px; height: 44px; object-fit: contain; border: 1px solid var(--line); border-radius: 8px; background: #fff; grid-column: 1; }
+.choice-row .preview[hidden] { display: block; visibility: hidden; }
+.choice-row input { margin: 0 !important; }
+.opt-img { width: 46px; height: 46px; object-fit: contain; border: 1px solid var(--line); border-radius: 8px; background: #fff; vertical-align: middle; margin-right: 8px; }

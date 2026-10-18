@@ -75,7 +75,7 @@
                 @elseif ($part['type'] === 'color')
                     <div class="text"><span style="display:inline-block;width:22px;height:22px;border-radius:4px;vertical-align:middle;background:{{ $part['value'] }}"></span> {{ $part['value'] }}</div>
                 @else
-                    <div class="text">{{ $part['value'] !== '' ? $part['value'] : '—' }}</div>
+                    <div class="text">@if (! empty($part['image']))<img src="{{ $part['image'] }}" alt="" style="width:46px;height:46px;object-fit:contain;vertical-align:middle;margin-right:8px;border:1px solid #ddd;border-radius:6px">@endif{{ $part['value'] !== '' ? $part['value'] : '—' }}</div>
                 @endif
             </div>
         @endforeach

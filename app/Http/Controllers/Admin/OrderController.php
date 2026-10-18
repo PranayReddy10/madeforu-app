@@ -197,7 +197,7 @@ class OrderController extends Controller
                     }
                     $parts[] = ['type' => 'images', 'label' => $c['label'], 'photos' => $photos];
                 } else {
-                    $parts[] = ['type' => $c['type'] ?? 'text', 'label' => $c['label'], 'value' => (string) ($c['value'] ?? '')];
+                    $parts[] = ['type' => $c['type'] ?? 'text', 'label' => $c['label'], 'value' => (string) ($c['value'] ?? ''), 'image' => $c['image'] ?? null];
                 }
             }
             $out[] = ['item' => $item, 'n' => $i + 1, 'parts' => $parts];

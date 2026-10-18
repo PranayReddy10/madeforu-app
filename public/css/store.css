@@ -943,3 +943,21 @@ a.contact-card:hover { transform: translateY(-2px); box-shadow: var(--shadow); }
     .pdp-details { max-width: 860px; }
     .trust-tiles li { padding: 14px 8px; }
 }
+
+/* "Choose a design" picture tiles on the product page */
+.lbl-like { display: block; font-weight: 600; margin-bottom: 8px; }
+.lbl-like em { color: var(--rose); font-style: normal; }
+.choice-picked { font-weight: 700; color: var(--rose-d); }
+.choice-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); gap: 10px 8px; }
+.choice-tile { position: relative; display: grid; gap: 6px; justify-items: center; text-align: center; cursor: pointer; }
+.choice-tile input { position: absolute; opacity: 0; pointer-events: none; }
+.ct-box { display: grid; place-items: center; width: 100%; aspect-ratio: 1; border-radius: 16px; background: #fff; border: 2px solid var(--line); overflow: hidden; transition: border-color .15s, box-shadow .15s, transform .15s; }
+.ct-box img { width: 100%; height: 100%; object-fit: contain; padding: 6px; }
+.ct-letter { font: 700 28px var(--display); color: var(--rose); }
+.ct-label { font-size: 12.5px; font-weight: 600; line-height: 1.25; }
+.ct-label small { display: block; font-weight: 700; color: var(--rose-d); }
+.choice-tile:active .ct-box { transform: scale(.96); }
+.choice-tile input:checked + .ct-box { border-color: var(--rose); box-shadow: 0 0 0 4px var(--rose-l); }
+.choice-tile input:checked + .ct-box::after { content: '✓'; position: absolute; top: 6px; right: 6px; width: 22px; height: 22px; border-radius: 50%; background: var(--rose); color: #fff; font-size: 13px; font-weight: 700; display: grid; place-items: center; }
+.choice-tile input:focus-visible + .ct-box { outline: 2px solid var(--rose); outline-offset: 2px; }
+.opt-thumb { width: 22px; height: 22px; object-fit: contain; border-radius: 5px; border: 1px solid var(--line); background: #fff; vertical-align: middle; margin-right: 6px; }

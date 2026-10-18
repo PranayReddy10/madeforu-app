@@ -269,6 +269,7 @@
         function extras(block) {
             var e = 0;
             $$('[data-extra-select]', block).forEach(function (s) { var o = s.selectedOptions[0]; e += o ? +(o.dataset.price || 0) : 0; });
+            $$('[data-extra-choice]:checked', block).forEach(function (r) { e += +(r.dataset.price || 0); });
             return e;
         }
         function render() {
@@ -337,6 +338,13 @@
             base = +m; baseRegular = regEl && !regEl.hidden ? +regEl.textContent.replace(/[^\d.]/g, '') : base;
         }
         $$('[data-extra-select]', form).forEach(function (s) { s.addEventListener('change', render); });
+        // Picture choices (shape, style…): reprice and show the chosen name, in every item box.
+        form.addEventListener('change', function (e) {
+            if (!e.target.matches('[data-extra-choice]')) return;
+            var field = e.target.closest('.field'), pick = field && $('[data-choice-picked]', field);
+            if (pick) pick.textContent = '· ' + e.target.value;
+            render();
+        });
         syncBlocks(); render();
 
         $$('[data-upload]', form).forEach(function (u) { uploader(u, form.dataset.uploadUrl); });
