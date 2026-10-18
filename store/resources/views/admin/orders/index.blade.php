@@ -84,7 +84,7 @@
                                     @foreach ($it->uploads->take(3) as $u)<a href="{{ $u->fullUrl() }}" target="_blank" rel="noopener"><img src="{{ $u->thumb_path ? $u->thumbUrl() : $u->fullUrl() }}" alt="" loading="lazy"></a>@endforeach
                                     @if ($it->uploads->count() > 3)<em>+{{ $it->uploads->count() - 3 }}</em>@endif
                                 @else
-                                    <img src="{{ $it->product?->mainImageUrl() ?? asset('images/placeholder.svg') }}" alt="" loading="lazy" class="prod">
+                                    <img src="{{ $it->product?->thumbUrl() ?? asset('images/placeholder.svg') }}" alt="" loading="lazy" class="prod">
                                 @endif
                             </span>
                             <small>{{ $it->qty }} × {{ \Illuminate\Support\Str::limit($it->name, 30) }}</small>

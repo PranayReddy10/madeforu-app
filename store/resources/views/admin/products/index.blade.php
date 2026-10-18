@@ -50,7 +50,7 @@
         @php $seoScore = \App\Http\Controllers\Admin\SeoController::score($p); @endphp
         <tr>
             <td><input type="checkbox" name="ids[]" value="{{ $p->id }}" form="bulk-form" data-check></td>
-            <td><img class="thumb" src="{{ $p->mainImageUrl() }}" alt="" loading="lazy"></td>
+            <td><img class="thumb" src="{{ $p->thumbUrl() }}" alt="" loading="lazy"></td>
             <td><a href="{{ route('admin.products.edit', $p) }}"><strong>{{ $p->name }}</strong></a><br><small class="muted">{{ $p->sku ?: '—' }} · {{ $p->type }}</small>
                 <br><small class="perso">{{ $p->customizationFields->map(fn ($f) => $f->type === 'images' ? '📷 '.$f->max_files.' '.\Illuminate\Support\Str::plural('photo', $f->max_files) : $f->label)->implode(' + ') ?: 'No personalisation' }}</small></td>
             <td>

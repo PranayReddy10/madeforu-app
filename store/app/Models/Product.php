@@ -154,6 +154,18 @@ class Product extends Model
         return $img ? $img->url() : asset('images/placeholder.svg');
     }
 
+    /** The small (480 px WebP) copy of the main photo when it exists, for tiles and thumbnails. */
+    public function thumbUrl(): string
+    {
+        $img = $this->relationLoaded('images') ? $this->images->first() : $this->images()->first();
+        if ($img && ! preg_match('#^https?://#', $img->path) && config('store.media_disk') === 'public'
+            && \Illuminate\Support\Facades\Storage::disk('public')->exists($thumb = \App\Services\ImageTools::thumbPath($img->path))) {
+            return media_url($thumb);
+        }
+
+        return $this->mainImageUrl();
+    }
+
     public function needsUpload(): bool
     {
         return $this->customizationFields->contains(fn ($f) => $f->type === 'images');

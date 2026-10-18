@@ -11,7 +11,7 @@
         @error('reviews')<p class="err">{{ $message }}</p>@enderror
         @foreach($products as $p)
             <section class="panel">
-                <div class="mini-line"><img src="{{ $p->mainImageUrl() }}" alt="" width="56" height="56"><span><b>{{ $p->name }}</b></span></div>
+                <div class="mini-line"><img src="{{ $p->thumbUrl() }}" alt="" width="56" height="56"><span><b>{{ $p->name }}</b></span></div>
                 <div class="rate-input" role="radiogroup" aria-label="Rating for {{ $p->name }}">
                     @for($i = 5; $i >= 1; $i--)<input type="radio" id="r{{ $p->id }}-{{ $i }}" name="reviews[{{ $p->id }}][rating]" value="{{ $i }}"><label for="r{{ $p->id }}-{{ $i }}" title="{{ $i }} stars">★</label>@endfor
                 </div>

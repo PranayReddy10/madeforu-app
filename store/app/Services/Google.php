@@ -83,7 +83,7 @@ class Google
     {
         $prop = preg_replace('/\D/', '', (string) setting('google.ga4_property'));
         $body = [
-            'dateRanges' => [['startDate' => $days.'daysAgo', 'endDate' => 'today']],
+            'dateRanges' => [['startDate' => $days <= 1 ? 'today' : ($days - 1).'daysAgo', 'endDate' => 'today']],
             'dimensions' => array_map(fn ($d) => ['name' => $d], $dimensions),
             'metrics' => array_map(fn ($m) => ['name' => $m], $metrics),
             'limit' => $limit,
@@ -106,7 +106,7 @@ class Google
     {
         $site = rawurlencode((string) self::site());
         $data = $this->call('post', "https://www.googleapis.com/webmasters/v3/sites/{$site}/searchAnalytics/query", [
-            'startDate' => now()->subDays($days + 2)->toDateString(),   // Search Console data lags ~2 days
+            'startDate' => now()->subDays($days + 1)->toDateString(),   // Search Console data lags ~2 days
             'endDate' => now()->subDays(2)->toDateString(),
             'dimensions' => $dimensions,
             'rowLimit' => $limit,

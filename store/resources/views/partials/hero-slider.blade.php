@@ -47,7 +47,7 @@
                         </div>
                         <div class="hs-art polaroids" aria-hidden="true">
                             @forelse($s['pics'] as $k => $p)
-                                <span class="polaroid p{{ $k }}"><img src="{{ $p->mainImageUrl() }}" alt="" width="300" height="300" @if($k) loading="lazy" @else fetchpriority="high" @endif></span>
+                                <span class="polaroid p{{ $k }}"><img src="{{ $p->thumbUrl() }}" alt="" width="300" height="300" @if($k) loading="lazy" @else fetchpriority="high" @endif></span>
                             @empty
                                 <img src="{{ asset('images/logo-round.png') }}" alt="" class="hs-logo-art" width="300" height="307">
                             @endforelse
@@ -63,7 +63,7 @@
                             <span class="btn primary">Personalise now</span>
                         </div>
                         <div class="hs-art">
-                            <span class="hs-blob"><img src="{{ $p->mainImageUrl() }}" alt="{{ $p->name }}" width="420" height="420" loading="lazy"></span>
+                            <span class="hs-blob"><img src="{{ $p->thumbUrl() }}" alt="{{ $p->name }}" width="420" height="420" loading="lazy"></span>
                         </div>
                     </a>
                 @else

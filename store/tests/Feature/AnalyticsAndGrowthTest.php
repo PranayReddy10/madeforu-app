@@ -74,6 +74,11 @@ class AnalyticsAndGrowthTest extends TestCase
             ->assertSee('Organic Search')->assertSee('personalised photo magnet')->assertSee('Submit sitemap to Google');
         Http::assertSent(fn ($r) => str_contains($r->url(), 'properties/412345678:runReport'));
         $this->get('/admin/')->assertOk()->assertSee('visitors this week');
+
+        // Today: per-hour chart, compared with yesterday, GA asked for today only
+        $this->get('/admin/analytics/?days=1')->assertOk()->assertSee('per hour today')->assertSee('Compared with yesterday')
+            ->assertSee('Google shares search data about 2 days late');
+        Http::assertSent(fn ($r) => str_contains($r->url(), ':runReport') && ($r['dateRanges'][0]['startDate'] ?? null) === 'today');
     }
 
     public function test_index_check_stores_what_google_says(): void

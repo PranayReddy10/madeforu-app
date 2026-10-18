@@ -13,7 +13,7 @@
             <a class="btn insta-btn" href="{{ $igUrl }}" target="_blank" rel="noopener">Follow</a>
         </div>
         @php
-            $tiles = $posts ?: $fallback->filter(fn ($p) => $p->images->isNotEmpty())->take(8)->map(fn ($p) => ['image' => $p->mainImageUrl(), 'link' => $p->url(), 'caption' => $p->name, 'video' => false, 'own' => true])->values()->all();
+            $tiles = $posts ?: $fallback->filter(fn ($p) => $p->images->isNotEmpty())->take(8)->map(fn ($p) => ['image' => $p->thumbUrl(), 'link' => $p->url(), 'caption' => $p->name, 'video' => false, 'own' => true])->values()->all();
         @endphp
         @if(count($tiles))
         <div class="insta-grid">

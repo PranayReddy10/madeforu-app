@@ -69,9 +69,12 @@ class VisitReport
         return ['now' => $now, 'change' => $change];
     }
 
-    /** One row per day: visitors, orders, revenue. */
+    /** One row per day (per hour for "Today"): visitors, orders, revenue. */
     public function daily(): Collection
     {
+        if ($this->days === 1) {
+            return $this->hourly();
+        }
         $visitors = $this->events()->selectRaw('day, count(distinct visitor) as n')->groupBy('day')->pluck('n', 'day');
         $orders = self::sales()->whereBetween('created_at', [$this->from->copy()->startOfDay(), $this->to->copy()->endOfDay()])
             ->get(['created_at', 'total'])->groupBy(fn ($o) => $o->created_at->toDateString());
@@ -81,6 +84,20 @@ class VisitReport
 
             return ['day' => $d, 'visitors' => (int) ($visitors[$d] ?? 0), 'orders' => count($orders[$d] ?? []), 'revenue' => (float) collect($orders[$d] ?? [])->sum('total')];
         });
+    }
+
+    /** Today, hour by hour (only hours that have started). */
+    public function hourly(): Collection
+    {
+        $visitors = $this->events()->get(['visitor', 'created_at'])->groupBy(fn ($e) => (int) Carbon::parse($e->created_at)->format('G'))
+            ->map(fn ($g) => $g->pluck('visitor')->unique()->count());
+        $orders = self::sales()->whereBetween('created_at', [$this->from->copy()->startOfDay(), $this->to->copy()->endOfDay()])
+            ->get(['created_at', 'total'])->groupBy(fn ($o) => (int) $o->created_at->format('G'));
+
+        return collect(range(0, (int) now()->format('G')))->map(fn ($h) => [
+            'day' => today()->setHour($h)->toDateTimeString(), 'hour' => $h,
+            'visitors' => (int) ($visitors[$h] ?? 0), 'orders' => count($orders[$h] ?? []), 'revenue' => (float) collect($orders[$h] ?? [])->sum('total'),
+        ]);
     }
 
     /** Where visitors came from, and which sources turn into orders. */

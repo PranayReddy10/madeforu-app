@@ -17,7 +17,7 @@ class AnalyticsController extends Controller
 {
     public function index(Request $request)
     {
-        $days = in_array((int) $request->query('days'), [7, 30, 90], true) ? (int) $request->query('days') : 30;
+        $days = in_array((int) $request->query('days'), [1, 7, 30, 90], true) ? (int) $request->query('days') : 30;
         $r = new VisitReport($days);
 
         return view('admin.analytics', [

@@ -103,7 +103,7 @@
         @foreach ($order->items as $idx => $item)
             <div class="order-item">
                 <div class="oi-head">
-                    <img class="oi-thumb" src="{{ $item->product?->mainImageUrl() ?? asset('images/placeholder.svg') }}" alt="" loading="lazy">
+                    <img class="oi-thumb" src="{{ $item->product?->thumbUrl() ?? asset('images/placeholder.svg') }}" alt="" loading="lazy">
                     <div class="oi-title">
                         <strong>{{ $item->name }}</strong>
                         @if ($item->options)<br><small class="muted">{{ collect($item->options)->map(fn ($v, $k) => "$k: $v")->implode(', ') }}</small>@endif
