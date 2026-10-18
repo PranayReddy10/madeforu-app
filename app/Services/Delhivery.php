@@ -127,11 +127,41 @@ class Delhivery
         });
     }
 
+    /**
+     * Delhivery's own charge to send a parcel to a PIN (surface or express, prepaid or COD), in ₹.
+     * Cached for 12 hours; null when it cannot be worked out (callers then use the flat fee).
+     */
+    public function rate(string $pin, int $chargeableGrams, bool $cod = false, float $codAmount = 0): ?float
+    {
+        $from = preg_replace('/\D/', '', (string) setting('delhivery.pickup_pincode'));
+        if (! self::enabled() || ! preg_match('/^[1-9]\d{5}$/', $pin) || ! preg_match('/^[1-9]\d{5}$/', $from)) {
+            return null;
+        }
+        $mode = setting('delhivery.shipping_mode') === 'Express' ? 'E' : 'S';
+        $slab = (int) (ceil(max(1, $chargeableGrams) / 50) * 50);   // the API is per gram; 50 g steps keep the cache useful
+        $key = 'delhivery.rate.'.implode('.', [$mode, $from, $pin, $slab, $cod ? 'cod'.(int) ceil($codAmount / 100) : 'pp']);
+
+        return Cache::remember($key, 12 * 3600, function () use ($mode, $from, $pin, $slab, $cod, $codAmount) {
+            try {
+                $res = $this->http()->get($this->base().'/api/kinko/v1/invoice/charges/.json', [
+                    'md' => $mode, 'ss' => 'Delivered', 'o_pin' => $from, 'd_pin' => $pin, 'cgm' => $slab,
+                    'pt' => $cod ? 'COD' : 'Pre-paid', 'cod' => $cod ? round($codAmount, 2) : 0,
+                ]);
+            } catch (\Throwable) {
+                return null;
+            }
+            $total = $res->successful() ? ($res->json('0.total_amount') ?? $res->json('total_amount')) : null;
+
+            return is_numeric($total) && $total > 0 ? round((float) $total, 2) : null;
+        });
+    }
+
     /** Create the shipment in Delhivery and return the AWB (waybill). */
     public function createShipment(Order $order): string
     {
-        $order->loadMissing('items');
+        $order->loadMissing('items.product');
         $cod = $order->payment_method === 'cod' && $order->payment_status !== 'paid';
+        $parcel = Parcel::of($order->items->map(fn ($i) => [$i->product, $i->qty]));
         // Delhivery's fraud check ("suspicious order/consignee") trips on symbols, emojis and long product titles.
         $shipment = [
             'name' => self::clean($order->name, 80),
@@ -148,6 +178,9 @@ class Delhivery
             'products_desc' => self::clean($order->items->map(fn ($i) => trim(Str::before($i->name, '|')).' x'.$i->qty)->implode(', '), 200),
             'quantity' => (string) $order->items->sum('qty'),
             'weight' => (string) $order->shippingWeight(),
+            'shipment_length' => $parcel->length ? (string) $parcel->length : '',
+            'shipment_width' => $parcel->width ? (string) $parcel->width : '',
+            'shipment_height' => $parcel->height ? (string) $parcel->height : '',
             'seller_name' => self::clean((string) config('store.name'), 60),
             'shipping_mode' => setting('delhivery.shipping_mode') === 'Express' ? 'Express' : 'Surface',
             'waybill' => '',

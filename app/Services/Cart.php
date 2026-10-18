@@ -318,8 +318,13 @@ class Cart
         return round(max($fixed, $pct > 0 ? $orderValue * $pct / 100 : 0), 2);
     }
 
-    /** @return array{subtotal: float, discount: float, coupon: ?string, shipping: float, cod_fee: float, total: float, free_shipping_gap: float} */
-    public function totals(?Collection $lines = null, string $paymentMethod = 'razorpay'): array
+    /**
+     * With the "live" shipping setting and a delivery PIN, shipping is Delhivery's own rate for the
+     * parcel (weight or packed size, whichever is billed) to that PIN; otherwise the flat fee.
+     *
+     * @return array{subtotal: float, discount: float, coupon: ?string, shipping: float, cod_fee: float, total: float, free_shipping_gap: float, shipping_live: bool, shipping_estimate: bool}
+     */
+    public function totals(?Collection $lines = null, string $paymentMethod = 'razorpay', ?string $pin = null): array
     {
         $lines ??= $this->lines();
         $subtotal = $this->subtotal($lines);
@@ -338,8 +343,9 @@ class Cart
         }
         $after = $subtotal - $discount;
         $freeOver = (float) setting('free_shipping_over');
-        $shipping = $lines->isEmpty() || $after >= $freeOver ? 0.0 : (float) setting('shipping_fee');
-        $cod = $paymentMethod === 'cod' ? self::codCharge($after + $shipping) : 0.0;
+        $quote = $lines->isEmpty() ? null : self::shippingQuote($lines->map(fn ($l) => [$l->product, $l->qty]), $pin, $paymentMethod === 'cod', $after);
+        $shipping = $lines->isEmpty() || $after >= $freeOver ? 0.0 : ($quote['shipping'] ?? (float) setting('shipping_fee'));
+        $cod = $paymentMethod === 'cod' ? ($quote['cod'] ?? self::codCharge($after + $shipping)) : 0.0;
 
         return [
             'subtotal' => $subtotal,
@@ -347,8 +353,45 @@ class Cart
             'coupon' => $code,
             'shipping' => $shipping,
             'cod_fee' => $cod,
+            'shipping_live' => (bool) ($quote['live'] ?? false),
+            'shipping_estimate' => self::liveShipping() && ! ($quote['live'] ?? false) && $shipping > 0,
             'total' => round($after + $shipping + $cod, 2),
             'free_shipping_gap' => $lines->isEmpty() ? 0.0 : max(0, round($freeOver - $after, 2)),
         ];
+    }
+
+    public static function liveShipping(): bool
+    {
+        return setting('shipping.mode') === 'live' && Delhivery::enabled();
+    }
+
+    /**
+     * Delhivery's charge for these items to a PIN, plus the handling fee, rounded up. 'cod' is set
+     * only when the COD charge comes from Delhivery too (their COD rate minus their prepaid rate).
+     *
+     * @param  iterable<array{0: ?Product, 1: int}>  $items
+     * @return array{shipping: float, cod: ?float, live: bool}|null null = use the flat fee
+     */
+    public static function shippingQuote(iterable $items, ?string $pin, bool $cod = false, float $orderValue = 0): ?array
+    {
+        $pin = preg_replace('/\D/', '', (string) $pin);
+        if (! self::liveShipping() || strlen($pin) !== 6) {
+            return null;
+        }
+        $grams = Parcel::of($items)->chargeableGrams();
+        $delhivery = app(Delhivery::class);
+        $prepaid = $delhivery->rate($pin, $grams);
+        if ($prepaid === null) {
+            return null;
+        }
+        $round = max(1, (int) setting('shipping.round_to', 1));
+        $up = fn (float $v) => (float) (ceil($v / $round) * $round);
+        $codFee = null;
+        if ($cod && setting('shipping.cod_mode') === 'delhivery') {
+            $withCod = $delhivery->rate($pin, $grams, true, $orderValue);
+            $codFee = $withCod !== null ? $up(max(0, $withCod - $prepaid)) : null;
+        }
+
+        return ['shipping' => $up($prepaid + (float) setting('shipping.extra')), 'cod' => $codFee, 'live' => true];
     }
 }
