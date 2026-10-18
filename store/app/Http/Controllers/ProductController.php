@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Product;
 use App\Models\Review;
 use App\Services\Analytics;
+use App\Services\Delhivery;
 use App\Services\Seo;
 use Illuminate\Http\Request;
 
@@ -37,6 +38,32 @@ class ProductController extends Controller
         ])->values();
 
         return view('product', compact('product', 'related', 'variants'));
+    }
+
+    /** "Check delivery" box on the product page and the PIN field at checkout. */
+    public function deliveryCheck(Request $request, Delhivery $delhivery)
+    {
+        $pin = preg_replace('/\D/', '', (string) $request->query('pin'));
+        if (! preg_match('/^[1-9]\d{5}$/', $pin)) {
+            return response()->json(['ok' => false, 'message' => 'Please enter a valid 6-digit PIN code.'], 422);
+        }
+        $days = max(1, (int) $request->query('days', 3));
+        $from = now()->addWeekdays($days)->addDays(2)->format('D, j M');
+        $to = now()->addWeekdays($days)->addDays(6)->format('D, j M');
+        $res = $delhivery->pincode($pin);
+        $codOn = (bool) setting('cod_enabled');
+        if ($res === null) {   // not configured or Delhivery unreachable: give the usual estimate
+            return response()->json(['ok' => true, 'pin' => $pin, 'cod' => $codOn, 'message' => "Delivery by {$from} – {$to}"]);
+        }
+        if (! $res['serviceable']) {
+            return response()->json(['ok' => false, 'pin' => $pin, 'cod' => false, 'message' => "Sorry, we don't deliver to {$pin} yet."]);
+        }
+
+        return response()->json([
+            'ok' => true, 'pin' => $pin, 'cod' => $codOn && $res['cod'], 'city' => $res['city'],
+            'message' => "Delivery to {$pin}".($res['city'] ? " ({$res['city']})" : '')." by {$from} – {$to}"
+                .($codOn ? ($res['cod'] ? ' · Cash on delivery available' : ' · Prepaid only') : ''),
+        ]);
     }
 
     public function review(Request $request, Product $product)

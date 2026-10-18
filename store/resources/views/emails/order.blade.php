@@ -14,7 +14,7 @@
     @endforeach
         <tr><td>Shipping</td><td align="right">{{ $order->shipping > 0 ? money($order->shipping) : 'Free' }}</td></tr>
         @if($order->discount > 0)<tr><td>Discount</td><td align="right">−{{ money($order->discount) }}</td></tr>@endif
-        @if($order->cod_fee > 0)<tr><td>COD fee</td><td align="right">{{ money($order->cod_fee) }}</td></tr>@endif
+        @if($order->cod_fee > 0)<tr><td>Cash on delivery charges</td><td align="right">{{ money($order->cod_fee) }}</td></tr>@endif
         <tr><td><b>Total</b></td><td align="right"><b>{{ money($order->total) }}</b></td></tr>
     </table>
     <p style="font-size:14px">Delivering to: {{ $order->name }}, {{ $order->address_line1 }} {{ $order->address_line2 }}, {{ $order->city }}, {{ $order->state }} {{ $order->pincode }} · {{ $order->phone }}</p>

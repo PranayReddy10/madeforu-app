@@ -333,11 +333,50 @@
         update();
     }
 
+    /* Delivery PIN check (product page) — remembers the PIN for next time */
+    function checkPin(url, pin, days) {
+        return fetch(url + '?pin=' + encodeURIComponent(pin) + (days ? '&days=' + days : ''), { headers: { Accept: 'application/json' } })
+            .then(function (r) { return r.json(); });
+    }
+    $$('[data-pin-check]').forEach(function (f) {
+        var input = $('input', f), out = $('[data-pin-result]', f);
+        try { var saved = localStorage.getItem('mfu.pin'); if (saved) input.value = saved; } catch (e) {}
+        function run() {
+            var pin = input.value.replace(/\D/g, '');
+            if (!/^[1-9]\d{5}$/.test(pin)) { out.className = 'small pin-no'; out.textContent = 'Please enter a valid 6-digit PIN code.'; return; }
+            out.className = 'small muted'; out.textContent = 'Checking…';
+            checkPin(f.dataset.pinCheck, pin, f.dataset.days).then(function (d) {
+                out.className = 'small ' + (d.ok ? 'pin-ok' : 'pin-no'); out.textContent = (d.ok ? '✓ ' : '') + d.message;
+                try { localStorage.setItem('mfu.pin', pin); } catch (e) {}
+            }).catch(function () { out.textContent = ''; });
+        }
+        f.addEventListener('submit', run);
+        if (input.value) run();
+    });
+
     /* Checkout */
     var co = $('[data-checkout]');
     if (co) {
         var tot = $('[data-place-total]', co);
-        $$('input[name=payment_method]', co).forEach(function (r) { r.addEventListener('change', function () { if (r.checked) tot.textContent = r.dataset.total; }); });
+        function showTotals(method) {
+            $$('[data-totals]', co).forEach(function (t) { t.hidden = (t.dataset.totals === 'cod') !== (method === 'cod'); });
+        }
+        $$('input[name=payment_method]', co).forEach(function (r) { r.addEventListener('change', function () { if (r.checked) { tot.textContent = r.dataset.total; showTotals(r.value); } }); });
+        // PIN: ask the courier as soon as six digits are typed; switch COD off where cash can't be collected.
+        var pinIn = $('[data-pincode]', co), pinMsg = $('[data-pin-msg]', co);
+        function pinCheck() {
+            var pin = pinIn.value.replace(/\D/g, ''), cod = $('input[name=payment_method][value=cod]', co);
+            if (!/^[1-9]\d{5}$/.test(pin) || !pinIn.dataset.check) { pinMsg.textContent = ''; return; }
+            checkPin(pinIn.dataset.check, pin).then(function (d) {
+                pinMsg.className = 'pin-msg ' + (d.ok ? 'pin-ok' : 'pin-no'); pinMsg.textContent = d.message;
+                if (cod) {
+                    cod.disabled = !d.cod; cod.closest('.pay-opt').style.opacity = d.cod ? '' : '.5';
+                    if (!d.cod && cod.checked) { var other = $('input[name=payment_method]:not([value=cod])', co); if (other) { other.checked = true; other.dispatchEvent(new Event('change')); } }
+                }
+            }).catch(function () {});
+        }
+        pinIn.addEventListener('input', pinCheck);
+        if (pinIn.value) pinCheck();
         var pin = $('[data-pincode]', co);
         pin.addEventListener('input', function () {
             if (!/^[1-9]\d{5}$/.test(pin.value)) return;

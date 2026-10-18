@@ -130,6 +130,12 @@
                 <p class="err" data-form-error hidden></p>
             </form>
 
+            <form class="pin-check" data-pin-check="{{ route('delivery.check') }}" data-days="{{ $product->production_days }}" onsubmit="return false">
+                <label for="pinbox">Check delivery</label>
+                <div><input id="pinbox" inputmode="numeric" maxlength="6" placeholder="Enter PIN code" autocomplete="postal-code"><button type="submit" class="btn small">Check</button></div>
+                <p class="small" data-pin-result aria-live="polite"></p>
+            </form>
+
             <ul class="assure">
                 <li><svg viewBox="0 0 24 24"><path d="M3 7h11v9H3zM14 10h4l3 3v3h-7z"/><circle cx="7" cy="18" r="1.6"/><circle cx="17" cy="18" r="1.6"/></svg><span>Get it by <b>{{ $deliverFrom->format('D, j M') }} – {{ $deliverTo->format('D, j M') }}</b><small>Made in {{ $product->production_days }} {{ \Illuminate\Support\Str::plural('day', $product->production_days) }}, then shipped</small></span></li>
                 <li><svg viewBox="0 0 24 24"><path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"/><path d="m9 12 2 2 4-4"/></svg><span><b>Secure payments</b><small>UPI, cards, netbanking{{ setting('cod_enabled') ? ', cash on delivery' : '' }}</small></span></li>

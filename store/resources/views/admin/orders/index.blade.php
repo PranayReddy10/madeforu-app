@@ -33,5 +33,18 @@
     </tbody>
 </table>
 {{ $orders->links('admin.pagination') }}
+@if ($delhivery)
+<section class="card narrow">
+    <h2>Delhivery pickup</h2>
+    <p class="muted small">{{ $awaitingPickup }} {{ \Illuminate\Support\Str::plural('parcel', $awaitingPickup) }} booked and waiting to be picked up.</p>
+    <form method="post" action="{{ route('admin.orders.pickup') }}" class="row3">
+        @csrf
+        <label>Date <input type="date" name="pickup_date" value="{{ now()->hour >= 14 ? now()->addDay()->toDateString() : now()->toDateString() }}" min="{{ now()->toDateString() }}"></label>
+        <label>Time <input type="time" name="pickup_time" value="15:00"></label>
+        <label>Parcels <input type="number" name="count" min="1" value="{{ max(1, $awaitingPickup) }}"></label>
+        <button class="btn">Request pickup</button>
+    </form>
+</section>
+@endif
 </div>
 @endsection

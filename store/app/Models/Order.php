@@ -10,7 +10,7 @@ class Order extends Model
 {
     protected $guarded = ['id'];
 
-    protected $casts = ['utm' => 'array'];
+    protected $casts = ['utm' => 'array', 'shipment_scans' => 'array', 'shipped_at' => 'datetime', 'delivered_at' => 'datetime', 'tracked_at' => 'datetime'];
 
     public const STATUSES = [
         'pending' => 'Awaiting payment',
@@ -18,6 +18,7 @@ class Order extends Model
         'in_production' => 'Being made',
         'shipped' => 'Shipped',
         'delivered' => 'Delivered',
+        'returned' => 'Returned',
         'cancelled' => 'Cancelled',
     ];
 
@@ -29,6 +30,23 @@ class Order extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function trackingUrl(): ?string
+    {
+        return $this->tracking_number ? 'https://www.delhivery.com/track/package/'.rawurlencode($this->tracking_number) : null;
+    }
+
+    /** Grams to declare to the courier: product weights where set, otherwise the default per item. */
+    public function shippingWeight(): int
+    {
+        if ($this->weight_grams) {
+            return $this->weight_grams;
+        }
+        $default = (int) setting('delhivery.default_weight', 300);
+        $this->loadMissing('items.product');
+
+        return max(50, (int) $this->items->sum(fn ($i) => $i->qty * ($i->product?->weight_kg ? (int) round($i->product->weight_kg * 1000) : $default)));
     }
 
     public function statusLabel(): string
