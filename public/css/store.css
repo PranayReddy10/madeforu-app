@@ -734,3 +734,37 @@ a.contact-card:hover { transform: translateY(-2px); box-shadow: var(--shadow); }
     .custom-art { height: 200px; }
     .polaroid { width: 150px; }
 }
+
+/* ---------- Top menu on one line, sideways category row, prices ---------- */
+.cat-nav-more[hidden] { display: none; }
+.cat-nav-more > button { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px; font-size: 13.5px; font-weight: 700; border: 1px solid var(--line); border-radius: 999px; background: #fff; }
+.cat-nav-more > button.on { background: var(--ink); color: #fff; border-color: var(--ink); }
+.cat-nav-more > button .chev { margin: -3px 0 0; width: 7px; height: 7px; }
+.cat-nav-more .cat-nav-drop { left: auto; right: 0; max-height: 70vh; overflow-y: auto; }
+.cat-nav-more .cat-nav-item > a { padding: 8px 12px; border-radius: 8px; border: 0; background: none; font-size: 14px; }
+.cat-nav-more .cat-nav-item > a:hover { background: var(--rose-l); color: var(--rose-d); }
+.cat-nav-more .cat-nav-item > a.on { background: var(--rose-l); color: var(--rose-d); }
+.cat-nav-more .cat-nav-item .cat-nav-drop { position: static; display: block; box-shadow: none; padding: 0 0 4px 12px; min-width: 0; }
+
+.hscroll { position: relative; }
+.hs-arrow { display: none; }
+
+/* Prices: the brand pink, so the price never reads like the title */
+.price b { color: var(--rose-d); font-weight: 800; }
+.pdp-price { background: linear-gradient(120deg, var(--rose-l), #fff 80%); border: 1px solid #f9d3df; border-radius: 18px; padding: 12px 16px; gap: 4px 12px; }
+.pdp-price b { color: var(--rose); font-size: 32px; line-height: 1.1; letter-spacing: -.01em; }
+.pdp-price s { font-size: 17px; }
+.pdp-price .save { background: #e3f6ee; color: #146c48; }
+.pdp-price .save[hidden] { display: none; }
+.pdp-info h1 { color: var(--ink); margin-bottom: 6px; }
+.pdp-info .pdp-cat { display: inline-block; font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--rose-d); margin-bottom: 4px; }
+
+@media (min-width: 960px) {
+    .cat-nav-track { flex-wrap: nowrap; overflow: visible; justify-content: center; }
+    .cat-nav-track > a, .cat-nav-item { flex: none; }
+    .cat-bubbles { grid-auto-flow: column; grid-template-columns: none; grid-auto-columns: 118px; overflow-x: auto; scroll-snap-type: x proximity; margin: 0; padding: 4px 2px 8px; gap: 18px; }
+    .hs-arrow { display: grid; place-items: center; position: absolute; top: 38px; z-index: 2; width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--line); background: #fff; box-shadow: var(--shadow); font-size: 24px; line-height: 1; color: var(--ink); opacity: 0; pointer-events: none; transition: opacity .2s; }
+    .hs-arrow.prev { left: -14px; } .hs-arrow.next { right: -14px; }
+    .hscroll.scrollable .hs-arrow { opacity: 1; pointer-events: auto; }
+    .hscroll.scrollable .hs-arrow:disabled { opacity: 0; pointer-events: none; }
+}

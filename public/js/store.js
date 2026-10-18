@@ -93,6 +93,51 @@
         mark();
     });
 
+    /* Top category menu on desktop: one line only; whatever doesn't fit moves into "More". */
+    (function () {
+        var more = $('[data-nav-more]');
+        if (!more) return;
+        var track = more.parentNode, list = $('[data-nav-more-list]', more), btn = $('button', more);
+        var desk = window.matchMedia('(min-width: 960px)');
+        function items() { return Array.prototype.filter.call(track.children, function (c) { return c !== more; }); }
+        function used() {
+            var gap = parseFloat(getComputedStyle(track).columnGap) || 0, w = 0, kids = Array.prototype.filter.call(track.children, function (c) { return !c.hidden; });
+            kids.forEach(function (c) { w += c.offsetWidth; });
+            return w + gap * Math.max(0, kids.length - 1);
+        }
+        function fit() {
+            // Put everything back, then move items from the end into "More" until the line fits.
+            Array.prototype.slice.call(list.children).forEach(function (c) { track.insertBefore(c, more); });
+            more.hidden = true;
+            if (!desk.matches) return;
+            var room = track.clientWidth - parseFloat(getComputedStyle(track).paddingLeft) - parseFloat(getComputedStyle(track).paddingRight);
+            if (used() <= room) return;
+            more.hidden = false;
+            var all = items();
+            for (var i = all.length - 1; i > 0 && used() > room; i--) list.insertBefore(all[i], list.firstChild);
+            btn.classList.toggle('on', !!$('a.on', list));
+        }
+        var t;
+        window.addEventListener('resize', function () { clearTimeout(t); t = setTimeout(fit, 120); });
+        if (document.fonts && document.fonts.ready) document.fonts.ready.then(fit);
+        fit();
+    })();
+
+    /* Sideways rows with arrow buttons (Shop by category) */
+    $$('[data-hscroll]').forEach(function (box) {
+        var row = $('[data-hscroll-row]', box), prev = $('[data-hscroll-prev]', box), next = $('[data-hscroll-next]', box);
+        function update() {
+            prev.disabled = row.scrollLeft < 4;
+            next.disabled = row.scrollLeft + row.clientWidth >= row.scrollWidth - 4;
+            box.classList.toggle('scrollable', row.scrollWidth > row.clientWidth + 4);
+        }
+        prev.addEventListener('click', function () { row.scrollBy({ left: -row.clientWidth * 0.8, behavior: 'smooth' }); });
+        next.addEventListener('click', function () { row.scrollBy({ left: row.clientWidth * 0.8, behavior: 'smooth' }); });
+        row.addEventListener('scroll', function () { window.requestAnimationFrame(update); }, { passive: true });
+        window.addEventListener('resize', update);
+        update();
+    });
+
     /* Home slider: swipe (native scroll-snap), autoplay with a progress dot, arrows on desktop, pauses on touch/hover/hidden tab */
     $$('[data-slider]').forEach(function (sl) {
         var track = $('[data-slider-track]', sl), slides = $$('.hs-slide', sl), dots = $$('[data-slider-dot]', sl);
@@ -190,7 +235,7 @@
             var now = base + extras(), reg = baseRegular + extras();
             priceEls.forEach(function (p) { p.textContent = inr(now); });
             if (regEl) { regEl.textContent = inr(reg); regEl.hidden = !(reg > now); }
-            if (saveEl) { saveEl.textContent = 'Save ' + Math.round(100 * (reg - now) / reg) + '%'; saveEl.hidden = !(reg > now); }
+            if (saveEl) { saveEl.textContent = 'You save ' + inr(reg - now) + ' (' + Math.round(100 * (reg - now) / reg) + '% off)'; saveEl.hidden = !(reg > now); }
         }
         function matchVariant() {
             var sel = selection(), keys = Object.keys(sel);

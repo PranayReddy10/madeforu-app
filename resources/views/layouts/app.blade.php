@@ -84,7 +84,7 @@
     <nav class="cat-nav" aria-label="Categories">
         <div class="wrap cat-nav-track" data-scroll-active>
             <a href="{{ url('shop') }}/" class="{{ request()->routeIs('shop') ? 'on' : '' }}">All gifts</a>
-            @foreach($menuCategories as $cat)
+            @foreach($menuCategories->reject(fn ($c) => $c->show_in_menu === false) as $cat)
                 <div class="cat-nav-item">
                     <a href="{{ $cat->url() }}" class="{{ request()->is('product-category/'.$cat->path, 'product-category/'.$cat->path.'/*') ? 'on' : '' }}">{{ $cat->name }}</a>
                     @if($cat->children->isNotEmpty())
@@ -94,6 +94,11 @@
                     @endif
                 </div>
             @endforeach
+            {{-- Desktop: categories that don't fit on one line move in here (store.js). --}}
+            <div class="cat-nav-item cat-nav-more" data-nav-more hidden>
+                <button type="button" aria-haspopup="true">More <span class="chev"></span></button>
+                <div class="cat-nav-drop" data-nav-more-list></div>
+            </div>
         </div>
     </nav>
     @endunless

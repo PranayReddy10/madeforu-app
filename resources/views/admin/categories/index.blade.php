@@ -15,7 +15,7 @@
             <td>{{ $c->position }}</td>
             <td>
                 @if ($c->is_active)<span class="badge ok">Active</span>@else<span class="badge">Hidden</span>@endif
-                @if ($c->show_on_home)<span class="badge">Home</span>@endif
+                @if ($c->show_on_home)<span class="badge">Home</span>@endif @if ($c->show_in_menu === false)<span class="badge">Not in top menu</span>@endif
                 @if (! $c->meta_description)<span class="badge warn" title="No meta description">SEO</span>@endif
             </td>
         </tr>

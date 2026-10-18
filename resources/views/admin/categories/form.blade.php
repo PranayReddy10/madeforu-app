@@ -24,6 +24,7 @@
     </div>
     <label class="check"><input type="checkbox" name="is_active" value="1" @checked(old('is_active', $category->is_active))> Active</label>
     <label class="check"><input type="checkbox" name="show_on_home" value="1" @checked(old('show_on_home', $category->show_on_home))> Show on home page</label>
+    <label class="check"><input type="checkbox" name="show_in_menu" value="1" @checked(old('show_in_menu', $category->show_in_menu ?? true))> Show in the top menu <small class="muted">(untick duplicates or small categories; they stay in the side menu and on the Categories page)</small></label>
 
     <h2>SEO</h2>
     <label>Meta title <small class="counter" data-for="c-mt" data-max="60"></small><input id="c-mt" name="meta_title" value="{{ old('meta_title', $category->meta_title) }}"></label>

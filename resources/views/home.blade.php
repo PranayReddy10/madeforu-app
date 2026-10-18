@@ -19,7 +19,9 @@
 <section class="section">
     <div class="wrap">
         <div class="section-head"><div><h2>Shop by category</h2><p>Every one made with your photos</p></div><a href="{{ route('categories') }}">See all</a></div>
-        <div class="cat-bubbles">
+        <div class="hscroll" data-hscroll>
+        <button type="button" class="hs-arrow prev" data-hscroll-prev aria-label="Scroll left">‹</button>
+        <div class="cat-bubbles" data-hscroll-row>
             @foreach($categories as $c)
                 <a href="{{ $c->url() }}" class="bubble">
                     <span class="bubble-img">
@@ -28,6 +30,8 @@
                     <span class="bubble-name">{{ $c->name }}</span>
                 </a>
             @endforeach
+        </div>
+        <button type="button" class="hs-arrow next" data-hscroll-next aria-label="Scroll right">›</button>
         </div>
     </div>
 </section>
