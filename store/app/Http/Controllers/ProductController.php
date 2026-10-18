@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use App\Models\Product;
 use App\Models\Review;
 use App\Services\Analytics;
-use App\Services\Cart;
 use App\Services\Delhivery;
 use App\Services\Seo;
 use Illuminate\Http\Request;
@@ -53,52 +52,21 @@ class ProductController extends Controller
             return response()->json(['ok' => false, 'message' => 'Please enter a valid 6-digit PIN code.'], 422);
         }
         $days = max(1, (int) $request->query('days', 3));
-        $from = now()->addWeekdays($days)->addDays(2)->format('D, j M');
         $to = now()->addWeekdays($days)->addDays(6)->format('D, j M');
         $res = $delhivery->pincode($pin);
         $codOn = (bool) setting('cod_enabled');
         if ($res === null) {   // not configured or Delhivery unreachable: give the usual estimate
-            return response()->json(['ok' => true, 'pin' => $pin, 'cod' => $codOn, 'message' => "Delivery by {$from} – {$to}"]);
+            return response()->json(['ok' => true, 'pin' => $pin, 'cod' => $codOn, 'message' => "Delivery by {$to}"]);
         }
         if (! $res['serviceable']) {
             return response()->json(['ok' => false, 'pin' => $pin, 'cod' => false, 'message' => "Sorry, we don't deliver to {$pin} yet."]);
         }
 
-        $charge = $this->deliveryCharge($request, $pin, $codOn && $res['cod']);
-
         return response()->json([
-            'ok' => true, 'pin' => $pin, 'cod' => $codOn && $res['cod'], 'city' => $res['city'], 'charge' => $charge['amount'] ?? null,
-            'message' => "Delivery to {$pin}".($res['city'] ? " ({$res['city']})" : '')." by {$from} – {$to}"
-                .($charge ? ' · '.$charge['text'] : '')
+            'ok' => true, 'pin' => $pin, 'cod' => $codOn && $res['cod'], 'city' => $res['city'],
+            'message' => "Delivery to {$pin}".($res['city'] ? " ({$res['city']})" : '')." by {$to}"
                 .($codOn ? ($res['cod'] ? ' · Cash on delivery available' : ' · Prepaid only') : ''),
         ]);
-    }
-
-    /** The live Delhivery charge for one of this product to the PIN (product page), when live rates are on. */
-    private function deliveryCharge(Request $request, string $pin, bool $codPossible): ?array
-    {
-        $product = $request->integer('item') ? Product::active()->find($request->integer('item')) : null;
-        if (! $product || ! Cart::liveShipping()) {
-            return null;
-        }
-        $price = (float) ($product->isOnSale() ? $product->sale_price : $product->price);
-        $freeOver = (float) setting('free_shipping_over');
-        if ($freeOver > 0 && $price >= $freeOver) {
-            return ['amount' => 0.0, 'text' => 'Free delivery'];
-        }
-        $quote = Cart::shippingQuote([[$product, 1]], $pin, $codPossible, $price);
-        if (! $quote) {
-            return null;
-        }
-        $text = 'Delivery charge '.money($quote['shipping']);
-        if ($codPossible && $quote['cod'] !== null && $quote['cod'] > 0) {
-            $text .= ' (+'.money($quote['cod']).' for cash on delivery)';
-        }
-        if ($freeOver > 0) {
-            $text .= ' · free over '.money($freeOver);
-        }
-
-        return ['amount' => $quote['shipping'], 'text' => $text];
     }
 
     public function review(Request $request, Product $product)

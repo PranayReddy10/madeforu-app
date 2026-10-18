@@ -237,7 +237,7 @@ Each product has a packed weight in grams, a packed size (length × width × hei
 - **Flat fee**: the same shipping fee on every order, as before.
 - **Live Delhivery rate**: the cart asks Delhivery what it charges for the parcel from your pickup PIN (**Settings → Delhivery shipping → Pickup PIN code**) to the customer's PIN. The parcel is all items stacked together. A carton box is billed on the higher of the actual weight and the volumetric weight (L × W × H ÷ 5000 kg); a flyer on its actual weight, the same as Delhivery's rate calculator.
   - Checkout re-prices as soon as the customer types their PIN.
-  - The product page PIN check shows the charge for one item.
+  - The product page PIN check shows only the delivery date (and COD availability), not the charge; the charge appears at checkout.
   - Optional: a packing/handling amount added to each rate, and rounding up (e.g. to ₹5).
   - COD charge: either your own COD charge, or Delhivery's (their COD price minus their prepaid price).
   - If Delhivery doesn't answer, the flat fee is used. Rates are cached for 12 hours.

@@ -121,8 +121,8 @@
             </form>
 
             <div class="delivery-card">
-                <div class="dc-eta">@include('partials.icon', ['i' => 'truck'])<span>Get it by <b>{{ $deliverFrom->format('D, j M') }} – {{ $deliverTo->format('D, j M') }}</b><small>Made in {{ $product->production_days }} {{ \Illuminate\Support\Str::plural('day', $product->production_days) }}, then shipped with tracking</small></span></div>
-                <form class="pin-check" data-pin-check="{{ route('delivery.check', ['item' => $product->id]) }}" data-days="{{ $product->production_days }}" onsubmit="return false">
+                <div class="dc-eta">@include('partials.icon', ['i' => 'truck'])<span>Get it by <b>{{ $deliverTo->format('D, j M') }}</b><small>Made in {{ $product->production_days }} {{ \Illuminate\Support\Str::plural('day', $product->production_days) }}, then shipped with tracking</small></span></div>
+                <form class="pin-check" data-pin-check="{{ route('delivery.check') }}" data-days="{{ $product->production_days }}" onsubmit="return false">
                     <label for="pinbox" class="sr">Check delivery to your PIN code</label>
                     <div><input id="pinbox" inputmode="numeric" maxlength="6" placeholder="Your PIN code" autocomplete="postal-code"><button type="submit" class="btn small">Check</button></div>
                     <p class="small" data-pin-result aria-live="polite"></p>
