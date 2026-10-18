@@ -8,8 +8,8 @@
     </div>
     <div class="menu-list">
         <a href="{{ route('track') }}">Track an order <span>›</span></a>
-        @foreach(['contact-us' => 'Contact us', 'shipping-policy' => 'Shipping policy', 'refund_returns' => 'Returns & refunds', 'privacy-policy' => 'Privacy policy'] as $slug => $label)
-            <a href="{{ url($slug) }}/">{{ $label }} <span>›</span></a>
+        @foreach($footerPages as $fp)
+            <a href="{{ $fp['url'] }}">{{ $fp['title'] }} <span>›</span></a>
         @endforeach
     </div>
 </div>

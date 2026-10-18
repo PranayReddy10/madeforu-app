@@ -36,7 +36,7 @@ WordPress is the easier choice if non-developers need to build new page layouts 
   - text, message, dropdown (with an extra price per option), colour and date
   - Customer photos are private: only the customer's own session and the admin can see them. Admin can download all photos for an order as one ZIP.
 - **Checkout**:
-  - Razorpay (UPI, GPay, PhonePe, cards, netbanking), verified on the server and by webhook
+  - Razorpay and Cashfree (UPI, GPay, PhonePe, cards, netbanking), each checked with the gateway on the server and by webhook; switch either on or off and enter keys in Admin → Settings → Payment gateways
   - cash on delivery, with a fee and a maximum order value
   - coupons, free shipping above a threshold, and PIN-code lookup that fills in the city and state
 - **Phone-first design**:
@@ -129,8 +129,11 @@ You need a Business plan or higher, for SSH. Set the PHP version to **8.3** unde
    ```
 
    This deletes abandoned photo uploads and pings IndexNow.
-5. **Razorpay webhook.** Dashboard → Webhooks → `https://madeforu.co.in/webhooks/razorpay`, with the events `payment.captured` and `order.paid`. Copy the webhook secret into `.env`.
-6. **Switch DNS.** Move the domain's A record from DigitalOcean to Hostinger, then turn on the free SSL. Keep the DigitalOcean droplet for a week, in case anything was missed.
+5. **Payment gateways.** Enter keys in Admin → Settings → Payment gateways (or `.env`).
+   - Razorpay: Dashboard → Webhooks → `https://madeforu.co.in/webhooks/razorpay`, events `payment.captured` and `order.paid`; paste the webhook secret in settings.
+   - Cashfree: Developers → Webhooks → `https://madeforu.co.in/webhooks/cashfree`, event "Payment success". Cashfree signs webhooks with the secret key, so nothing extra to paste. Try it first with Mode = Test and sandbox keys.
+6. **Images on DigitalOcean Spaces.** Imported images stay on your Spaces CDN (`friendsmedia.sgp1.cdn.digitaloceanspaces.com`), so they keep loading after the WordPress server is switched off. Keep the Space itself. To send new admin uploads to the same Space, set `MEDIA_DISK=spaces` and the `DO_SPACES_*` keys in `.env` (Spaces → Access keys).
+7. **Switch DNS.** Move the domain's A record from DigitalOcean to Hostinger, then turn on the free SSL. Keep the DigitalOcean droplet for a week, in case anything was missed.
 
 Without SSH: run `composer install` on your computer, zip the whole `store` folder including `vendor/`, upload it with File Manager, and run the artisan commands from hPanel's "Run command" or a one-off cron job.
 

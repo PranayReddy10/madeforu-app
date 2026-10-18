@@ -21,6 +21,11 @@ class ShareStoreData
             ->whereNull('parent_id')->with(['children' => fn ($q) => $q->active()])
             ->orderBy('position')->orderBy('name')->get()));
 
+        // Footer/help links: the store's real CMS pages, whatever WordPress called them.
+        View::share('footerPages', Cache::remember('menu.pages', 600, fn () => \App\Models\Page::where('is_active', true)
+            ->whereNotIn('slug', ['legal'])->orderByRaw("slug like 'legal/%'")->orderBy('title')->get(['title', 'slug'])
+            ->map(fn ($p) => ['title' => $p->title, 'url' => $p->url()])->all()));
+
         return $next($request);
     }
 }

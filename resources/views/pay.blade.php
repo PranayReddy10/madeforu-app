@@ -16,7 +16,7 @@
 <script>
 (function () {
     var opts = {
-        key: @json(config('store.razorpay.key')),
+        key: @json(setting('razorpay.key')),
         amount: @json($rp['amount']),
         currency: 'INR',
         name: @json(config('store.name')),

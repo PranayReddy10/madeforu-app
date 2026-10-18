@@ -165,8 +165,8 @@
             <h3>Help</h3>
             <a href="{{ route('track') }}">Track order</a>
             <a href="{{ route('account') }}">My account</a>
-            @foreach(['contact-us' => 'Contact us', 'about-us' => 'About us', 'shipping-policy' => 'Shipping', 'refund_returns' => 'Returns & refunds', 'privacy-policy' => 'Privacy policy', 'terms-and-conditions' => 'Terms'] as $slug => $label)
-                <a href="{{ url($slug) }}/">{{ $label }}</a>
+            @foreach($footerPages as $fp)
+                <a href="{{ $fp['url'] }}">{{ $fp['title'] }}</a>
             @endforeach
         </div>
         <div>

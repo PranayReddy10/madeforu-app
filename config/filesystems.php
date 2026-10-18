@@ -60,6 +60,23 @@ return [
             'report' => false,
         ],
 
+        // DigitalOcean Spaces (S3-compatible) for product, category and banner images.
+        // Turn on with MEDIA_DISK=spaces; files are served from the Spaces CDN.
+        'spaces' => [
+            'driver' => 's3',
+            'key' => env('DO_SPACES_KEY'),
+            'secret' => env('DO_SPACES_SECRET'),
+            'region' => env('DO_SPACES_REGION', 'sgp1'),
+            'bucket' => env('DO_SPACES_BUCKET'),
+            'endpoint' => env('DO_SPACES_ENDPOINT', 'https://sgp1.digitaloceanspaces.com'),
+            'url' => env('DO_SPACES_URL'),   // CDN address, e.g. https://friendsmedia.sgp1.cdn.digitaloceanspaces.com
+            'root' => env('DO_SPACES_ROOT', 'store'),
+            'visibility' => 'public',
+            'use_path_style_endpoint' => false,
+            'throw' => true,
+            'report' => true,
+        ],
+
     ],
 
     /*

@@ -26,15 +26,31 @@ return [
     'cod_fee' => (float) env('COD_FEE', 50),
     'cod_max' => (float) env('COD_MAX', 5000),
 
+    // Where product, category and banner images are stored: 'public' (this server) or 'spaces' (DigitalOcean Spaces).
+    'media_disk' => env('MEDIA_DISK', 'public'),
+    // Images already on these hosts are used where they are; the importer does not copy them.
+    'media_keep_hosts' => array_filter(array_map('trim', explode(',', env('MEDIA_KEEP_HOSTS', 'digitaloceanspaces.com')))),
+
     // Customer photo uploads
     'upload_max_kb' => (int) env('UPLOAD_MAX_KB', 15360),
     'upload_mimes' => ['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif'],
 
     // Payments
+    // Payments. Everything here can also be set in Admin → Settings → Payment gateways (that wins over .env).
+    'payments' => [
+        'default' => env('PAYMENT_DEFAULT', 'razorpay'),   // which online gateway is pre-selected at checkout
+    ],
     'razorpay' => [
+        'enabled' => (bool) env('RAZORPAY_ENABLED', true),
         'key' => env('RAZORPAY_KEY_ID'),
         'secret' => env('RAZORPAY_KEY_SECRET'),
         'webhook_secret' => env('RAZORPAY_WEBHOOK_SECRET'),
+    ],
+    'cashfree' => [
+        'enabled' => (bool) env('CASHFREE_ENABLED', true),
+        'mode' => env('CASHFREE_MODE', 'production'),       // production | sandbox
+        'app_id' => env('CASHFREE_APP_ID'),
+        'secret' => env('CASHFREE_SECRET_KEY'),            // also signs webhooks
     ],
 
     // Analytics & search engines. All optional; anything left blank is simply not printed.
