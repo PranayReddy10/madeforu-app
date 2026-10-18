@@ -34,14 +34,20 @@
                 </div>
             @endif
             @if($off)<span class="tag sale big">{{ $off }}% off</span>@endif
+            @if($product->images->count() > 1)<span class="gallery-count only-mobile" data-gallery-count>1 / {{ $product->images->count() }}</span>@endif
         </div>
 
         <div class="pdp-info">
             @if($product->primaryCategory)<a href="{{ $product->primaryCategory->url() }}" class="pdp-cat">{{ $product->primaryCategory->name }}</a>@endif
             <h1>{{ $product->name }}</h1>
-            @if($product->rating_count)
-                <a href="#reviews" class="stars-line"><span class="stars-sm"><span style="--r: {{ $product->rating_avg }}"></span></span> {{ number_format($product->rating_avg, 1) }} · {{ $product->rating_count }} {{ \Illuminate\Support\Str::plural('review', $product->rating_count) }}</a>
-            @endif
+            <div class="pdp-meta">
+                @if($product->rating_count)
+                    <a href="#reviews" class="stars-line"><span class="stars-sm"><span style="--r: {{ $product->rating_avg }}"></span></span> <b>{{ number_format($product->rating_avg, 1) }}</b> · {{ $product->rating_count }} {{ \Illuminate\Support\Str::plural('review', $product->rating_count) }}</a>
+                @else
+                    <a href="#reviews" class="stars-line muted">☆ Be the first to review</a>
+                @endif
+                @if($product->sales_count >= 5)<span class="sold">🔥 {{ number_format($product->sales_count) }}+ sold</span>@endif
+            </div>
 
             <div class="pdp-price" data-price-box>
                 <b data-price>{{ money($product->currentPrice()) }}</b>
@@ -53,6 +59,12 @@
             @php $left = \App\Services\Stock::available($product); $low = \App\Services\Stock::lowThreshold(); @endphp
             @php $showLeft = $left !== null && $left > 0 && $left <= $low; @endphp
             <p class="stock-note" data-stock-note data-low="{{ $low }}" @unless($showLeft) hidden @endunless>@if($showLeft) 🔥 Only {{ $left }} left — order soon @endif</p>
+
+            <ul class="pdp-chips">
+                @if($product->needsUpload())<li>@include('partials.icon', ['i' => 'camera']) {{ $product->uploadCount() > 1 ? 'Add '.$product->uploadCount().' photos' : 'Add your photo' }}</li>@endif
+                <li>@include('partials.icon', ['i' => 'hand']) Made in {{ $product->production_days }} {{ \Illuminate\Support\Str::plural('day', $product->production_days) }}</li>
+                @if(setting('cod_enabled'))<li>@include('partials.icon', ['i' => 'cash']) Cash on delivery</li>@endif
+            </ul>
 
             @if($product->short_description)<div class="prose short">{!! $product->short_description !!}</div>@endif
 
@@ -75,7 +87,7 @@
 
                 @if($product->customizationFields->isNotEmpty())
                 <div class="personalise" data-item-block="0">
-                    <h2 class="h-sm">Personalise it <span class="item-tag" data-item-tag hidden>Item 1</span></h2>
+                    <div class="pz-head"><span class="pz-step">@include('partials.icon', ['i' => 'sparkle'])</span><div><h2 class="h-sm">Personalise it <span class="item-tag" data-item-tag hidden>Item 1</span></h2><small class="muted">Your photos are private and used only to make your gift.</small></div></div>
                     @include('partials.personalise-fields', ['prefix' => 'custom', 'suffix' => ''])
                 </div>
                 {{-- Ordering more than one: same personalisation for all, or a box per item. --}}
@@ -103,18 +115,24 @@
                 </div>
                 <button class="btn dark block" name="buy_now" value="1" @disabled(!$stock)>Buy now</button>
                 <p class="err" data-form-error hidden></p>
+                @if(config('store.whatsapp'))
+                    <a class="help-line" href="https://wa.me/{{ config('store.whatsapp') }}?text={{ rawurlencode('Hi! I need help personalising: '.$product->name.' '.$product->url()) }}" target="_blank" rel="noopener">@include('partials.icon', ['i' => 'whatsapp']) Need help with your design? <b>Chat with us</b></a>
+                @endif
             </form>
 
-            <form class="pin-check" data-pin-check="{{ route('delivery.check') }}" data-days="{{ $product->production_days }}" onsubmit="return false">
-                <label for="pinbox">Check delivery</label>
-                <div><input id="pinbox" inputmode="numeric" maxlength="6" placeholder="Enter PIN code" autocomplete="postal-code"><button type="submit" class="btn small">Check</button></div>
-                <p class="small" data-pin-result aria-live="polite"></p>
-            </form>
+            <div class="delivery-card">
+                <div class="dc-eta">@include('partials.icon', ['i' => 'truck'])<span>Get it by <b>{{ $deliverFrom->format('D, j M') }} – {{ $deliverTo->format('D, j M') }}</b><small>Made in {{ $product->production_days }} {{ \Illuminate\Support\Str::plural('day', $product->production_days) }}, then shipped with tracking</small></span></div>
+                <form class="pin-check" data-pin-check="{{ route('delivery.check') }}" data-days="{{ $product->production_days }}" onsubmit="return false">
+                    <label for="pinbox" class="sr">Check delivery to your PIN code</label>
+                    <div><input id="pinbox" inputmode="numeric" maxlength="6" placeholder="Your PIN code" autocomplete="postal-code"><button type="submit" class="btn small">Check</button></div>
+                    <p class="small" data-pin-result aria-live="polite"></p>
+                </form>
+            </div>
 
-            <ul class="assure">
-                <li><svg viewBox="0 0 24 24"><path d="M3 7h11v9H3zM14 10h4l3 3v3h-7z"/><circle cx="7" cy="18" r="1.6"/><circle cx="17" cy="18" r="1.6"/></svg><span>Get it by <b>{{ $deliverFrom->format('D, j M') }} – {{ $deliverTo->format('D, j M') }}</b><small>Made in {{ $product->production_days }} {{ \Illuminate\Support\Str::plural('day', $product->production_days) }}, then shipped</small></span></li>
-                <li><svg viewBox="0 0 24 24"><path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"/><path d="m9 12 2 2 4-4"/></svg><span><b>Secure payments</b><small>UPI, cards, netbanking{{ setting('cod_enabled') ? ', cash on delivery' : '' }}</small></span></li>
-                <li><svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-3-6.2"/><path d="M20 4v5h-5"/></svg><span><b>Damage-free promise</b><small>Arrived damaged? We remake it free.</small></span></li>
+            <ul class="trust-tiles">
+                <li>@include('partials.icon', ['i' => 'shield'])<b>Secure payment</b><small>UPI, cards{{ setting('cod_enabled') ? ', COD' : '' }}</small></li>
+                <li>@include('partials.icon', ['i' => 'return'])<b>Damage-free</b><small>Free remake if broken</small></li>
+                <li>@include('partials.icon', ['i' => 'hand'])<b>Handmade</b><small>In {{ config('store.city') }}</small></li>
             </ul>
 
             <div class="share-row">
@@ -142,6 +160,26 @@
             </table>
         </details>
         @endif
+        <details>
+            <summary><h2>How personalisation works</h2></summary>
+            <ol class="mini-steps">
+                <li><b>1</b><span><strong>Upload &amp; type</strong> Add your {{ $product->needsUpload() ? 'photos' : 'details' }} and any names or message above.</span></li>
+                <li><b>2</b><span><strong>We make it</strong> Printed and finished by hand in {{ $product->production_days }} {{ \Illuminate\Support\Str::plural('day', $product->production_days) }}, checked before packing.</span></li>
+                <li><b>3</b><span><strong>Delivered</strong> Shipped with Delhivery tracking to your door, anywhere in India.</span></li>
+            </ol>
+        </details>
+        <details>
+            <summary><h2>Delivery &amp; returns</h2></summary>
+            <div class="prose">
+                <ul>
+                    <li>Made to order in {{ $product->production_days }} {{ \Illuminate\Support\Str::plural('day', $product->production_days) }}, then delivered in 2–7 days with tracking.</li>
+                    @if((float) setting('free_shipping_over') > 0)<li>Free delivery on orders over {{ money(setting('free_shipping_over')) }}; otherwise {{ money(setting('shipping_fee')) }}.</li>@endif
+                    @if(setting('cod_enabled'))<li>Cash on delivery available on most PIN codes.</li>@endif
+                    <li>Personalised items can’t be returned for change of mind, but if it arrives damaged or wrong we replace or refund it — tell us within 48 hours.</li>
+                </ul>
+                <p><a href="{{ url('legal/shipping-delivery-policy') }}/">Shipping policy</a> · <a href="{{ url('legal/refund-cancellation-policy') }}/">Refund policy</a></p>
+            </div>
+        </details>
         @if($product->faqs)
         <details open>
             <summary><h2>Frequently asked questions</h2></summary>
@@ -156,9 +194,19 @@
 
     <section class="reviews" id="reviews">
         <div class="section-head"><h2>Customer reviews</h2></div>
-        @if($product->rating_count)
-            <p class="big-rating"><b>{{ number_format($product->rating_avg, 1) }}</b> <span class="stars-sm"><span style="--r: {{ $product->rating_avg }}"></span></span> <span class="muted">based on {{ $product->rating_count }} {{ \Illuminate\Support\Str::plural('review', $product->rating_count) }}</span></p>
-        @endif
+        <div class="rv-summary">
+            @if($product->rating_count)
+                <div class="rv-score"><b>{{ number_format($product->rating_avg, 1) }}</b><span class="stars-sm"><span style="--r: {{ $product->rating_avg }}"></span></span><small class="muted">{{ $product->rating_count }} {{ \Illuminate\Support\Str::plural('review', $product->rating_count) }}</small></div>
+                <div class="rv-bars">
+                    @for($i = 5; $i >= 1; $i--)
+                        @php $c = $ratingBars[$i] ?? 0; $tot = max(1, array_sum($ratingBars)); @endphp
+                        <div><span>{{ $i }}★</span><i><em style="width: {{ round(100 * $c / $tot) }}%"></em></i><small>{{ $c }}</small></div>
+                    @endfor
+                </div>
+            @else
+                <div class="rv-empty">@include('partials.icon', ['i' => 'star'])<span><b>No reviews yet</b><small>Bought this? Share a photo of your gift — it helps other shoppers.</small></span></div>
+            @endif
+        </div>
         @php $reviewPhotos = $product->reviews->flatMap(fn ($r) => $r->photoUrls())->take(12); @endphp
         @if($reviewPhotos->isNotEmpty())
             <div class="review-photos" aria-label="Customer photos">
@@ -193,15 +241,16 @@
 
     @if($related->isNotEmpty())
     <section class="section">
-        <div class="section-head"><h2>You may also like</h2></div>
-        <div class="rail">@foreach($related as $p)@include('partials.product-card', ['p' => $p])@endforeach</div>
+        <div class="section-head"><h2>You may also like</h2>@if($product->primaryCategory)<a href="{{ $product->primaryCategory->url() }}">More {{ $product->primaryCategory->name }}</a>@endif</div>
+        @include('partials.product-group', ['list' => $related, 'layout' => $related->count() >= 6 ? 'grid6' : 'grid4'])
     </section>
     @endif
 </div>
 
 {{-- Phone: price + add-to-cart stays reachable above the tab bar --}}
 <div class="sticky-buy only-mobile" data-sticky-buy>
-    <div><small class="muted">{{ \Illuminate\Support\Str::limit($product->name, 28) }}</small><b data-price>{{ money($product->currentPrice()) }}</b></div>
+    <img src="{{ $product->mainImageUrl() }}" alt="" width="44" height="44" class="sb-thumb">
+    <div class="sb-text"><small class="muted">{{ \Illuminate\Support\Str::limit($product->name, 28) }}</small><b data-price>{{ money($product->currentPrice()) }}</b></div>
     <button class="btn primary" data-scroll-buy>{{ $product->customizationFields->isNotEmpty() ? 'Personalise' : 'Add to cart' }}</button>
 </div>
 @endsection

@@ -87,6 +87,7 @@
             var i = Math.round(track_.scrollLeft / track_.clientWidth);
             dots.forEach(function (d, j) { d.classList.toggle('on', i === j); });
             thumbs.forEach(function (t, j) { t.classList.toggle('on', i === j); });
+            var c = $('[data-gallery-count]', g); if (c) c.textContent = (i + 1) + ' / ' + track_.children.length;
         }
         track_.addEventListener('scroll', function () { window.requestAnimationFrame(mark); }, { passive: true });
         thumbs.forEach(function (t) { t.addEventListener('click', function () { track_.scrollTo({ left: track_.clientWidth * +t.dataset.goto, behavior: 'smooth' }); }); });
