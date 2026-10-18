@@ -992,3 +992,9 @@ body {
 .cat-nav-track > a, .cat-nav-item > a { background: #fff; }
 .usp-track span, .chip, .pager a, .pager span { box-shadow: 0 2px 8px rgba(240,69,119,.07); }
 .card { box-shadow: 0 1px 2px rgba(28,40,68,.05), 0 10px 26px rgba(240,69,119,.10); }
+
+/* Photo upload that waits for an option (e.g. print side) to say how many photos */
+.upload-wait { display: none; margin: 0; padding: 12px 14px; border-radius: 12px; background: var(--rose-l); color: var(--rose-d); font-size: 14px; font-weight: 600; }
+.upload.waiting .upload-wait { display: block; }
+.upload.waiting > :not(.upload-wait) { display: none; }
+.upload-slots .slot[hidden] { display: none !important; }
