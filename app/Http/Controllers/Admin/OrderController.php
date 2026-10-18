@@ -119,13 +119,27 @@ class OrderController extends Controller
 
     public function update(Request $request, Order $order)
     {
+        if ($request->filled('phone')) {
+            $request->merge(['phone' => preg_replace('/[^\d+]/', '', (string) $request->input('phone'))]);
+        }
         $data = $request->validate([
             'status' => 'required|in:'.implode(',', array_keys(Order::STATUSES)),
             'payment_status' => 'required|in:unpaid,paid,failed,refunded',
             'tracking_number' => 'nullable|string|max:100',
             'courier' => 'nullable|string|max:100',
             'notes' => 'nullable|string|max:2000',
+            // Optional: fix the customer's details (Edit on the Ship-to card) before booking the courier.
+            'name' => 'sometimes|required|string|max:120',
+            'phone' => ['sometimes', 'required', 'regex:/^(\+?91)?[6-9]\d{9}$/'],
+            'address_line1' => 'sometimes|required|string|max:255',
+            'address_line2' => 'nullable|string|max:255',
+            'city' => 'sometimes|required|string|max:100',
+            'state' => 'sometimes|required|string|max:100',
+            'pincode' => 'sometimes|required|digits:6',
         ]);
+        if (isset($data['phone'])) {
+            $data['phone'] = substr(preg_replace('/\D/', '', $data['phone']), -10);
+        }
         $wasShipped = in_array($order->status, ['shipped', 'delivered'], true);
         $previous = $order->status;
         if ($data['status'] === 'shipped' && ! $order->shipped_at) {
