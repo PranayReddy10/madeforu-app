@@ -50,7 +50,7 @@ class OrderNotifier
             return;
         }
         // Each step is sent once, however many times it is triggered.
-        if (NotificationLog::where('order_id', $order->id)->where('event', $event)->where('status', 'sent')->exists()) {
+        if (NotificationLog::where('order_id', $order->id)->where('channel', 'whatsapp')->where('event', $event)->where('status', 'sent')->exists()) {
             return;
         }
         $this->wa->sendForOrder($order, $event, $to, $template, $params, $document);

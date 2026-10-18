@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Jobs\CreateShipment;
 use App\Jobs\NotifyOrder;
-use App\Mail\OrderPlaced;
 use App\Models\Coupon;
 use App\Models\CustomerUpload;
 use App\Models\Order;
@@ -15,13 +14,13 @@ use App\Services\CartRecovery;
 use App\Services\Cashfree;
 use App\Services\Delhivery;
 use App\Services\Invoice;
+use App\Services\OrderEmails;
 use App\Services\Razorpay;
 use App\Services\Seo;
 use App\Services\Stock;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Mail;
 
 class CheckoutController extends Controller
 {
@@ -315,14 +314,7 @@ class CheckoutController extends Controller
         if (Delhivery::enabled() && setting('delhivery.auto')) {
             CreateShipment::dispatchAfterResponse($order->id);
         }
-        try {
-            Mail::to($order->email)->send(new OrderPlaced($order));
-            if ($admin = config('store.email')) {
-                Mail::to($admin)->send(new OrderPlaced($order, true));
-            }
-        } catch (\Throwable $e) {
-            Log::warning('Order mail failed: '.$e->getMessage());
-        }
+        app(OrderEmails::class)->placed($order);
     }
 
     /** The customer's own browser: empty the cart and remember the order so they can see its thank-you page. */

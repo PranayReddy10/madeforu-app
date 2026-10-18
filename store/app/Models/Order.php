@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\OrderEmails;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -21,6 +22,20 @@ class Order extends Model
         'returned' => 'Returned',
         'cancelled' => 'Cancelled',
     ];
+
+    protected static function booted(): void
+    {
+        // One place that notices every status change — admin, courier tracking or payment — and emails about it.
+        static::updated(function (Order $order) {
+            $emails = app(OrderEmails::class);
+            if ($order->wasChanged('status')) {
+                $emails->statusChanged($order, $order->getOriginal('status'), $order->status);
+            }
+            if ($order->wasChanged('payment_status') && $order->payment_status === 'refunded') {
+                $emails->refunded($order);
+            }
+        });
+    }
 
     public function items(): HasMany
     {

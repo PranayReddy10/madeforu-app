@@ -2,10 +2,14 @@
 
 namespace App\Models;
 
+use App\Mail\AdminAlert;
 use App\Services\ImageTools;
+use App\Services\OrderEmails;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 
 class Review extends Model
@@ -57,6 +61,22 @@ class Review extends Model
 
     protected static function booted(): void
     {
+        // Tell the shop a review is waiting to be approved.
+        static::created(function (Review $r) {
+            if ($r->is_approved || ! setting('notify.admin_reviews', true) || ! ($to = OrderEmails::adminAddresses())) {
+                return;
+            }
+            try {
+                Mail::to($to)->send(new AdminAlert(
+                    'New '.$r->rating.'★ review waiting: '.($r->product?->name ?? 'product'),
+                    [e($r->name).($r->is_verified ? ' (verified buyer)' : '').' wrote:', '<i>'.e(Str::limit((string) $r->body, 300) ?: '(no text)').'</i>'
+                        .($r->photos ? '<br>+ '.count($r->photos).' photo(s)' : '')],
+                    route('admin.reviews.index'), 'Approve or hide',
+                ));
+            } catch (\Throwable $e) {
+                Log::warning('Review alert failed: '.$e->getMessage());
+            }
+        });
         $refresh = function (Review $r) {
             $p = $r->product;
             if (! $p) {

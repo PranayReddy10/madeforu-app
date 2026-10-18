@@ -212,3 +212,20 @@ Hi {{1}}, you left {{2}} in your MadeForU cart 💝 Your photos are saved — fi
 - **Reviews with photos:** customers can add up to 3 photos to a review (resized, location data removed). Reviews from people who bought the product show **Verified buyer**. Customer photos appear in a strip above the reviews.
 - **Review requests:** a couple of days after an order is delivered, the customer gets "How was your gift?" by email (and WhatsApp when set up) with a link to review every item on one page. Settings → Reviews: days to wait, and whether verified 4★/5★ reviews publish straight away (otherwise approve them in Admin → Reviews).
 - Optional WhatsApp template **review_request** (Utility): `Hi {{1}}, how was your MadeForU order {{2}}? 💝 We'd love a quick review — photos of your gift are extra special: {{3}}`
+
+## Email notifications
+
+Emails go out through the mail account in `.env` (`MAIL_*`, e.g. a Hostinger mailbox `orders@madeforu.co.in`). Every email is logged on the order page under **Messages sent**, and each one goes only once per order.
+
+**To the customer**
+- Order confirmed — order summary, photos/text they chose, and the GST invoice PDF attached.
+- In production, Shipped (with the Delhivery tracking link), Delivered, Cancelled, Returned and Refunded — sent when the order status changes, whether you change it in admin or Delhivery tracking does.
+- Abandoned-cart reminders, review requests and password resets (see above).
+
+**To the shop** (to `NOTIFY_ADMIN_EMAILS`, comma separated, or the store email)
+- New order, with a link to the order in admin.
+- Delhivery could not book a shipment (with Delhivery's reason), and parcels coming back (RTO).
+- Low stock, and a new review waiting for approval.
+- Daily summary at 21:00: today's orders and revenue, what to make, parcels to hand over, unpaid orders and shipping problems. Run `php artisan store:daily-summary --force` to see one now.
+
+Turn any of them off, change the admin addresses or the summary time in **Admin → Settings → Email notifications**. Orders imported from WooCommerce never trigger emails. The daily summary needs the scheduler cron from the Hostinger section.

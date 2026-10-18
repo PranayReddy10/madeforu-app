@@ -47,6 +47,16 @@ return [
         'check_pincodes' => (bool) env('DELHIVERY_CHECK_PINCODES', true),
     ],
 
+    // Email notifications (each can be switched off in Admin → Settings)
+    'notify' => [
+        'admin_emails' => env('NOTIFY_ADMIN_EMAILS'),
+        'admin_new_order' => true, 'admin_reviews' => true, 'admin_shipping' => true, 'admin_low_stock' => true,
+        'admin_daily_summary' => (bool) env('NOTIFY_DAILY_SUMMARY', true),
+        'daily_summary_time' => env('NOTIFY_DAILY_SUMMARY_TIME', '21:00'),
+        'customer_in_production' => true, 'customer_shipped' => true, 'customer_delivered' => true,
+        'customer_cancelled' => true, 'customer_refunded' => true, 'customer_returned' => true,
+    ],
+
     // Reviews
     'reviews' => [
         'request_enabled' => (bool) env('REVIEW_REQUESTS', true),
