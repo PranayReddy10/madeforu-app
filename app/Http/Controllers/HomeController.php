@@ -23,7 +23,7 @@ class HomeController extends Controller
 
         return view('home', [
             'banners' => Banner::where('is_active', true)->orderBy('position')->get(),
-            'categories' => Category::active()->where('show_on_home', true)->whereNull('parent_id')->withCount('products')->orderBy('position')->orderBy('name')->get(),
+            'categories' => Category::active()->where('show_on_home', true)->whereNull('parent_id')->whereIn('id', Category::withShopProductsIds())->withShopCount()->orderBy('position')->orderBy('name')->get(),
             'featured' => Product::active()->with($with)->where('is_featured', true)->latest()->take(12)->get(),
             'bestsellers' => Product::active()->with($with)->orderByDesc('sales_count')->orderByDesc('views')->take(12)->get(),
             'newest' => Product::active()->with($with)->latest()->take(12)->get(),

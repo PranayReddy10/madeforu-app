@@ -18,9 +18,13 @@ class ShareStoreData
     public function handle(Request $request, Closure $next): Response
     {
         View::share('cartCount', $this->cart->count());
-        View::share('menuCategories', Cache::remember('menu.categories', 600, fn () => Category::active()
-            ->whereNull('parent_id')->with(['children' => fn ($q) => $q->active()])
-            ->orderBy('position')->orderBy('name')->get()));
+        View::share('menuCategories', Cache::remember('menu.categories', 600, function () {
+            $shown = Category::withShopProductsIds();
+
+            return Category::active()->whereNull('parent_id')->whereIn('id', $shown)
+                ->with(['children' => fn ($q) => $q->active()->whereIn('id', $shown)])
+                ->orderBy('position')->orderBy('name')->get();
+        }));
 
         // Footer/help links: the store's real CMS pages, whatever WordPress called them.
         View::share('footerPages', Cache::remember('menu.pages', 600, fn () => Page::where('is_active', true)
