@@ -18,6 +18,25 @@
         clearTimeout(toastTimer); toastTimer = setTimeout(function () { t.hidden = true; }, 3500);
     }
     function track(e) { if (window.mfuTrack) window.mfuTrack(e); }
+    /* "Added to cart" card: photo, short name, price, View cart / Checkout. Closes itself after a few seconds. */
+    var addedTimer;
+    function addedCard(a, count) {
+        if (!a) return;
+        var box = $('[data-added]');
+        if (!box) { box = document.createElement('div'); box.className = 'added-card'; box.setAttribute('data-added', ''); box.setAttribute('role', 'status'); document.body.appendChild(box); }
+        box.innerHTML = '<button type="button" class="ac-close" aria-label="Close">×</button>'
+            + '<p class="ac-title"><span class="ac-tick">✓</span> Added to cart</p>'
+            + '<div class="ac-item"><img alt="" width="56" height="56"><div><b class="ac-name"></b><small class="ac-meta"></small></div></div>'
+            + '<div class="ac-actions"><a class="btn ghost small" data-view>View cart (' + count + ')</a><a class="btn primary small" data-go>Checkout</a></div>';
+        $('img', box).src = a.image; $('.ac-name', box).textContent = a.name;
+        $('.ac-meta', box).textContent = 'Qty ' + a.qty + ' · ' + a.price;
+        $('[data-view]', box).href = a.cart; $('[data-go]', box).href = a.checkout;
+        $('.ac-close', box).addEventListener('click', function () { box.classList.remove('show'); });
+        requestAnimationFrame(function () { box.classList.add('show'); });
+        clearTimeout(addedTimer);
+        addedTimer = setTimeout(function () { box.classList.remove('show'); }, 6000);
+        box.onmouseenter = function () { clearTimeout(addedTimer); };
+    }
 
     /* Drawer: the page behind stays still (iOS ignores overflow:hidden on body, so pin it), the list scrolls inside */
     var lockY = 0;
@@ -374,7 +393,7 @@
                     btn.disabled = false;
                     if (!res.ok) { var errs = res.d.errors ? Object.values(res.d.errors).map(function (x) { return x[0]; }) : [res.d.message]; showError(errs.join(' ')); return; }
                     $$('[data-cart-count]').forEach(function (b) { b.textContent = res.d.count; b.hidden = false; });
-                    toast(esc(res.d.message) + ' <a href="/cart">View cart</a>');
+                    addedCard(res.d.added, res.d.count);
                     track(res.d.event);
                     $$('[data-upload]', form).forEach(function (u) { u.reset && u.reset(); });
                     blocksBox && (blocksBox.innerHTML = '');

@@ -73,7 +73,8 @@ class QuantityPersonalisationTest extends TestCase
     {
         [$photo, $name] = [$this->mug->customizationFields[0], $this->mug->customizationFields[1]];
         $this->postJson(route('cart.add', $this->mug), ['qty' => 3, 'custom_each' => 0, 'custom' => [$photo->id => [$this->photo()], $name->id => 'Team']])
-            ->assertOk()->assertJson(['count' => 3]);
+            ->assertOk()->assertJson(['count' => 3])
+            ->assertJsonPath('added.name', $this->mug->name)->assertJsonPath('added.qty', 3)->assertJsonPath('added.checkout', route('checkout'));
 
         $lines = app(Cart::class)->lines();
         $this->assertCount(1, $lines);
