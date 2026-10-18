@@ -116,7 +116,7 @@ You need a Business plan or higher, for SSH. Set the PHP version to **8.3** unde
    cp .env.example .env && nano .env      # database, mail, Razorpay, analytics
    php artisan key:generate
    php artisan migrate --force
-   php artisan storage:link
+   ln -s ../storage/app/public public/storage   # optional: Hostinger blocks `php artisan storage:link`, and the site serves /storage/ files without it
    php artisan store:admin you@madeforu.co.in
    php artisan store:import-woo https://madeforu.co.in --key=ck_… --secret=cs_… --customers   # while WP is still live
    php artisan optimize

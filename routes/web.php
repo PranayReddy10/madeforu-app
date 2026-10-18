@@ -16,6 +16,7 @@ use App\Http\Controllers\SitemapController;
 use App\Http\Controllers\UploadController;
 use App\Models\ProductImage;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Storage;
 
 /*
 | URLs mirror WooCommerce exactly so every link Google already knows keeps working:
@@ -99,6 +100,15 @@ Route::get('/wp-content/uploads/{path}', function (string $path) {
 
     return redirect($img->url(), 301);
 })->where('path', '.+');
+// Hostinger blocks PHP's symlink(), so `storage:link` can fail. Files the web server
+// can't find under /storage/ come here and are read straight from storage/app/public.
+Route::get('/storage/{path}', function (string $path) {
+    if (str_contains($path, '..') || ! Storage::disk('public')->exists($path)) {
+        return response('Not found', 404);
+    }
+
+    return response()->file(Storage::disk('public')->path($path), ['Cache-Control' => 'public, max-age=31536000']);
+})->where('path', '.+')->withoutMiddleware('web')->name('storage.fallback');
 Route::get('/manifest.webmanifest', [PageController::class, 'manifest'])->name('manifest');
 Route::get('/{key}.txt', [SitemapController::class, 'indexNowKey'])->where('key', '[a-f0-9]{32}');
 
