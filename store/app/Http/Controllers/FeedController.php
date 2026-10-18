@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Product;
+use App\Services\Parcel;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 
@@ -27,7 +28,7 @@ class FeedController extends Controller
                 'product_type' => $p->primaryCategory ? collect($p->primaryCategory->ancestors())->push($p->primaryCategory)->pluck('name')->implode(' > ') : null,
                 'google_category' => $p->google_category,
                 'gtin' => $p->gtin,
-                'shipping_weight' => $p->weight_kg,
+                'shipping_weight' => $p->weight_kg ? Parcel::itemGrams($p) / 1000 : null,
             ];
             if ($p->type === 'variable' && $p->variants->isNotEmpty()) {
                 foreach ($p->variants as $v) {

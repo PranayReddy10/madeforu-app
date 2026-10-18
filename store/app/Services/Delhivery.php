@@ -133,27 +133,50 @@ class Delhivery
      */
     public function rate(string $pin, int $chargeableGrams, bool $cod = false, float $codAmount = 0): ?float
     {
+        $q = $this->rateQuery($pin, $chargeableGrams, $cod, $codAmount);
+        if (! $q) {
+            return null;
+        }
+        $key = 'delhivery.rate.'.implode('.', [$q['md'], $q['o_pin'], $q['d_pin'], $q['cgm'], $cod ? 'cod'.(int) ceil($codAmount / 100) : 'pp']);
+
+        return Cache::remember($key, 12 * 3600, fn () => $this->rateDetails($pin, $chargeableGrams, $cod, $codAmount)['total']);
+    }
+
+    /**
+     * The rate call itself, uncached, with what was sent and what came back (for the admin tester).
+     *
+     * @return array{total: ?float, sent: ?array, status: ?int, body: mixed, error: ?string}
+     */
+    public function rateDetails(string $pin, int $chargeableGrams, bool $cod = false, float $codAmount = 0): array
+    {
+        $q = $this->rateQuery($pin, $chargeableGrams, $cod, $codAmount);
+        if (! $q) {
+            return ['total' => null, 'sent' => null, 'status' => null, 'body' => null,
+                'error' => self::enabled() ? 'Set a valid Pickup PIN code in Settings → Delhivery shipping, and enter a 6-digit PIN.' : 'Delhivery is not switched on.'];
+        }
+        try {
+            $res = $this->http()->get($this->base().'/api/kinko/v1/invoice/charges/.json', $q);
+        } catch (\Throwable $e) {
+            return ['total' => null, 'sent' => $q, 'status' => null, 'body' => null, 'error' => $e->getMessage()];
+        }
+        $total = $res->successful() ? ($res->json('0.total_amount') ?? $res->json('total_amount')) : null;
+
+        return ['total' => is_numeric($total) && $total > 0 ? round((float) $total, 2) : null, 'sent' => $q,
+            'status' => $res->status(), 'body' => $res->json() ?? $res->body(), 'error' => null];
+    }
+
+    private function rateQuery(string $pin, int $chargeableGrams, bool $cod, float $codAmount): ?array
+    {
         $from = preg_replace('/\D/', '', (string) setting('delhivery.pickup_pincode'));
         if (! self::enabled() || ! preg_match('/^[1-9]\d{5}$/', $pin) || ! preg_match('/^[1-9]\d{5}$/', $from)) {
             return null;
         }
-        $mode = setting('delhivery.shipping_mode') === 'Express' ? 'E' : 'S';
-        $slab = (int) (ceil(max(1, $chargeableGrams) / 50) * 50);   // the API is per gram; 50 g steps keep the cache useful
-        $key = 'delhivery.rate.'.implode('.', [$mode, $from, $pin, $slab, $cod ? 'cod'.(int) ceil($codAmount / 100) : 'pp']);
 
-        return Cache::remember($key, 12 * 3600, function () use ($mode, $from, $pin, $slab, $cod, $codAmount) {
-            try {
-                $res = $this->http()->get($this->base().'/api/kinko/v1/invoice/charges/.json', [
-                    'md' => $mode, 'ss' => 'Delivered', 'o_pin' => $from, 'd_pin' => $pin, 'cgm' => $slab,
-                    'pt' => $cod ? 'COD' : 'Pre-paid', 'cod' => $cod ? round($codAmount, 2) : 0,
-                ]);
-            } catch (\Throwable) {
-                return null;
-            }
-            $total = $res->successful() ? ($res->json('0.total_amount') ?? $res->json('total_amount')) : null;
-
-            return is_numeric($total) && $total > 0 ? round((float) $total, 2) : null;
-        });
+        return [
+            'md' => setting('delhivery.shipping_mode') === 'Express' ? 'E' : 'S', 'ss' => 'Delivered', 'o_pin' => $from, 'd_pin' => $pin,
+            'cgm' => (int) (ceil(max(1, $chargeableGrams) / 50) * 50),   // grams; 50 g steps keep the cache useful
+            'pt' => $cod ? 'COD' : 'Pre-paid', 'cod' => $cod ? round($codAmount, 2) : 0,
+        ];
     }
 
     /** Create the shipment in Delhivery and return the AWB (waybill). */

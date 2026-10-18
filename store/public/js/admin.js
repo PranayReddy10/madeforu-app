@@ -553,3 +553,29 @@ document.addEventListener('click', function (e) {
         update();
     });
 })();
+
+/* Product form: test the live Delhivery charge for this product */
+document.querySelectorAll('[data-rate-test]').forEach(function (box) {
+    const out = box.querySelector('[data-rate-out]');
+    const rupees = function (v) { return v == null ? '—' : '₹' + Number(v).toFixed(2); };
+    const kg = function (g) { return g + ' g'; };
+    box.querySelector('[data-rate-go]').addEventListener('click', function () {
+        const pin = box.querySelector('[data-rate-pin]').value.replace(/\D/g, ''), qty = box.querySelector('[data-rate-qty]').value || 1;
+        if (pin.length !== 6) { out.textContent = 'Enter a 6-digit PIN.'; return; }
+        out.textContent = 'Asking Delhivery…';
+        fetch(box.dataset.rateTest + '?pin=' + pin + '&qty=' + qty, { headers: { Accept: 'application/json' } }).then(function (r) { return r.json(); }).then(function (d) {
+            const p = d.parcel, lines = [];
+            lines.push('Parcel: actual ' + kg(p.actual_g) + (p.size_cm ? ', size ' + p.size_cm.join(' × ') + ' cm = volumetric ' + kg(p.volumetric_g) : ', no size set') + ' → billed as ' + kg(p.chargeable_g) + ' (' + p.packaging + ')');
+            if (d.prepaid.error) lines.push('Delhivery: ' + d.prepaid.error);
+            else lines.push('Delhivery prepaid ' + rupees(d.prepaid.total) + ' · COD ' + rupees(d.cod.total) + ' (HTTP ' + d.prepaid.status + ')');
+            if (d.customer_pays) lines.push('Customer pays: shipping ' + rupees(d.customer_pays.shipping) + (d.customer_pays.cod_charge != null ? ', COD charge ' + rupees(d.customer_pays.cod_charge) : ''));
+            out.innerHTML = '';
+            lines.forEach(function (t) { const div = document.createElement('div'); div.textContent = t; out.appendChild(div); });
+            const det = document.createElement('details'), pre = document.createElement('pre');
+            det.innerHTML = '<summary>What was sent and Delhivery’s full reply</summary>';
+            pre.style.cssText = 'white-space:pre-wrap;max-height:240px;overflow:auto;font-size:11px';
+            pre.textContent = JSON.stringify({ sent: d.prepaid.sent, reply: d.prepaid.body }, null, 2);
+            det.appendChild(pre); out.appendChild(det);
+        }).catch(function () { out.textContent = 'Could not reach the store. Try again.'; });
+    });
+});

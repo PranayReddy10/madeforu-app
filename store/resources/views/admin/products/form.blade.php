@@ -55,7 +55,7 @@
             <div class="row3">
                 <label>Regular price (₹) <input type="number" step="0.01" min="0" name="price" id="f-price" value="{{ old('price', $product->price) }}" required></label>
                 <label>Sale price (₹) <input type="number" step="0.01" min="0" name="sale_price" value="{{ old('sale_price', $product->sale_price) }}"></label>
-                <label>Weight (kg) <input type="number" step="0.001" min="0" name="weight_kg" value="{{ old('weight_kg', $product->weight_kg) }}"></label>
+                <label>Weight (grams) <small class="muted">packed, e.g. 350</small> <input type="number" step="1" min="0" max="30000" name="weight_g" value="{{ old('weight_g', $product->weight_kg ? (int) round(\App\Services\Parcel::itemGrams($product)) : '') }}"></label>
             </div>
             <h3>Packed size <small class="muted">— used for live Delhivery delivery charges and sent with every shipment</small></h3>
             <div class="row4">
@@ -70,6 +70,17 @@
                     </select>
                 </label>
             </div>
+            @if($product->exists)
+            <div class="rate-test" data-rate-test="{{ route('admin.products.rate', $product) }}">
+                <b>Test the delivery charge</b> <small class="muted">— save first, then check what Delhivery charges for this product</small>
+                <div class="row-inline">
+                    <input type="text" inputmode="numeric" maxlength="6" placeholder="Customer PIN" data-rate-pin>
+                    <input type="number" min="1" max="20" value="1" style="width:70px" title="Quantity" data-rate-qty>
+                    <button type="button" class="btn small" data-rate-go>Check</button>
+                </div>
+                <div class="muted small" data-rate-out></div>
+            </div>
+            @endif
             <label>Short description <textarea name="short_description" rows="3">{{ old('short_description', $product->short_description) }}</textarea></label>
             <label>Description (HTML allowed) <textarea name="description" id="f-description" rows="10">{{ old('description', $product->description) }}</textarea></label>
         </section>
