@@ -1075,3 +1075,13 @@ body > .site-header, body > .site-footer, body > .announce { flex: none; }
     .toolbar .price-filter input { flex: 1 1 0; width: 0; min-width: 0; }
     .toolbar .price-filter .btn { flex: none; }
 }
+
+/* Header actions on laptops: Track order, account and cart on one centre line, same height */
+@media (min-width: 960px) {
+    .header-actions { gap: 4px; }
+    .header-actions .icon-btn.hide-mobile { display: inline-grid !important; }
+    .header-actions > .hdr-link { display: inline-flex !important; align-items: center; gap: 6px; height: 42px; padding: 0 12px; border-radius: 12px; font-weight: 600; font-size: 14px; line-height: 1; }
+    .header-actions > .hdr-link svg { width: 20px; height: 20px; }
+    .header-actions > .hdr-link:hover, .header-actions .icon-btn:hover { background: var(--rose-l); color: var(--rose-d); }
+    .header-actions .icon-btn svg { display: block; }
+}

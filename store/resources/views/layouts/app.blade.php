@@ -69,7 +69,7 @@
             <a href="{{ route('search') }}" class="icon-btn only-mobile" aria-label="Search">
                 <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
             </a>
-            <a href="{{ route('track') }}" class="hide-mobile">Track order</a>
+            <a href="{{ route('track') }}" class="hdr-link hide-mobile"><svg viewBox="0 0 24 24"><path d="M3 7h11v9H3zM14 10h4l3 3v3h-7z"/><circle cx="7" cy="17.5" r="1.8"/><circle cx="17" cy="17.5" r="1.8"/></svg><span>Track order</span></a>
             <a href="{{ route('account') }}" class="icon-btn hide-mobile" aria-label="My account">
                 <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>
             </a>
