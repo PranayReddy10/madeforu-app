@@ -118,4 +118,52 @@ class WooImporterTest extends TestCase
         $this->assertEquals(299, $p->variants->firstWhere('sku', 'MUG-W')->currentPrice());
         $this->assertFalse($p->variants->firstWhere('sku', 'MUG-B')->in_stock);
     }
+
+    public function test_rest_api_keys_import_drafts_hidden(): void
+    {
+        $site = 'https://shop.test';
+        Http::fake([
+            "$site/wp-json/wc/v3/products/categories*" => Http::response([
+                ['id' => 10, 'name' => 'Mugs', 'slug' => 'mugs', 'parent' => 0, 'description' => '', 'image' => null, 'count' => 2],
+            ]),
+            "$site/wp-json/wc/v3/products/7/variations*" => Http::response([
+                ['id' => 71, 'sku' => 'M-11', 'price' => '299', 'regular_price' => '349', 'sale_price' => '299', 'status' => 'publish', 'stock_status' => 'instock', 'image' => null, 'attributes' => [['name' => 'Size', 'option' => '11 oz']]],
+                ['id' => 72, 'sku' => '', 'price' => '', 'regular_price' => '', 'sale_price' => '', 'status' => 'publish', 'stock_status' => 'instock', 'image' => null, 'attributes' => [['name' => 'Size', 'option' => '']]],
+            ]),
+            "$site/wp-json/wc/v3/products/reviews*" => Http::response([]),
+            "$site/wp-json/wc/v3/products*" => Http::response([
+                ['id' => 5, 'name' => 'Photo Mug', 'slug' => 'photo-mug', 'status' => 'publish', 'type' => 'simple', 'sku' => 'MUG', 'permalink' => "$site/product/photo-mug/",
+                    'price' => '249', 'regular_price' => '299', 'sale_price' => '249', 'stock_status' => 'instock', 'images' => [], 'categories' => [['id' => 10]], 'tags' => [], 'attributes' => [],
+                    'meta_data' => [['key' => '_yoast_wpseo_title', 'value' => 'Photo Mug | MadeForU'], ['key' => '_yoast_wpseo_metadesc', 'value' => '%%excerpt%%']]],
+                ['id' => 6, 'name' => 'Photo Mug', 'slug' => '', 'status' => 'draft', 'type' => 'simple', 'sku' => '', 'permalink' => "$site/?post_type=product&p=6",
+                    'price' => '199', 'regular_price' => '199', 'sale_price' => '', 'stock_status' => 'instock', 'images' => [], 'categories' => [['id' => 10]], 'tags' => [], 'attributes' => []],
+                ['id' => 7, 'name' => 'Big Mug', 'slug' => 'big-mug', 'status' => 'private', 'type' => 'variable', 'sku' => '', 'permalink' => "$site/product/big-mug/",
+                    'price' => '299', 'regular_price' => '', 'sale_price' => '', 'stock_status' => 'instock', 'images' => [], 'categories' => [['id' => 10]], 'tags' => [],
+                    'attributes' => [['name' => 'Size', 'variation' => true, 'options' => ['11 oz']]]],
+                ['id' => 8, 'name' => 'Old', 'slug' => 'old', 'status' => 'trash', 'type' => 'simple', 'price' => '1', 'images' => [], 'categories' => [], 'attributes' => []],
+            ]),
+        ]);
+
+        $stats = (new WooImporter($site, 'ck_test', 'cs_test'))->run(withPages: false);
+
+        $this->assertSame(3, $stats['products']);
+        Http::assertSent(fn ($r) => str_contains($r->url(), '/wc/v3/products') && $r->hasHeader('Authorization'));
+        $published = Product::where('woo_id', 5)->first();
+        $this->assertTrue($published->is_active);
+        $this->assertSame('Photo Mug | MadeForU', $published->meta_title);
+        $this->assertNull($published->meta_description);   // Yoast template variables are not copied
+        $this->assertEquals(249, (float) $published->sale_price);
+
+        $draft = Product::where('woo_id', 6)->first();
+        $this->assertFalse($draft->is_active);
+        $this->assertSame('photo-mug-2', $draft->slug);
+        $this->get('/product/photo-mug-2/')->assertNotFound();
+
+        $big = Product::where('woo_id', 7)->with('variants')->first();
+        $this->assertFalse($big->is_active);
+        $this->assertCount(1, $big->variants);               // the empty "any" variation is skipped
+        $this->assertSame(['Size' => '11 oz'], $big->variants[0]->options);
+        $this->assertEquals(299, $big->variants[0]->currentPrice());
+        $this->assertNull(Product::where('woo_id', 8)->first());
+    }
 }

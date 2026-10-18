@@ -10,6 +10,8 @@ class ImportWoo extends Command
 {
     protected $signature = 'store:import-woo
         {url? : WooCommerce site, default WOO_URL from .env}
+        {--key= : WooCommerce REST API consumer key (ck_...). With key + secret, drafts are imported too (hidden)}
+        {--secret= : WooCommerce REST API consumer secret (cs_...)}
         {--csv= : Import a WooCommerce product export CSV instead of calling the site}
         {--no-images : Keep image URLs pointing at the old site instead of downloading them}
         {--no-upload-fields : Do not add the default "upload your photo" field to new products}
@@ -20,7 +22,10 @@ class ImportWoo extends Command
 
     public function handle(): int
     {
-        $importer = new WooImporter($this->argument('url'));
+        $importer = new WooImporter($this->argument('url'), $this->option('key'), $this->option('secret'));
+        $this->line($importer->usesApiKeys()
+            ? 'Using WooCommerce REST API keys: published, draft and private products.'
+            : 'No API keys: public Store API, published products only. Pass --key/--secret (or WOO_CONSUMER_KEY/SECRET) to include drafts.');
         $importer->downloadImages = ! $this->option('no-images');
         $importer->addUploadFields = ! $this->option('no-upload-fields');
         $importer->log = fn ($m) => $this->line($m);
