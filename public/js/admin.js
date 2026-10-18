@@ -536,3 +536,20 @@ document.addEventListener('click', function (e) {
     var rm = e.target.closest('[data-choice-remove]');
     if (rm) rm.closest('[data-choice-row]').remove();
 });
+
+/* Orders list: tick orders, then act on them together */
+(function () {
+    var form = document.querySelector('[data-bulk]');
+    if (!form) return;
+    var bar = form.querySelector('[data-bulk-bar]'), count = form.querySelector('[data-bulk-count]'), all = form.querySelector('[data-check-all]');
+    function update() {
+        var n = form.querySelectorAll('[data-check]:checked').length;
+        bar.hidden = n === 0; count.textContent = n + ' selected';
+        form.querySelectorAll('[data-check]').forEach(function (c) { c.closest('.ol-row').classList.toggle('picked', c.checked); });
+        if (all) all.checked = n > 0 && n === form.querySelectorAll('[data-check]').length;
+    }
+    form.addEventListener('change', function (e) {
+        if (e.target === all) form.querySelectorAll('[data-check]').forEach(function (c) { c.checked = all.checked; });
+        update();
+    });
+})();

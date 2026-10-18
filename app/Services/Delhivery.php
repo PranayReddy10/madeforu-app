@@ -20,6 +20,53 @@ class Delhivery
         return (bool) setting('delhivery.enabled') && (bool) setting('delhivery.token');
     }
 
+    /** The pickup location (warehouse) name exactly as registered with Delhivery. */
+    public static function pickupName(): string
+    {
+        return trim((string) setting('delhivery.pickup_location'));
+    }
+
+    /** Delhivery's own wording, plus what to do about the errors shop owners actually meet. */
+    public static function explain(string $why): string
+    {
+        $name = self::pickupName();
+        if (stripos($why, 'ClientWarehouse') !== false || (stripos($why, 'warehouse') !== false && stripos($why, 'does not exist') !== false)) {
+            return 'the pickup location “'.($name ?: 'not set').'” is not a warehouse in your Delhivery account. '
+                .'The name must match exactly (capital letters and spaces too): copy it from Delhivery One → Settings → Pickup locations into '
+                .'Admin → Settings → Delhivery shipping, or register your address from Admin → Orders → Delhivery. (Delhivery said: '.$why.')';
+        }
+        if (stripos($why, 'Unauthorized') !== false || stripos($why, 'token') !== false && stripos($why, 'invalid') !== false) {
+            return 'the API token was refused. Check it in Admin → Settings → Delhivery shipping, and that Mode (Live/Test) matches the token. (Delhivery said: '.$why.')';
+        }
+        if (stripos($why, 'non serviceable') !== false || stripos($why, 'pincode') !== false) {
+            return 'Delhivery does not deliver to this PIN code (or it is mistyped). (Delhivery said: '.$why.')';
+        }
+
+        return $why;
+    }
+
+    /**
+     * Register the shop's pickup address as a Delhivery warehouse ("client warehouse").
+     *
+     * @param  array{name: string, phone: string, email?: string, address: string, city: string, state: string, pin: string}  $w
+     */
+    public function createWarehouse(array $w): void
+    {
+        $res = $this->http()->asJson()->post($this->base().'/api/backend/clientwarehouse/create/', [
+            'name' => $w['name'], 'registered_name' => $w['name'], 'phone' => $w['phone'], 'email' => $w['email'] ?? config('store.email'),
+            'address' => $w['address'], 'city' => $w['city'], 'pin' => $w['pin'], 'country' => 'India',
+            'return_address' => $w['address'], 'return_city' => $w['city'], 'return_pin' => $w['pin'], 'return_state' => $w['state'], 'return_country' => 'India',
+        ]);
+        $body = (string) $res->body();
+        // Already registered under this name is fine: we just use it.
+        if (stripos($body, 'already exists') !== false) {
+            return;
+        }
+        if (! $res->successful() || $res->json('success') === false) {
+            throw new RuntimeException('Delhivery could not register the pickup address: '.Str::limit((string) ($res->json('error') ?: $res->json('message') ?: $body), 300));
+        }
+    }
+
     private function base(): string
     {
         return setting('delhivery.mode') === 'staging' ? 'https://staging-express.delhivery.com' : 'https://track.delhivery.com';
@@ -91,7 +138,7 @@ class Delhivery
             'waybill' => '',
             'order_date' => $order->created_at->toDateTimeString(),
         ];
-        $payload = ['shipments' => [$shipment], 'pickup_location' => ['name' => (string) setting('delhivery.pickup_location')]];
+        $payload = ['shipments' => [$shipment], 'pickup_location' => ['name' => self::pickupName()]];
 
         // Delhivery wants form fields: format=json&data=<json>
         $res = $this->http()->asForm()->post($this->base().'/api/cmu/create.json', [
@@ -101,7 +148,7 @@ class Delhivery
         $pkg = $res->json('packages.0');
         if (! $res->successful() || ! $pkg || strtolower((string) ($pkg['status'] ?? '')) !== 'success' || empty($pkg['waybill'])) {
             $why = collect((array) ($pkg['remarks'] ?? []))->filter()->implode(' ') ?: ($res->json('rmk') ?: Str::limit($res->body(), 300));
-            throw new RuntimeException('Delhivery did not accept the shipment: '.$why);
+            throw new RuntimeException('Delhivery did not accept the shipment: '.self::explain($why));
         }
 
         return (string) $pkg['waybill'];
@@ -159,13 +206,13 @@ class Delhivery
     public function requestPickup(string $date, string $time, int $count): array
     {
         $res = $this->http()->asJson()->post($this->base().'/fm/request/new/', [
-            'pickup_location' => (string) setting('delhivery.pickup_location'),
+            'pickup_location' => self::pickupName(),
             'pickup_date' => $date,
             'pickup_time' => $time,
             'expected_package_count' => max(1, $count),
         ]);
         if (! $res->successful()) {
-            throw new RuntimeException('Delhivery pickup request failed: '.Str::limit($res->body(), 300));
+            throw new RuntimeException('Delhivery pickup request failed: '.self::explain(Str::limit($res->body(), 300)));
         }
 
         return $res->json() ?? [];
