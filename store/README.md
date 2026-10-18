@@ -239,3 +239,15 @@ Turn any of them off, change the admin addresses or the summary time in **Admin 
 - **About, Contact and policy pages** each have their own layout. Change the text in Admin → Pages (the *Layout* and *Intro* fields set the design and the line under the title). Your phone, WhatsApp, email, address, hours and Instagram come from **Admin → Settings → Store details** and appear on every page.
 - **Contact form** messages are saved in **Admin → Messages** and emailed to the shop (reply to the email to answer the customer).
 - **Home page:** slider, categories, bestsellers, "Gifts for every budget", a row for each of your biggest categories, offers (products with a sale price), how it works, custom-order banner, reviews, new arrivals, FAQs (with Google FAQ markup). Mark products as *Featured* in admin for "Handpicked for you"; add a sale price to show a product under Offers.
+
+## Analytics, Google and Instagram
+
+**Admin → Analytics** (summary on the Dashboard):
+- **The shop's own numbers, no setup:** visitors, page views, orders, revenue and conversion rate, each compared with the previous period. Also visitors and orders per day, the shopping funnel (visit → product → cart → checkout → order), where visitors come from (Google, Instagram, WhatsApp, Facebook, Direct… with orders and revenue per source), phone vs computer, products from views to carts to sales, top pages and what people search for. Bots and logged-in admins aren't counted, and no IP addresses are stored. Add `?utm_source=instagram` to links you share to see which posts bring orders.
+- **Google Analytics 4 and Search Console:** in Google Cloud, create a service account and download its JSON key. Enable *Google Analytics Data API* and *Google Search Console API*. Add the service account email as a Viewer in GA4, and as a user with *Full* permission in Search Console. Then paste the key, the GA4 property ID and the Search Console property in **Settings → Google Analytics & Search Console reports**. The page then shows users, sessions, channels, cities, the searches that find you, clicks, position and sitemap status, plus a **Submit sitemap** button.
+- **Google index:** every night `store:index-check` asks Google whether each product, category and page is indexed, and lists the pages that aren't (with Google's reason).
+- **Meta / Google Shopping:** shows whether the Meta Pixel and GA tag are on, and when Meta (catalog feed) and Google Merchant Center last downloaded your product feeds.
+
+**Instagram on the home page:** the "Follow us on Instagram" section links to your account. To show your latest posts, create an Instagram access token (Meta developers → your app → Instagram API with Instagram login → Generate token) and paste it in **Settings → Instagram on the home page**. It renews itself every week.
+
+**Coupons** are imported from WooCommerce with customers and orders (Admin → Import, or `--customers`).

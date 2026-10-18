@@ -135,6 +135,8 @@
     </div>
 </section>
 
+@include('partials.instagram', ['fallback' => $bestsellers])
+
 <section class="section">
     <div class="wrap narrow">
         <div class="center"><span class="eyebrow">Good to know</span><h2>Questions, answered</h2></div>

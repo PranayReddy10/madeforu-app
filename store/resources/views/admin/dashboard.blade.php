@@ -7,6 +7,15 @@
     @endforeach
 </div>
 
+<a class="card traffic-strip" href="{{ route('admin.analytics') }}">
+    <span><b>{{ number_format($traffic['visitors']) }}</b> visitors this week</span>
+    <span><b>{{ number_format($traffic['product_viewers']) }}</b> looked at products</span>
+    <span><b>{{ number_format($traffic['carts']) }}</b> added to cart</span>
+    <span><b>{{ number_format($traffic['conversion'], 1) }}%</b> ordered</span>
+    @if ($topSource)<span>Top source <b>{{ $topSource->source }}</b></span>@endif
+    <span class="go">Full analytics, Google &amp; Instagram →</span>
+</a>
+
 <div class="card">
     <h2>Orders by status</h2>
     <div class="chips">

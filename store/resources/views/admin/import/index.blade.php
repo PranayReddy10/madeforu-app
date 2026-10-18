@@ -38,7 +38,7 @@
         <input type="text" name="key" value="" placeholder="ck_…" autocomplete="off"></label>
     <label>Consumer secret<input type="password" name="secret" value="" placeholder="cs_…" autocomplete="new-password"></label>
     <input type="hidden" name="customers" value="0">
-    <label class="check"><input type="checkbox" name="customers" value="1" checked> Also import customers and past orders (with their photos)</label>
+    <label class="check"><input type="checkbox" name="customers" value="1" checked> Also import customers, past orders (with their photos) and coupons</label>
     <input type="hidden" name="images" value="0">
     <label class="check"><input type="checkbox" name="images" value="1" checked> Copy images (images already on the DigitalOcean Spaces CDN keep their URL)</label>
     <p class="muted small">The keys are used for this one run and then deleted. Afterwards you can revoke the key in WooCommerce.</p>

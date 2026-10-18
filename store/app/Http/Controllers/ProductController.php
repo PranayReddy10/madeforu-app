@@ -17,6 +17,7 @@ class ProductController extends Controller
             ->with(['images', 'variants', 'productAttributes', 'customizationFields', 'primaryCategory.parent', 'reviews', 'categories'])
             ->firstOrFail();
         Product::whereKey($product->id)->increment('views');
+        request()->attributes->set('visit_product', $product->id);
 
         $seo->forProduct($product);
         $analytics->viewItem($product);

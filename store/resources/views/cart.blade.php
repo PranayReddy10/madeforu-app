@@ -31,6 +31,21 @@
         </form>
 
         <aside class="summary">
+            @guest
+                <div class="account-nudge">
+                    <b>@include('partials.icon', ['i' => 'gift']) Create a free account</b>
+                    <ul>
+                        <li>@include('partials.icon', ['i' => 'check']) Track every order in one place</li>
+                        <li>@include('partials.icon', ['i' => 'check']) Faster checkout — address saved</li>
+                        <li>@include('partials.icon', ['i' => 'check']) Reorder your gifts &amp; get member offers</li>
+                    </ul>
+                    <div class="an-actions">
+                        <a class="btn primary small" href="{{ route('register', ['next' => 'cart']) }}">Create account</a>
+                        <a class="btn ghost small" href="{{ route('login', ['next' => 'cart']) }}">Log in</a>
+                    </div>
+                    <small class="muted">Your cart and photos stay saved.</small>
+                </div>
+            @endguest
             @if($totals['free_shipping_gap'] > 0)
                 <div class="ship-meter"><p>Add <b>{{ money($totals['free_shipping_gap']) }}</b> more for free shipping</p><span style="--p: {{ min(100, round(100 * ($totals['subtotal'] - $totals['discount']) / max(1, setting('free_shipping_over')))) }}%"></span></div>
             @elseif($totals['shipping'] == 0)

@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Product;
+use App\Models\User;
 use App\Services\Cart;
 use App\Support\Personalisation;
 use Database\Seeders\DemoSeeder;
@@ -94,7 +95,7 @@ class QuantityPersonalisationTest extends TestCase
         $this->get('/checkout')->assertOk()->assertSee('line-photos compact', false);
 
         // Logging in changes the session; the photos must still load.
-        $this->actingAs(\App\Models\User::factory()->create());
+        $this->actingAs(User::factory()->create());
         $this->get(html_entity_decode($m[1][0]))->assertOk();
     }
 }

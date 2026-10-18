@@ -8,6 +8,7 @@ use App\Services\Analytics;
 use App\Services\Cart;
 use App\Services\CartRecovery;
 use App\Services\Seo;
+use App\Services\Visits;
 use Illuminate\Http\Request;
 
 class CartController extends Controller
@@ -46,6 +47,7 @@ class CartController extends Controller
         }
 
         $line = $this->cart->lines()->last();
+        Visits::record($request, 'cart', ['product_id' => $product->id, 'value' => $line ? $line->unit * $qty : null]);
         if ($request->expectsJson()) {
             return response()->json([
                 'count' => $this->cart->count(),
