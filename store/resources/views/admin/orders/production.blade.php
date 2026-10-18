@@ -22,7 +22,7 @@
     .text { font-size: 22px; font-weight: 700; padding: 8px 12px; background: #fff5f8; border-left: 4px solid #f04577; border-radius: 6px; margin-top: 4px; white-space: pre-wrap; }
     .warn { color: #8a5a00; font-weight: 700; }
     .tick { display: inline-block; width: 18px; height: 18px; border: 2px solid #1c2844; border-radius: 4px; vertical-align: middle; margin-right: 6px; }
-    .no-print { margin-bottom: 16px; }
+    .no-print { margin-bottom: 16px; display: flex; flex-wrap: wrap; gap: 8px; }
     .btn { background: #f04577; color: #fff; border: 0; border-radius: 8px; padding: 10px 16px; font-weight: 700; cursor: pointer; text-decoration: none; font-size: 14px; }
     .btn.ghost { background: #fff; color: #1c2844; border: 1px solid #ccc; }
     @media print { .no-print { display: none; } body { padding: 0; } a { color: inherit; text-decoration: none; } }
