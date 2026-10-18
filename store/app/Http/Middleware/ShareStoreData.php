@@ -13,11 +13,20 @@ use Symfony\Component\HttpFoundation\Response;
 
 class ShareStoreData
 {
-    public function __construct(private Cart $cart) {}
-
     public function handle(Request $request, Closure $next): Response
     {
-        View::share('cartCount', $this->cart->count());
+        self::share();
+
+        return $next($request);
+    }
+
+    /**
+     * Cart count, menu and footer links for the shop layout. Also called by the layout itself
+     * (AppServiceProvider) when no web route ran, e.g. the 404 page for /wp-login.php.
+     */
+    public static function share(): void
+    {
+        View::share('cartCount', app(Cart::class)->count());
         View::share('menuCategories', Cache::remember('menu.categories', 600, function () {
             $shown = Category::withShopProductsIds();
 
@@ -30,7 +39,5 @@ class ShareStoreData
         View::share('footerPages', Cache::remember('menu.pages', 600, fn () => Page::where('is_active', true)
             ->whereNotIn('slug', ['legal'])->orderByRaw("slug like 'legal/%'")->orderBy('title')->get(['title', 'slug'])
             ->map(fn ($p) => ['title' => $p->title, 'url' => $p->url()])->all()));
-
-        return $next($request);
     }
 }
