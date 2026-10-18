@@ -106,14 +106,15 @@ class LiveShippingTest extends TestCase
         $this->assertStringContainsString('estimate', $q->json('online.html'));
     }
 
-    public function test_product_page_pin_check_shows_the_delivery_charge(): void
+    public function test_product_page_pin_check_shows_the_date_but_no_delivery_charge(): void
     {
         Http::fake(['track.delhivery.com/c/api/pin-codes/*' => Http::response(['delivery_codes' => [['postal_code' => ['pin' => 500001, 'district' => 'Hyderabad', 'pre_paid' => 'Y', 'cod' => 'Y']]]])]);
         Setting::put(['cod_enabled' => '1']);
         $mug = $this->mug();
-        $r = $this->getJson(route('delivery.check', ['pin' => '500001', 'item' => $mug->id]))->assertOk()->assertJson(['ok' => true, 'charge' => 75]);
-        $this->assertStringContainsString('Delivery charge ₹75 (+₹35 for cash on delivery)', $r->json('message'));
-        $this->get('/product/'.$mug->slug.'/')->assertSee('item='.$mug->id, false);
+        $r = $this->getJson(route('delivery.check', ['pin' => '500001', 'days' => 3]))->assertOk()->assertJson(['ok' => true])->assertJsonMissingPath('charge');
+        $by = now()->addWeekdays(3)->addDays(6)->format('D, j M');
+        $this->assertSame("Delivery to 500001 (Hyderabad) by {$by} · Cash on delivery available", $r->json('message'));
+        Http::assertNotSent(fn ($req) => str_contains($req->url(), 'kinko'));
     }
 
     public function test_admin_saves_packed_size_and_product_page_shows_it(): void
