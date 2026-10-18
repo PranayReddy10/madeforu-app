@@ -190,7 +190,11 @@ class ProductController extends Controller
             }],
             'fields' => 'nullable|array',
             'fields.*.id' => 'nullable|integer',
-            'fields.*.type' => 'nullable|in:images,text,textarea,select,color,date',
+            'fields.*.type' => 'nullable|in:images,text,textarea,select,choice,color,date',
+            'fields.*.choices' => 'nullable|array|max:30',
+            'fields.*.choices.*.label' => 'nullable|string|max:60',
+            'fields.*.choices.*.price' => 'nullable|numeric|min:0',
+            'fields.*.choices.*.image' => 'nullable|string|max:500',
             'fields.*.label' => 'nullable|string|max:255',
             'fields.*.help' => 'nullable|string|max:255',
             'fields.*.min_files' => 'nullable|integer|min:0|max:50',
@@ -326,6 +330,15 @@ class ProductController extends Controller
 
                             return ['label' => trim($l), 'price' => (float) $p];
                         })->values()->all();
+                }
+                if ($f['type'] === 'choice') {
+                    $options = collect($f['choices'] ?? [])->filter(fn ($c) => trim((string) ($c['label'] ?? '')) !== '')
+                        ->map(fn ($c) => ['label' => trim($c['label']), 'price' => (float) ($c['price'] ?? 0), 'image' => ($c['image'] ?? '') ?: null])->values()->all();
+                    foreach ($options as $o) {
+                        if ($o['image']) {
+                            Media::register($o['image'], 'options');
+                        }
+                    }
                 }
                 $min = (int) ($f['min_files'] ?? 1);
                 $max = max($min, (int) ($f['max_files'] ?? 1));

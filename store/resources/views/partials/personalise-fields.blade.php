@@ -31,6 +31,19 @@
                     <option value="{{ $o['label'] }}" data-price="{{ (float) ($o['price'] ?? 0) }}">{{ $o['label'] }}@if(!empty($o['price']) && $o['price'] > 0) (+{{ money($o['price']) }})@endif</option>
                 @endforeach
             </select>
+        @elseif($f->type === 'choice')
+            <span class="lbl-like">{{ $f->label }} @if($f->required)<em>*</em>@endif <b class="choice-picked" data-choice-picked></b></span>
+            <div class="choice-tiles" role="radiogroup" aria-label="{{ $f->label }}">
+                @foreach($f->options ?? [] as $k => $o)
+                    <label class="choice-tile">
+                        <input type="radio" name="{{ $prefix }}[{{ $f->id }}]" value="{{ $o['label'] }}" data-price="{{ (float) ($o['price'] ?? 0) }}" data-extra-choice @required($f->required) @checked(! $suffix && old('custom.'.$f->id) === $o['label'])>
+                        <span class="ct-box">
+                            @if(! empty($o['image']))<img src="{{ media_url($o['image']) }}" alt="{{ $o['label'] }}" loading="lazy" width="120" height="120">@else<span class="ct-letter">{{ mb_substr($o['label'], 0, 1) }}</span>@endif
+                        </span>
+                        <span class="ct-label">{{ $o['label'] }}@if(! empty($o['price']) && $o['price'] > 0)<small>+{{ money($o['price']) }}</small>@endif</span>
+                    </label>
+                @endforeach
+            </div>
         @elseif($f->type === 'color')
             <label for="cf{{ $f->id }}{{ $suffix }}">{{ $f->label }}</label>
             <input id="cf{{ $f->id }}{{ $suffix }}" type="color" name="{{ $prefix }}[{{ $f->id }}]" value="{{ old('custom.'.$f->id, '#f04577') }}">

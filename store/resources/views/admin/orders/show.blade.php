@@ -49,6 +49,7 @@
                             <div><span class="swatch" style="background: {{ $part['value'] }}"></span> {{ $part['value'] }}</div>
                         @else
                             <div class="print-text">
+                                @if (! empty($part['image']))<img src="{{ $part['image'] }}" alt="" class="opt-img">@endif
                                 <strong class="pre">{{ $part['value'] !== '' ? $part['value'] : '—' }}</strong>
                                 @if ($part['value'] !== '')<button type="button" class="btn small ghost" data-copy="{{ $part['value'] }}">Copy</button>@endif
                             </div>

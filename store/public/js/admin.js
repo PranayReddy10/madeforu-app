@@ -513,3 +513,26 @@
         }
     });
 })();
+
+/* "Choose a design" options in the product's personalisation fields */
+document.addEventListener('click', function (e) {
+    var add = e.target.closest('[data-choice-add]');
+    if (add) {
+        var box = add.closest('[data-choices]'), list = box.querySelector('[data-choice-list]');
+        var name = box.dataset.base + '[' + Date.now() % 1000000 + ']';
+        var row = document.createElement('div');
+        row.className = 'choice-row'; row.setAttribute('data-choice-row', '');
+        row.innerHTML = '<img class="preview" hidden alt=""><input type="hidden"><button type="button" class="btn small ghost" data-media-pick data-multiple="0" data-folder="options">Picture</button>'
+            + '<input placeholder="e.g. Heart" maxlength="60"><input type="number" step="0.01" min="0" value="0" title="Extra price (₹)" class="price-in">'
+            + '<button type="button" class="link danger" data-choice-remove aria-label="Remove option">✕</button>';
+        row.querySelector('img').setAttribute('data-preview-for', name + '[image]');
+        row.querySelector('input[type=hidden]').name = name + '[image]';
+        row.querySelector('[data-media-pick]').setAttribute('data-input', name + '[image]');
+        var ins = row.querySelectorAll('input:not([type=hidden])');
+        ins[0].name = name + '[label]'; ins[1].name = name + '[price]';
+        list.appendChild(row); ins[0].focus();
+        return;
+    }
+    var rm = e.target.closest('[data-choice-remove]');
+    if (rm) rm.closest('[data-choice-row]').remove();
+});

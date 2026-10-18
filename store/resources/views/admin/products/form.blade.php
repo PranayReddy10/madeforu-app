@@ -18,6 +18,7 @@
         'id' => $f->id, 'type' => $f->type, 'label' => $f->label, 'help' => $f->help, 'required' => $f->required,
         'min_files' => $f->min_files, 'max_files' => $f->max_files, 'max_length' => $f->max_length,
         'options' => $f->type === 'select' ? collect($f->options ?? [])->map(fn ($o) => $o['label'].'|'.($o['price'] ?? 0))->implode("\n") : '',
+        'choices' => $f->type === 'choice' ? array_values($f->options ?? []) : [],
         'slots' => $f->type === 'images' ? collect($f->options ?? [])->pluck('label')->implode("\n") : '',
         'extra_price' => $f->extra_price, 'position' => $f->position,
     ])->all() : [
@@ -25,7 +26,7 @@
     ]);
     $faqs = old('faqs', $product->faqs ?? []);
     $gallery = old('gallery', $product->exists ? $product->images->map(fn ($img) => ['path' => $img->path, 'alt' => $img->alt])->all() : []);
-    $fieldTypes = ['images' => 'Photo upload', 'text' => 'Text (one line)', 'textarea' => 'Text (multi-line)', 'select' => 'Choice', 'color' => 'Colour', 'date' => 'Date'];
+    $fieldTypes = ['images' => 'Photo upload', 'text' => 'Text (one line)', 'textarea' => 'Text (multi-line)', 'select' => 'Choice (dropdown)', 'choice' => 'Choose a design (picture tiles)', 'color' => 'Colour', 'date' => 'Date'];
 @endphp
 
 <form method="post" enctype="multipart/form-data" id="product-form"

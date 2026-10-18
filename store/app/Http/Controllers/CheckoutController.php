@@ -146,6 +146,7 @@ class CheckoutController extends Controller
                         'label' => $d->label, 'type' => $d->type, 'value' => $d->value,
                         'files' => $d->uploads->pluck('token')->all(),
                         'slots' => $d->slots ?? [],
+                        'image' => $d->image ?? null,
                     ])->all(),
                     'qty' => $l->qty,
                     'unit_price' => $l->unit,

@@ -22,6 +22,15 @@
     <label data-show="select">Choices — one per line, <code>Label|extra price</code>
         <textarea name="fields[{{ $i }}][options]" rows="3" placeholder="Gift wrap|49&#10;No wrap|0">{{ $f['options'] ?? '' }}</textarea>
     </label>
+    <div data-show="choice" class="choice-editor" data-choices data-base="fields[{{ $i }}][choices]">
+        <span class="lbl">Options <small class="muted">— a picture for each (shape, style, colour…), with an extra price if it costs more</small></span>
+        <div class="choice-list" data-choice-list>
+            @foreach (($f['choices'] ?? []) as $k => $c)
+                @include('admin.products._choice', ['base' => "fields[{$i}][choices]", 'k' => $k, 'c' => $c])
+            @endforeach
+        </div>
+        <button type="button" class="btn small ghost" data-choice-add>+ Add option</button>
+    </div>
     <div class="row-inline">
         <label class="check"><input type="checkbox" name="fields[{{ $i }}][required]" value="1" @checked(! empty($f['required']))> Required</label>
         <button type="button" class="link danger" data-remove-row>Remove field</button>

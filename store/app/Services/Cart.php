@@ -140,7 +140,7 @@ class Cart
             if ($field->max_length && mb_strlen($value) > $field->max_length) {
                 $errors[$name] = "“{$field->label}” can be at most {$field->max_length} characters.";
             }
-            if ($field->type === 'select' && ! collect($field->options)->pluck('label')->contains($value)) {
+            if (in_array($field->type, ['select', 'choice'], true) && ! collect($field->options)->pluck('label')->contains($value)) {
                 $errors[$name] = "Please choose a valid option for “{$field->label}”.";
             }
             if ($field->type === 'color' && ! preg_match('/^#[0-9a-f]{6}$/i', $value)) {
@@ -233,9 +233,8 @@ class Cart
                 }
                 $v = $line['custom'][$field->id];
                 $extra = (float) $field->extra_price;
-                if ($field->type === 'select') {
-                    $extra += (float) (collect($field->options)->firstWhere('label', $v)['price'] ?? 0);
-                }
+                $opt = in_array($field->type, ['select', 'choice'], true) ? collect($field->options)->firstWhere('label', $v) : null;
+                $extra += (float) ($opt['price'] ?? 0);
                 $unit += $extra;
                 $details[] = (object) [
                     'field_id' => $field->id,
@@ -244,6 +243,7 @@ class Cart
                     'value' => $field->type === 'images' ? null : $v,
                     'uploads' => $field->type === 'images' ? collect($v)->map(fn ($t) => $uploads->get($t))->filter()->values() : collect(),
                     'slots' => $field->type === 'images' ? collect($field->options ?? [])->pluck('label')->all() : [],
+                    'image' => ! empty($opt['image']) ? media_url($opt['image']) : null,
                 ];
             }
             $out->push((object) [
