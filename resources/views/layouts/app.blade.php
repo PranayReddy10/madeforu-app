@@ -20,7 +20,7 @@
     @foreach($seo->og as $k => $v)<meta property="{{ $k }}" content="{{ $v }}">
     @endforeach
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="theme-color" content="#e8445a">
+    <meta name="theme-color" content="#ffffff">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -30,9 +30,10 @@
         @if($v = setting('analytics.'.$key))<meta name="{{ $name }}" content="{{ $v }}">@endif
     @endforeach
     <link rel="manifest" href="{{ route('manifest') }}">
-    <link rel="icon" href="{{ asset('favicon.ico') }}" sizes="any">
-    <link rel="icon" href="{{ asset('images/icon.svg') }}" type="image/svg+xml">
-    <link rel="apple-touch-icon" href="{{ asset('images/icon-192.png') }}">
+    <link rel="icon" href="{{ asset('favicon.ico') }}" sizes="48x48">
+    <link rel="icon" href="{{ asset('images/icon-192.png') }}" type="image/png" sizes="192x192">
+    <link rel="apple-touch-icon" href="{{ asset('images/apple-touch-icon.png') }}">
+    <link rel="preload" as="image" href="{{ asset('images/logo.webp') }}" type="image/webp">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -53,11 +54,11 @@
 
 <header class="site-header" id="top">
     <div class="wrap header-row">
-        <button class="icon-btn only-mobile" data-open="drawer" aria-label="Open menu">
+        <button class="icon-btn only-mobile" data-open="drawer" aria-label="Open menu" aria-controls="drawer" aria-expanded="false">
             <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></svg>
         </button>
         <a href="{{ url('/') }}" class="logo" aria-label="{{ config('store.name') }} home">
-            <span class="logo-mark">M</span><span class="logo-text">Made<b>For</b>U</span>
+            @include('partials.logo', ['eager' => true])
         </a>
         <form class="search-box" action="{{ route('search') }}" method="get" role="search" data-suggest="{{ route('search.suggest') }}">
             <svg viewBox="0 0 24 24" class="search-ico"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
@@ -65,6 +66,9 @@
             <div class="suggest" hidden></div>
         </form>
         <nav class="header-actions">
+            <a href="{{ route('search') }}" class="icon-btn only-mobile" aria-label="Search">
+                <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+            </a>
             <a href="{{ route('track') }}" class="hide-mobile">Track order</a>
             <a href="{{ route('account') }}" class="icon-btn hide-mobile" aria-label="My account">
                 <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>
@@ -75,12 +79,14 @@
             </a>
         </nav>
     </div>
-    <nav class="cat-nav hide-mobile" aria-label="Categories">
-        <div class="wrap">
-            <a href="{{ url('shop') }}/">All gifts</a>
-            @foreach($menuCategories->take(9) as $cat)
+    {{-- One menu row: fixed with the header, the categories scroll sideways inside it (phones swipe, desktop shows dropdowns) --}}
+    @unless(request()->routeIs('checkout', 'checkout.*', 'cart'))
+    <nav class="cat-nav" aria-label="Categories">
+        <div class="wrap cat-nav-track" data-scroll-active>
+            <a href="{{ url('shop') }}/" class="{{ request()->routeIs('shop') ? 'on' : '' }}">All gifts</a>
+            @foreach($menuCategories as $cat)
                 <div class="cat-nav-item">
-                    <a href="{{ $cat->url() }}">{{ $cat->name }}</a>
+                    <a href="{{ $cat->url() }}" class="{{ request()->is('product-category/'.$cat->path, 'product-category/'.$cat->path.'/*') ? 'on' : '' }}">{{ $cat->name }}</a>
                     @if($cat->children->isNotEmpty())
                         <div class="cat-nav-drop">
                             @foreach($cat->children as $child)<a href="{{ $child->url() }}">{{ $child->name }}</a>@endforeach
@@ -90,27 +96,51 @@
             @endforeach
         </div>
     </nav>
+    @endunless
 </header>
 
-<aside class="drawer" id="drawer" aria-hidden="true">
-    <div class="drawer-panel">
+<aside class="drawer" id="drawer" aria-hidden="true" aria-label="Menu">
+    <div class="drawer-scrim" data-close="drawer"></div>
+    <div class="drawer-panel" role="dialog" aria-modal="true">
         <div class="drawer-head">
-            <span class="logo-text">Made<b>For</b>U</span>
+            <a href="{{ url('/') }}" class="logo">@include('partials.logo')</a>
             <button class="icon-btn" data-close="drawer" aria-label="Close menu"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
         </div>
-        <a href="{{ url('shop') }}/" class="drawer-link">All gifts</a>
-        @foreach($menuCategories as $cat)
-            <details class="drawer-group">
-                <summary><a href="{{ $cat->url() }}">{{ $cat->name }}</a>@if($cat->children->isNotEmpty())<span class="chev"></span>@endif</summary>
-                @foreach($cat->children as $child)<a href="{{ $child->url() }}" class="drawer-sub">{{ $child->name }}</a>@endforeach
-            </details>
-        @endforeach
-        <hr>
-        <a href="{{ route('track') }}" class="drawer-link">Track your order</a>
-        <a href="{{ route('account') }}" class="drawer-link">My account</a>
-        @if(config('store.whatsapp'))<a href="https://wa.me/{{ config('store.whatsapp') }}" class="drawer-link" rel="noopener">WhatsApp us</a>@endif
+        <form class="drawer-search" action="{{ route('search') }}" method="get" role="search">
+            <svg viewBox="0 0 24 24" class="search-ico"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+            <input type="search" name="q" placeholder="Search gifts" aria-label="Search products">
+        </form>
+        {{-- Only this part scrolls; the head and the contact bar stay put --}}
+        <div class="drawer-body">
+            <p class="drawer-label">Shop by category</p>
+            <a href="{{ url('shop') }}/" class="drawer-link"><span class="d-ico">✦</span>All gifts</a>
+            @foreach($menuCategories as $cat)
+                @if($cat->children->isNotEmpty())
+                    <details class="drawer-group">
+                        <summary>
+                            <span class="d-ico">@if($cat->image)<img src="{{ $cat->imageUrl() }}" alt="" width="32" height="32" loading="lazy">@else{{ mb_substr($cat->name, 0, 1) }}@endif</span>
+                            {{ $cat->name }}<span class="chev"></span>
+                        </summary>
+                        <a href="{{ $cat->url() }}" class="drawer-sub">All {{ $cat->name }}</a>
+                        @foreach($cat->children as $child)<a href="{{ $child->url() }}" class="drawer-sub">{{ $child->name }}</a>@endforeach
+                    </details>
+                @else
+                    <a href="{{ $cat->url() }}" class="drawer-link">
+                        <span class="d-ico">@if($cat->image)<img src="{{ $cat->imageUrl() }}" alt="" width="32" height="32" loading="lazy">@else{{ mb_substr($cat->name, 0, 1) }}@endif</span>{{ $cat->name }}
+                    </a>
+                @endif
+            @endforeach
+            <p class="drawer-label">Help</p>
+            <a href="{{ route('track') }}" class="drawer-link"><span class="d-ico">🚚</span>Track your order</a>
+            <a href="{{ route('account') }}" class="drawer-link"><span class="d-ico">👤</span>My account</a>
+            <a href="{{ url('contact-us') }}/" class="drawer-link"><span class="d-ico">✉</span>Contact us</a>
+        </div>
+        <div class="drawer-foot">
+            @if(config('store.whatsapp'))<a href="https://wa.me/{{ config('store.whatsapp') }}" class="btn wa" rel="noopener">WhatsApp us</a>@endif
+            @if(config('store.phone'))<a href="tel:{{ config('store.phone') }}" class="btn ghost">Call</a>@endif
+            @if(!config('store.whatsapp') && !config('store.phone'))<a href="mailto:{{ config('store.email') }}" class="btn ghost">{{ config('store.email') }}</a>@endif
+        </div>
     </div>
-    <div class="drawer-scrim" data-close="drawer"></div>
 </aside>
 
 <main id="main">
@@ -121,7 +151,7 @@
 <footer class="site-footer">
     <div class="wrap footer-grid">
         <div>
-            <span class="logo-text light">Made<b>For</b>U</span>
+            <a href="{{ url('/') }}" class="footer-logo">@include('partials.logo')</a>
             <p>{{ config('store.tagline') }}. Every piece is printed and finished by hand after you order, from your own photos.</p>
             <div class="social">
                 @foreach(config('store.social') as $net => $link)<a href="{{ $link }}" rel="noopener" target="_blank">{{ ucfirst($net) }}</a>@endforeach

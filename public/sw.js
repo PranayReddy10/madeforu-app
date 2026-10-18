@@ -1,6 +1,6 @@
 /* Offline shell for the installed app. Pages are network-first so prices and stock are never stale. */
-var CACHE = 'mfu-v1';
-var SHELL = ['/css/store.css', '/js/store.js', '/images/icon.svg', '/images/placeholder.svg', '/offline.html'];
+var CACHE = 'mfu-v2';
+var SHELL = ['/css/store.css', '/js/store.js', '/images/logo.webp', '/images/logo.png', '/images/placeholder.svg', '/offline.html'];
 self.addEventListener('install', function (e) { e.waitUntil(caches.open(CACHE).then(function (c) { return c.addAll(SHELL); }).then(function () { return self.skipWaiting(); })); });
 self.addEventListener('activate', function (e) { e.waitUntil(caches.keys().then(function (ks) { return Promise.all(ks.filter(function (k) { return k !== CACHE; }).map(function (k) { return caches.delete(k); })); }).then(function () { return self.clients.claim(); })); });
 self.addEventListener('fetch', function (e) {

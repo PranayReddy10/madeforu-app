@@ -2,7 +2,7 @@
 
 return [
     'name' => env('STORE_NAME', 'MadeForU'),
-    'tagline' => env('STORE_TAGLINE', 'Personalised gifts, made for you'),
+    'tagline' => env('STORE_TAGLINE', 'Made for your moments'),
     'phone' => env('STORE_PHONE', ''),
     'whatsapp' => env('STORE_WHATSAPP', ''),
     'email' => env('STORE_EMAIL', 'hello@madeforu.co.in'),
@@ -11,7 +11,7 @@ return [
     'region' => env('STORE_REGION', 'Telangana'),
     'postcode' => env('STORE_POSTCODE', ''),
     'currency' => 'INR',
-    'logo' => env('STORE_LOGO', 'images/logo.svg'),
+    'logo' => env('STORE_LOGO', 'images/logo-round.png'),
     'social' => array_filter([
         'instagram' => env('SOCIAL_INSTAGRAM'),
         'facebook' => env('SOCIAL_FACEBOOK'),
