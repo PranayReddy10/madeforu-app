@@ -240,7 +240,7 @@ Turn any of them off, change the admin addresses or the summary time in **Admin 
 
 - **About, Contact and policy pages** each have their own layout. Change the text in Admin → Pages (the *Layout* and *Intro* fields set the design and the line under the title). Your phone, WhatsApp, email, address, hours and Instagram come from **Admin → Settings → Store details** and appear on every page.
 - **Contact form** messages are saved in **Admin → Messages** and emailed to the shop (reply to the email to answer the customer).
-- **Home page:** slider, categories, bestsellers, "Gifts for every budget", a row for each of your biggest categories, offers (products with a sale price), how it works, custom-order banner, reviews, new arrivals, FAQs (with Google FAQ markup). Mark products as *Featured* in admin for "Handpicked for you"; add a sale price to show a product under Offers.
+- **Home page:** edit it in **Admin → Home page**. Every section can be switched on or off, moved up or down, and have its headings and texts edited. You can add as many *promo banners* (your picture, title, button, link), *product rows* (bestsellers, newest, featured, on sale, one category, or products you pick, in your order), *category spotlights* and *text blocks* as you like. You can also edit the 3 steps, the 4 "why us" points and the FAQ (which Google also sees). Slides stay in Admin → Banners. **Reset to the standard home page** brings back the original layout.
 
 ## Analytics, Google and Instagram
 

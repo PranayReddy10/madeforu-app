@@ -9,7 +9,7 @@
     <div class="wrap">
         <div class="insta-head">
             <span class="insta-logo">@include('partials.icon', ['i' => 'instagram'])</span>
-            <div><h2>Follow us on Instagram</h2><p><a href="{{ $igUrl }}" target="_blank" rel="noopener">{{ $handle }}</a> · new designs, happy customers &amp; behind the scenes</p></div>
+            <div><h2>{{ $title ?? 'Follow us on Instagram' }}</h2><p><a href="{{ $igUrl }}" target="_blank" rel="noopener">{{ $handle }}</a> · new designs, happy customers &amp; behind the scenes</p></div>
             <a class="btn insta-btn" href="{{ $igUrl }}" target="_blank" rel="noopener">Follow</a>
         </div>
         @php

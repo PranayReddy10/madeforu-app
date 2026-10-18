@@ -831,3 +831,14 @@ a.contact-card:hover { transform: translateY(-2px); box-shadow: var(--shadow); }
 .site-footer a.footer-logo { display: inline-flex; align-items: center; width: auto; max-width: 100%; padding: 10px 16px; border-radius: 16px; background: #fff; box-shadow: 0 6px 18px rgba(0,0,0,.18); }
 .site-footer a.footer-logo picture { display: block; }
 .site-footer a.footer-logo img { height: 44px; width: auto; max-width: 200px; object-fit: contain; }
+
+/* Promo banner section (Admin → Home page) */
+.promo { position: relative; display: block; overflow: hidden; border-radius: 22px; background: var(--rose-l); box-shadow: var(--shadow); }
+.promo img { width: 100%; height: auto; display: block; transition: transform .4s; }
+.promo:hover img { transform: scale(1.02); }
+.promo.has-text::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, rgba(28,40,68,.62), rgba(28,40,68,.05) 70%); }
+.promo-text { position: absolute; z-index: 1; left: 0; bottom: 0; top: 0; display: flex; flex-direction: column; justify-content: center; gap: 6px; padding: 18px 20px; max-width: 70%; color: #fff; }
+.promo-text b { font: 700 clamp(20px, 4.5vw, 36px)/1.1 var(--display); }
+.promo-text span { font-size: clamp(13px, 2.4vw, 17px); opacity: .95; }
+.promo-text .btn { align-self: flex-start; margin-top: 6px; font-style: normal; }
+@media (min-width: 960px) { .promo-text { padding: 40px 48px; max-width: 55%; } }
