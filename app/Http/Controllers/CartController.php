@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AbandonedCart;
 use App\Models\Product;
 use App\Services\Analytics;
 use App\Services\Cart;
+use App\Services\CartRecovery;
 use App\Services\Seo;
 use Illuminate\Http\Request;
 
@@ -59,6 +61,40 @@ class CartController extends Controller
         $this->cart->remove($line);
 
         return redirect()->route('cart')->with('status', 'Item removed.');
+    }
+
+    /** Checkout calls this as the shopper types their email/phone, so the cart can be remembered. */
+    public function capture(Request $request, CartRecovery $recovery)
+    {
+        $data = $request->validate(['name' => 'nullable|string|max:120', 'email' => 'nullable|string|max:160', 'phone' => 'nullable|string|max:20']);
+
+        return response()->json(['saved' => (bool) $recovery->capture($data)]);
+    }
+
+    /** Link in the reminder: put the cart back and go to checkout. */
+    public function recover(string $token, CartRecovery $recovery)
+    {
+        $cart = AbandonedCart::where('token', $token)->first();
+        if (! $cart || $cart->recovered_at || $cart->created_at->lt(now()->subDays(14))) {
+            return redirect()->route('cart')->with('error', $cart?->recovered_at ? 'That order has already been placed. Thank you!' : 'That cart link has expired — have a look around!');
+        }
+        $recovery->restore($cart);
+        if ($code = request()->query('coupon')) {
+            $this->cart->applyCoupon((string) $code);
+        }
+
+        return redirect()->route('checkout')->with('status', 'Welcome back! Your cart is just as you left it.');
+    }
+
+    public function unsubscribe(string $token)
+    {
+        $cart = AbandonedCart::where('token', $token)->firstOrFail();
+        AbandonedCart::where(fn ($q) => $q->where('id', $cart->id)
+            ->orWhere(fn ($q) => $q->whereNotNull('email')->where('email', $cart->email))
+            ->orWhere(fn ($q) => $q->whereNotNull('phone')->where('phone', $cart->phone)))
+            ->update(['unsubscribed_at' => now()]);
+
+        return redirect()->route('home')->with('status', 'Done — we won\'t send you cart reminders again.');
     }
 
     public function coupon(Request $request)

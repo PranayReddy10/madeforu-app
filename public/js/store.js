@@ -209,6 +209,14 @@
             if (keys.length < groups.length) { chosenVariant = null; variantInput.value = ''; base = null; render(); return; }
             chosenVariant = variants.find(function (v) { return keys.every(function (k) { return v.options[k] === sel[k]; }); }) || null;
             variantInput.value = chosenVariant ? chosenVariant.id : '';
+            var note = $('[data-stock-note]');
+            if (note) {
+                var left = chosenVariant ? chosenVariant.stock : null;
+                note.hidden = !(left !== null && left !== undefined && left > 0 && left <= +note.dataset.low);
+                if (!note.hidden) note.textContent = '🔥 Only ' + left + ' left — order soon';
+            }
+            var addBtn = $('[data-add]', form);
+            if (addBtn && chosenVariant) { addBtn.disabled = !chosenVariant.in_stock; addBtn.textContent = chosenVariant.in_stock ? 'Add to cart' : 'Out of stock'; }
             if (chosenVariant) {
                 base = chosenVariant.price; baseRegular = chosenVariant.regular;
                 if (chosenVariant.image) {
@@ -376,6 +384,16 @@
             }).catch(function () {});
         }
         pinIn.addEventListener('input', pinCheck);
+        // Remember the cart once we know how to reach the shopper (for a reminder if they don't finish).
+        var capT, lastSent = '';
+        function capture() {
+            var f = { name: co.name.value, email: co.email.value, phone: co.phone.value }, key = JSON.stringify(f);
+            if (key === lastSent || !(/\S+@\S+\.\S+/.test(f.email) || f.phone.replace(/\D/g, '').length >= 10)) return;
+            lastSent = key;
+            fetch(co.dataset.capture, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRF-TOKEN': csrf }, body: key }).catch(function () {});
+        }
+        ['name', 'email', 'phone'].forEach(function (n) { if (co[n]) co[n].addEventListener('input', function () { clearTimeout(capT); capT = setTimeout(capture, 1200); }); });
+        if (co.email.value || co.phone.value) capture();
         if (pinIn.value) pinCheck();
         var pin = $('[data-pincode]', co);
         pin.addEventListener('input', function () {

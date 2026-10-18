@@ -14,6 +14,7 @@ class Product extends Model
     protected $guarded = ['id'];
 
     protected $casts = [
+        'stock_qty' => 'integer',
         'price' => 'decimal:2',
         'sale_price' => 'decimal:2',
         'is_active' => 'boolean',
@@ -26,9 +27,20 @@ class Product extends Model
     protected static function booted(): void
     {
         // Publishing or hiding a product can add or empty a category in the menu.
-        $forget = fn () => Cache::forget('menu.categories');
+        $forget = fn () => self::flushMenuCache();
         static::saved($forget);
         static::deleted($forget);
+        // A counted stock decides "in stock" by itself.
+        static::saving(function (Product $p) {
+            if ($p->type !== 'variable' && $p->stock_qty !== null) {
+                $p->in_stock = $p->stock_qty > 0;
+            }
+        });
+    }
+
+    public static function flushMenuCache(): void
+    {
+        Cache::forget('menu.categories');
     }
 
     public function primaryCategory(): BelongsTo

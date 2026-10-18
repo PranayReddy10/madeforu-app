@@ -42,6 +42,16 @@ class Cart
             throw ValidationException::withMessages(['qty' => 'This product is out of stock.']);
         }
 
+        $available = Stock::available($product, $variant);
+        if ($available !== null) {
+            $inCart = collect($this->raw())->filter(fn ($l) => $l['product_id'] === $product->id && $l['variant_id'] === $variant?->id)->sum('qty');
+            if ($inCart + $qty > $available) {
+                throw ValidationException::withMessages(['qty' => $available - $inCart > 0
+                    ? 'Only '.$available.' left'.($inCart ? ' (you have '.$inCart.' in your cart)' : '').'.'
+                    : 'Sorry, there are no more of these in stock.']);
+            }
+        }
+
         $clean = $this->validateCustomization($product, $custom);
 
         $lines = $this->raw();
@@ -115,6 +125,12 @@ class Cart
     public function update(string $lineId, int $qty): void
     {
         $lines = $this->raw();
+        if (isset($lines[$lineId]) && $qty > 0 && ($p = Product::with('variants')->find($lines[$lineId]['product_id']))) {
+            $available = Stock::available($p, $lines[$lineId]['variant_id'] ? $p->variants->firstWhere('id', $lines[$lineId]['variant_id']) : null);
+            if ($available !== null) {
+                $qty = min($qty, max(1, $available));
+            }
+        }
         if (isset($lines[$lineId])) {
             if ($qty < 1) {
                 unset($lines[$lineId]);
@@ -203,6 +219,29 @@ class Cart
                 'details' => $details,
                 'image' => $variant?->image ? media_url($variant->image) : $product->mainImageUrl(),
             ]);
+        }
+
+        return $out;
+    }
+
+    /**
+     * Lines asking for more than is left (stock changed after they were added).
+     *
+     * @return array<int, string> messages
+     */
+    public function stockProblems(Collection $lines): array
+    {
+        $want = [];
+        foreach ($lines as $l) {
+            $key = $l->product->id.'-'.($l->variant?->id ?? 0);
+            $want[$key] = ['line' => $l, 'qty' => ($want[$key]['qty'] ?? 0) + $l->qty];
+        }
+        $out = [];
+        foreach ($want as $w) {
+            $available = Stock::available($w['line']->product, $w['line']->variant);
+            $out = $available !== null && $w['qty'] > $available
+                ? [...$out, $available > 0 ? "Only {$available} of “{$w['line']->product->name}” left — please reduce the quantity." : "“{$w['line']->product->name}” has just sold out — please remove it."]
+                : $out;
         }
 
         return $out;

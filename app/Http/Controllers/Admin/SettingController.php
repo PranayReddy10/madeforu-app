@@ -18,6 +18,7 @@ class SettingController extends Controller
         'Shipping & payment' => [
             'free_shipping_over' => ['Free shipping over (₹)', 'number', ''],
             'shipping_fee' => ['Shipping fee (₹)', 'number', ''],
+            'low_stock_threshold' => ['Low-stock warning at (units)', 'number', 'You get an email when a counted product drops to this, and the product page shows “Only N left”.'],
             'cod_enabled' => ['Cash on delivery enabled', 'bool', ''],
             'cod_fee' => ['Cash on delivery charges, fixed (₹)', 'number', 'Shown as its own line, “Cash on delivery charges”.'],
             'cod_fee_percent' => ['Cash on delivery charges, % of order', 'number', 'Optional. The higher of the fixed amount and this % is charged — e.g. ₹40 and 2%.'],
@@ -44,6 +45,13 @@ class SettingController extends Controller
             'delhivery.shipping_mode' => ['Shipping mode', 'select:Surface=Surface,Express=Express (air)', ''],
             'delhivery.default_weight' => ['Default weight per item (grams)', 'number', 'Used when a product has no weight set.'],
             'delhivery.check_pincodes' => ['Check PIN codes with Delhivery at checkout', 'bool', 'Stops orders to places Delhivery can’t reach, and COD where it can’t collect cash.'],
+        ],
+        'Abandoned cart reminders' => [
+            'abandoned.enabled' => ['Save carts and send reminders', 'bool', 'A cart is saved once the shopper types an email or phone at checkout.'],
+            'abandoned.first_hours' => ['First reminder after (hours)', 'number', ''],
+            'abandoned.second_hours' => ['Second reminder after (hours)', 'number', 'Counted from when the cart was left.'],
+            'abandoned.coupon' => ['Coupon code in the second reminder', 'text', 'Optional. Create it in Coupons first (e.g. COMEBACK10).'],
+            'abandoned.whatsapp_template' => ['WhatsApp template for reminders', 'text', 'Optional, needs the WhatsApp API. {{1}} name, {{2}} product, {{3}} cart link.'],
         ],
         'Invoice (GST)' => [
             'invoice.legal_name' => ['Business name on invoices', 'text', ''],

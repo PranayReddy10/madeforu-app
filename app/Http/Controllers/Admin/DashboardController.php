@@ -5,7 +5,9 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Models\Product;
+use App\Models\ProductVariant;
 use App\Models\SearchQuery;
+use App\Services\Stock;
 use Illuminate\Database\Eloquent\Builder;
 
 class DashboardController extends Controller
@@ -26,6 +28,11 @@ class DashboardController extends Controller
             'revenue' => $revenue,
             'byStatus' => Order::selectRaw('status, count(*) as n')->groupBy('status')->pluck('n', 'status'),
             'recent' => Order::latest()->take(10)->get(),
+            'lowStock' => ProductVariant::with('product')->whereNotNull('stock_qty')->where('stock_qty', '<=', Stock::lowThreshold())->get()
+                ->map(fn ($v) => ['product' => $v->product, 'name' => $v->product?->name.' — '.$v->label(), 'qty' => $v->stock_qty])
+                ->concat(Product::whereNotNull('stock_qty')->where('type', 'simple')->where('stock_qty', '<=', Stock::lowThreshold())->get()
+                    ->map(fn ($p) => ['product' => $p, 'name' => $p->name, 'qty' => $p->stock_qty]))
+                ->filter(fn ($r) => $r['product'])->sortBy('qty')->take(15)->values(),
             'topProducts' => Product::orderByDesc('sales_count')->where('sales_count', '>', 0)->take(10)->get(),
             'topSearches' => SearchQuery::selectRaw('term, count(*) as n, max(results) as results')->where('created_at', '>=', now()->subDays(30))
                 ->groupBy('term')->orderByDesc('n')->take(15)->get(),

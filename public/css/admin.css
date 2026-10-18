@@ -273,3 +273,6 @@ input[type=file][hidden] { display: none; }
 .wa-list { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 10px; }
 .wa-log { list-style: none; padding: 0; margin: 10px 0 0; font-size: 12px; }
 .wa-log li { margin-bottom: 6px; }
+
+.stock-log ul { list-style: none; padding: 0; margin: 6px 0 0; font-size: 12px; }
+.stock-log li { margin-bottom: 3px; }

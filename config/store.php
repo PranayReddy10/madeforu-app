@@ -19,6 +19,8 @@ return [
         'pinterest' => env('SOCIAL_PINTEREST'),
     ]),
 
+    'low_stock_threshold' => (int) env('LOW_STOCK_THRESHOLD', 3),
+
     // Shipping & charges
     'free_shipping_over' => (float) env('FREE_SHIPPING_OVER', 499),
     'shipping_fee' => (float) env('SHIPPING_FEE', 60),
@@ -43,6 +45,15 @@ return [
         'shipping_mode' => env('DELHIVERY_SHIPPING_MODE', 'Surface'), // Surface | Express
         'default_weight' => (int) env('DELHIVERY_DEFAULT_WEIGHT', 300), // grams per item when a product has no weight
         'check_pincodes' => (bool) env('DELHIVERY_CHECK_PINCODES', true),
+    ],
+
+    // Abandoned cart reminders
+    'abandoned' => [
+        'enabled' => (bool) env('ABANDONED_CART_REMINDERS', true),
+        'first_hours' => (float) env('ABANDONED_FIRST_HOURS', 1),
+        'second_hours' => (float) env('ABANDONED_SECOND_HOURS', 24),
+        'coupon' => env('ABANDONED_COUPON'),
+        'whatsapp_template' => env('WHATSAPP_TEMPLATE_CART', 'cart_reminder'),
     ],
 
     // Tax invoice (PDF). Prices on the site include GST.

@@ -10,6 +10,7 @@ use App\Services\Delhivery;
 use App\Services\Invoice;
 use App\Services\OrderNotifier;
 use App\Services\Shipping;
+use App\Services\Stock;
 use App\Services\WhatsApp;
 use Illuminate\Http\Request;
 use ZipArchive;
@@ -56,6 +57,7 @@ class OrderController extends Controller
             'notes' => 'nullable|string|max:2000',
         ]);
         $wasShipped = in_array($order->status, ['shipped', 'delivered'], true);
+        $previous = $order->status;
         if ($data['status'] === 'shipped' && ! $order->shipped_at) {
             $data['shipped_at'] = now();
         }
@@ -71,6 +73,13 @@ class OrderController extends Controller
         }
         if (in_array($order->status, ['confirmed', 'in_production', 'shipped', 'delivered'], true)) {
             Invoice::assign($order);
+        }
+        // Stock follows the order: back on the shelf when cancelled or returned, out again if reopened.
+        $stock = app(Stock::class);
+        if ($previous !== $order->status && in_array($order->status, ['cancelled', 'returned'], true)) {
+            $stock->restore($order, $order->status);
+        } elseif (in_array($previous, ['cancelled', 'returned', 'pending'], true) && in_array($order->status, ['confirmed', 'in_production', 'shipped', 'delivered'], true)) {
+            $stock->reduce($order);
         }
 
         return back()->with('status', 'Order updated.');
