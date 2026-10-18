@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Jobs\CreateShipment;
+use App\Jobs\NotifyOrder;
 use App\Mail\OrderPlaced;
 use App\Models\Coupon;
 use App\Models\CustomerUpload;
@@ -12,6 +13,7 @@ use App\Services\Analytics;
 use App\Services\Cart;
 use App\Services\Cashfree;
 use App\Services\Delhivery;
+use App\Services\Invoice;
 use App\Services\Razorpay;
 use App\Services\Seo;
 use Illuminate\Http\Request;
@@ -295,6 +297,9 @@ class CheckoutController extends Controller
         foreach ($order->items as $i) {
             Product::whereKey($i->product_id)->increment('sales_count', $i->qty);
         }
+        Invoice::assign($order);
+        // WhatsApp to the customer and the shop, after the customer's page has gone out.
+        NotifyOrder::dispatchAfterResponse($order->id, 'confirmed');
         // Book the Delhivery shipment right away (after the customer's page has gone out).
         if (Delhivery::enabled() && setting('delhivery.auto')) {
             CreateShipment::dispatchAfterResponse($order->id);

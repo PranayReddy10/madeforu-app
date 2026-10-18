@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Order;
 use App\Models\Product;
+use App\Services\Invoice;
 use App\Services\Seo;
 use Illuminate\Http\Request;
 
@@ -40,6 +41,22 @@ class AccountController extends Controller
         }
 
         return view('account.track', compact('order'));
+    }
+
+    /**
+     * Invoice PDF for the customer: from a signed link (email, WhatsApp), the browser that placed
+     * the order, or the account it belongs to.
+     */
+    public function invoice(Request $request, string $number)
+    {
+        $order = Order::where('number', $number)->with('items.product')->firstOrFail();
+        $allowed = $request->hasValidSignature()
+            || in_array($order->number, session('placed_orders', []), true)
+            || ($request->user() && ($request->user()->id === $order->user_id || $request->user()->is_admin));
+        abort_unless($allowed, 403);
+        abort_unless($order->invoice_number || in_array($order->status, ['confirmed', 'in_production', 'shipped', 'delivered'], true), 404);
+
+        return Invoice::pdf($order)->download(Invoice::filename($order));
     }
 
     public function wishlist(Request $request, Seo $seo)

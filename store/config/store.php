@@ -45,6 +45,32 @@ return [
         'check_pincodes' => (bool) env('DELHIVERY_CHECK_PINCODES', true),
     ],
 
+    // Tax invoice (PDF). Prices on the site include GST.
+    'invoice' => [
+        'prefix' => env('INVOICE_PREFIX', 'MFU'),
+        'legal_name' => env('INVOICE_LEGAL_NAME', env('STORE_NAME', 'MadeForU')),
+        'gstin' => env('INVOICE_GSTIN'),                     // blank = plain invoice without GST lines
+        'address' => env('INVOICE_ADDRESS', env('STORE_ADDRESS', 'Hyderabad, Telangana, India')),
+        'state' => env('INVOICE_STATE', 'Telangana'),        // same state as customer: CGST+SGST, otherwise IGST
+        'gst_rate' => (float) env('INVOICE_GST_RATE', 18),
+        'hsn' => env('INVOICE_HSN', ''),                     // default HSN/SAC when a product has none
+        'footer' => env('INVOICE_FOOTER', 'Thank you for shopping with MadeForU.'),
+    ],
+
+    // WhatsApp Business (Meta Cloud API). Messages use templates approved in WhatsApp Manager.
+    'whatsapp_api' => [
+        'enabled' => (bool) env('WHATSAPP_API_ENABLED', false),
+        'phone_number_id' => env('WHATSAPP_PHONE_NUMBER_ID'),
+        'token' => env('WHATSAPP_ACCESS_TOKEN'),
+        'language' => env('WHATSAPP_TEMPLATE_LANGUAGE', 'en'),
+        'template_confirmed' => env('WHATSAPP_TEMPLATE_CONFIRMED', 'order_confirmed'),
+        'confirmed_invoice' => (bool) env('WHATSAPP_CONFIRMED_WITH_INVOICE', true),  // template has a document header
+        'template_shipped' => env('WHATSAPP_TEMPLATE_SHIPPED', 'order_shipped'),
+        'template_delivered' => env('WHATSAPP_TEMPLATE_DELIVERED', 'order_delivered'),
+        'template_admin' => env('WHATSAPP_TEMPLATE_ADMIN', 'new_order_alert'),
+        'admin_numbers' => env('WHATSAPP_ADMIN_NUMBERS', env('STORE_WHATSAPP')),   // comma separated, with country code
+    ],
+
     // Customer photo uploads
     'upload_max_kb' => (int) env('UPLOAD_MAX_KB', 15360),
     'upload_mimes' => ['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif'],

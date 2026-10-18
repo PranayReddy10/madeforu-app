@@ -69,6 +69,40 @@
         </form>
     </section>
     <section class="card">
+        <h2>Invoice</h2>
+        @if ($order->invoice_number)
+            <p><strong>{{ $order->invoice_number }}</strong> <span class="muted small">{{ $order->invoiced_at?->format('d M Y') }}</span></p>
+            <div class="row-actions"><a class="btn small" href="{{ route('admin.orders.invoice', $order) }}" target="_blank" rel="noopener">Open invoice PDF</a></div>
+        @else
+            <p class="muted small">The invoice number is given when the order is confirmed (COD placed or payment received).</p>
+        @endif
+    </section>
+    <section class="card">
+        <h2>WhatsApp</h2>
+        @php $waTo = \App\Services\WhatsApp::number($order->phone); @endphp
+        <p class="muted small">Opens WhatsApp with the message written — check it and press send.</p>
+        <div class="wa-list">
+            @foreach (\App\Services\OrderNotifier::manualMessages($order) as $label => $text)
+                <a class="btn small ghost" href="https://wa.me/{{ $waTo }}?text={{ rawurlencode($text) }}" target="_blank" rel="noopener">{{ $label }}</a>
+            @endforeach
+        </div>
+        @if (\App\Services\WhatsApp::enabled())
+            <form method="post" action="{{ route('admin.orders.whatsapp', $order) }}" class="row-actions">
+                @csrf
+                <select name="event"><option value="confirmed">Order confirmed</option>@if ($order->tracking_number)<option value="shipped">Shipped</option>@endif<option value="delivered">Delivered</option></select>
+                <button class="btn small">Send automatic message</button>
+            </form>
+        @endif
+        @php $logs = \App\Models\NotificationLog::where('order_id', $order->id)->latest('id')->take(10)->get(); @endphp
+        @if ($logs->isNotEmpty())
+            <ul class="wa-log">
+                @foreach ($logs as $log)
+                    <li><span class="badge {{ $log->status === 'sent' ? 'ok' : '' }}">{{ $log->status }}</span> {{ $log->event }} → {{ $log->to }} <span class="muted small">{{ $log->created_at->format('d M, H:i') }}</span>@if ($log->error)<br><span class="err small">{{ $log->error }}</span>@endif</li>
+                @endforeach
+            </ul>
+        @endif
+    </section>
+    <section class="card">
         <h2>Delhivery</h2>
         @if ($order->tracking_number)
             <p>AWB <strong>{{ $order->tracking_number }}</strong> · <a href="{{ $order->trackingUrl() }}" target="_blank" rel="noopener">track ↗</a></p>

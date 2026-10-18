@@ -4,9 +4,13 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\CustomerUpload;
+use App\Models\NotificationLog;
 use App\Models\Order;
 use App\Services\Delhivery;
+use App\Services\Invoice;
+use App\Services\OrderNotifier;
 use App\Services\Shipping;
+use App\Services\WhatsApp;
 use Illuminate\Http\Request;
 use ZipArchive;
 
@@ -62,8 +66,34 @@ class OrderController extends Controller
         if (! $wasShipped && $order->status === 'shipped' && $order->tracking_number && $request->boolean('notify', true)) {
             app(Shipping::class)->notifyShipped($order);
         }
+        if ($order->wasChanged('status') && $order->status === 'delivered' && $request->boolean('notify', true)) {
+            app(OrderNotifier::class)->delivered($order);
+        }
+        if (in_array($order->status, ['confirmed', 'in_production', 'shipped', 'delivered'], true)) {
+            Invoice::assign($order);
+        }
 
         return back()->with('status', 'Order updated.');
+    }
+
+    public function invoice(Order $order)
+    {
+        return Invoice::pdf($order)->stream(Invoice::filename($order));
+    }
+
+    /** Send an order step's WhatsApp message again (or for the first time). */
+    public function whatsapp(Request $request, Order $order, OrderNotifier $notifier)
+    {
+        $event = $request->validate(['event' => 'required|in:confirmed,shipped,delivered'])['event'];
+        abort_unless(WhatsApp::enabled(), 400, 'WhatsApp API is not set up.');
+        NotificationLog::where('order_id', $order->id)->where('event', $event)->where('status', 'sent')->delete();
+        $order->load('items');
+        $notifier->{$event}($order);
+        $last = NotificationLog::where('order_id', $order->id)->where('event', $event)->latest('id')->first();
+
+        return $last?->status === 'sent'
+            ? back()->with('status', 'WhatsApp "'.$event.'" message sent.')
+            : back()->with('error', 'WhatsApp: '.($last?->error ?: 'not sent (check the template name and the customer number).'));
     }
 
     /** Book (or retry) the Delhivery shipment. */

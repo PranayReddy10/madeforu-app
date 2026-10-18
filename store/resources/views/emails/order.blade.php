@@ -22,6 +22,7 @@
         <p><a href="{{ route('admin.orders.show', $order) }}" style="background:#f04577;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none">Open in admin</a></p>
     @else
         <p><a href="{{ route('track', ['number' => $order->number, 'phone' => $order->phone]) }}" style="background:#f04577;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none">Track your order</a></p>
+        @if($order->invoice_number)<p style="font-size:13px">Your invoice {{ $order->invoice_number }} is attached. <a href="{{ \App\Services\Invoice::publicUrl($order) }}">Download it here</a>.</p>@endif
         <p style="font-size:13px;color:#7a6b7d">We'll start making your gift now. If a photo needs adjusting we'll contact you before printing.</p>
     @endif
 </td></tr></table>

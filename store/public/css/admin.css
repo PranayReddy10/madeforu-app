@@ -268,3 +268,8 @@ input[type=file][hidden] { display: none; }
 .scans ol { margin: 8px 0 0; padding-left: 18px; font-size: 13px; }
 .scans li { margin-bottom: 6px; }
 .err.small { font-size: 13px; }
+
+/* WhatsApp panel */
+.wa-list { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 10px; }
+.wa-log { list-style: none; padding: 0; margin: 10px 0 0; font-size: 12px; }
+.wa-log li { margin-bottom: 6px; }

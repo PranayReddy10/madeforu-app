@@ -148,3 +148,39 @@ Without SSH: run `composer install` on your computer, zip the whole `store` fold
 - **Bing Webmaster Tools.** Import the site from Search Console, and set `INDEXNOW_KEY` so changed pages get submitted automatically.
 - **GA4.** Set the measurement ID in Admin → Settings, then mark `purchase` as a key event.
 - **For each product,** write a unique meta description and add two or three FAQs. Admin → SEO lists the products that need work, worst first.
+
+## Invoices and WhatsApp messages
+
+**Invoices.** Every confirmed order (COD placed, or online payment received) gets an invoice number like `MFU/26-27/0001`, counting from 1 each April. The PDF is attached to the order email and can be downloaded from the thank-you page, the customer's account, a link in the email/WhatsApp, and Admin → Orders. With a GSTIN set in Admin → Settings → Invoice it is a tax invoice: prices include GST, CGST + SGST for your state, IGST for other states, per-product HSN and GST rate (Admin → Products). Without a GSTIN it is a plain invoice.
+
+**WhatsApp, by hand (works now).** Each order in admin has buttons that open WhatsApp with the message written: order confirmation (with invoice link), photo check, shipped (with tracking), payment reminder, review request.
+
+**WhatsApp, automatic.** Uses the WhatsApp Business Cloud API from Meta (free tier covers small shops; Meta charges per conversation after that).
+
+1. In [Meta Business Manager](https://business.facebook.com) → WhatsApp Manager, add your business number, and create a permanent access token (System users → token with `whatsapp_business_messaging`).
+2. Create these message templates (category **Utility**, language English) and wait for approval. Names can differ; put yours in Admin → Settings → WhatsApp messages.
+
+   **order_confirmed** — header: *Document* (the invoice PDF is attached here)
+   ```
+   Hi {{1}}, thank you for your order {{2}} at MadeForU! 🎁
+   Total: {{3}}. We've started making your personalised gift and will message you when it ships.
+   Track your order: {{4}}
+   ```
+   **order_shipped**
+   ```
+   Hi {{1}}, your MadeForU order {{2}} is on its way with {{3}} 🚚
+   Tracking number: {{4}}
+   Track it here: {{5}}
+   ```
+   **order_delivered**
+   ```
+   Hi {{1}}, your MadeForU order {{2}} has been delivered 💝 We hope you love it!
+   Share a photo or a review with us: {{3}}
+   ```
+   **new_order_alert** (to you)
+   ```
+   New order {{1}} from {{2}} — {{3}} ({{4}}).
+   ```
+3. In Admin → Settings → WhatsApp messages: tick "Send automatically", paste the Phone number ID and token, and your own number for new-order alerts.
+
+Every message is logged on the order (sent / failed with Meta's reason), each step is sent once, and a failed message never blocks an order. Resend from the order page.

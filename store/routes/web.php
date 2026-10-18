@@ -57,6 +57,7 @@ Route::get('/checkout/cashfree/return', [CheckoutController::class, 'cashfreeRet
 Route::post('/webhooks/cashfree', [CheckoutController::class, 'cashfreeWebhook'])->name('webhooks.cashfree');
 Route::get('/checkout/order-received/{number}', [CheckoutController::class, 'thanks'])->name('checkout.thanks');
 Route::get('/track-order', [AccountController::class, 'track'])->name('track');
+Route::get('/invoice/{number}', [AccountController::class, 'invoice'])->name('invoice.download');
 
 Route::get('/my-account', [AccountController::class, 'index'])->name('account');
 Route::middleware('guest')->group(function () {
@@ -102,6 +103,8 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'admin'])->group(fun
     Route::put('orders/{order}', [Admin\OrderController::class, 'update'])->name('orders.update');
     Route::get('orders/{order}/uploads.zip', [Admin\OrderController::class, 'downloadUploads'])->name('orders.uploads');
     Route::post('orders/{order}/ship', [Admin\OrderController::class, 'ship'])->name('orders.ship');
+    Route::get('orders/{order}/invoice.pdf', [Admin\OrderController::class, 'invoice'])->name('orders.invoice');
+    Route::post('orders/{order}/whatsapp', [Admin\OrderController::class, 'whatsapp'])->name('orders.whatsapp');
     Route::post('orders/{order}/track', [Admin\OrderController::class, 'track'])->name('orders.track');
     Route::get('orders/{order}/label', [Admin\OrderController::class, 'label'])->name('orders.label');
     Route::post('orders/{order}/cancel-shipment', [Admin\OrderController::class, 'cancelShipment'])->name('orders.cancel-shipment');
