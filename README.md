@@ -147,6 +147,8 @@ You need a Business plan or higher, for SSH. Set the PHP version to **8.3** unde
 6. **Images on DigitalOcean Spaces.** Imported images stay on your Spaces CDN (`friendsmedia.sgp1.cdn.digitaloceanspaces.com`), so they keep loading after the WordPress server is switched off. Keep the Space itself. To send new admin uploads to the same Space, set `MEDIA_DISK=spaces` and the `DO_SPACES_*` keys in `.env` (Spaces → Access keys).
 7. **Switch DNS.** Move the domain's A record from DigitalOcean to Hostinger, then turn on the free SSL. Keep the DigitalOcean droplet for a week, in case anything was missed.
 
+**Site shows "500 Server Error"?** Run `php artisan store:check`. It checks PHP, extensions, `.env`, folder permissions and the database, and prints the last error from `storage/logs/laravel.log`. After any `.env` change run `php artisan optimize:clear && php artisan optimize`.
+
 Without SSH: run `composer install` on your computer, zip the whole `store` folder including `vendor/`, upload it with File Manager, and run the artisan commands from hPanel's "Run command" or a one-off cron job.
 
 ## After launch: Google and search

@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Http\Middleware\ShareStoreData;
 use App\Services\Analytics;
 use App\Services\Cart;
 use App\Services\Seo;
@@ -34,6 +35,11 @@ class AppServiceProvider extends ServiceProvider
             ->line('Tap the button to set a new password for your '.config('store.name').' account. The link works for 60 minutes.')
             ->action('Set my password', route('password.reset', ['token' => $token, 'email' => $user->email]))
             ->line('Didn\'t ask for this? You can ignore this email — your account is safe.'));
+        View::composer('layouts.app', function () {
+            if (View::shared('cartCount') === null) {
+                ShareStoreData::share();
+            }
+        });
         View::composer('*', function ($view) {
             $view->with('seo', app(Seo::class))->with('analytics', app(Analytics::class));
         });
