@@ -23,6 +23,7 @@
         ['type' => 'images', 'label' => 'Upload your photo', 'help' => 'Clear, well-lit photos print best.', 'required' => true, 'min_files' => 1, 'max_files' => 1, 'position' => 0],
     ]);
     $faqs = old('faqs', $product->faqs ?? []);
+    $gallery = old('gallery', $product->exists ? $product->images->map(fn ($img) => ['path' => $img->path, 'alt' => $img->alt])->all() : []);
     $fieldTypes = ['images' => 'Photo upload', 'text' => 'Text (one line)', 'textarea' => 'Text (multi-line)', 'select' => 'Choice', 'color' => 'Colour', 'date' => 'Date'];
 @endphp
 
@@ -60,22 +61,22 @@
 
         <section class="card">
             <h2>Images</h2>
-            @if ($product->exists && $product->images->isNotEmpty())
-                <div class="img-grid">
-                    @foreach ($product->images as $img)
-                        <div class="img-item">
-                            <img src="{{ $img->url() }}" alt="" loading="lazy">
-                            <input name="images[{{ $img->id }}][alt]" value="{{ $img->alt }}" placeholder="Alt text (describe the photo)">
-                            <div class="row-inline">
-                                <label class="tiny">Order <input type="number" name="images[{{ $img->id }}][position]" value="{{ $img->position }}"></label>
-                                <button type="submit" form="del-img-{{ $img->id }}" class="link danger" data-confirm="Delete this image?">Delete</button>
-                            </div>
-                        </div>
-                    @endforeach
-                </div>
-            @endif
-            <label>Add images <input type="file" name="new_images[]" accept="image/*" multiple></label>
-            <p class="muted">The first image (lowest order) is the main image in listings, Google Shopping and social shares.</p>
+            <p class="muted">Pick from the media library or upload new ones. Drag to reorder (or use the arrows); the first image is the main image in listings, Google Shopping and social shares.</p>
+            <input type="hidden" name="gallery_present" value="1">
+            <div class="gallery" id="gallery">
+                @foreach (array_values($gallery) as $i => $g)
+                    @include('admin.products._gallery', ['i' => $i, 'g' => $g])
+                @endforeach
+            </div>
+            <p class="muted" data-gallery-empty @if ($gallery) hidden @endif>No images yet.</p>
+            <template id="tpl-gallery">@include('admin.products._gallery', ['i' => '__i__', 'g' => []])</template>
+            <div class="row-inline">
+                <button type="button" class="btn" data-media-pick data-multiple="1" data-folder="products" data-gallery-add>+ Add images</button>
+                <details class="fallback-upload">
+                    <summary class="muted">or upload straight from this computer</summary>
+                    <input type="file" name="new_images[]" accept="image/*" multiple>
+                </details>
+            </div>
         </section>
 
         <section class="card">
@@ -105,7 +106,7 @@
             <p class="muted">Options are written <code>Size=A4; Frame=Black</code>.</p>
             <div class="tbl-wrap">
             <table class="tbl compact">
-                <thead><tr><th>Options</th><th>Price</th><th>Sale</th><th>SKU</th><th>In stock</th><th>Image path / URL</th><th></th></tr></thead>
+                <thead><tr><th>Options</th><th>Price</th><th>Sale</th><th>SKU</th><th>In stock</th><th>Image</th><th></th></tr></thead>
                 <tbody id="variants" data-rows>
                     @foreach (array_values($variants) as $i => $v)
                         @include('admin.products._variant', ['i' => $i, 'v' => $v])
@@ -194,9 +195,6 @@
 </form>
 
 @if ($product->exists)
-    @foreach ($product->images as $img)
-        <form id="del-img-{{ $img->id }}" method="post" action="{{ route('admin.products.images.delete', $img) }}" hidden>@csrf @method('DELETE')</form>
-    @endforeach
     <form method="post" action="{{ route('admin.products.destroy', $product) }}" class="card danger-zone">
         @csrf @method('DELETE')
         <button class="btn danger" data-confirm="Delete this product permanently? Its URL will stop working — consider hiding it or adding a redirect instead.">Delete product</button>

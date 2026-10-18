@@ -75,7 +75,7 @@ class AdminTest extends TestCase
             route('admin.categories.edit', $cat), route('admin.orders.index', ['status' => 'confirmed', 'q' => '98']), route('admin.orders.show', $order),
             route('admin.coupons.index'), route('admin.coupons.create'), route('admin.pages.index'), route('admin.pages.create'),
             route('admin.banners.index'), route('admin.banners.create'), route('admin.redirects.index'), route('admin.redirects.create'),
-            route('admin.reviews.index'), route('admin.seo'), route('admin.settings')] as $url) {
+            route('admin.reviews.index'), route('admin.seo'), route('admin.settings'), route('admin.media.index')] as $url) {
             $res = $this->get($url);
             $this->assertSame(200, $res->status(), $url."\n".substr($res->getContent(), 0, 2000));
         }

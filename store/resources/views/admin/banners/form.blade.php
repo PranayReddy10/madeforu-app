@@ -6,10 +6,8 @@
     @if ($banner->exists) @method('PUT') @endif
     <label>Title <input name="title" value="{{ old('title', $banner->title) }}" required></label>
     <label>Subtitle <input name="subtitle" value="{{ old('subtitle', $banner->subtitle) }}"></label>
-    <label>Desktop image <small class="muted">wide, about 1920×720</small><input type="file" name="image" accept="image/*" @required(! $banner->exists)></label>
-    @if ($banner->image)<img class="preview" src="{{ media_url($banner->image) }}" alt="">@endif
-    <label>Phone image <small class="muted">optional, taller, about 1080×1200. Without one, phones crop the centre of the desktop image.</small><input type="file" name="mobile_image" accept="image/*"></label>
-    @if ($banner->mobile_image)<img class="preview" src="{{ media_url($banner->mobile_image) }}" alt="" style="max-width:200px"><label class="check"><input type="checkbox" name="remove_mobile_image" value="1"> Remove phone image</label>@endif
+    @include('admin.partials.image-field', ['name' => 'image', 'label' => 'Desktop image', 'value' => old('image', $banner->image), 'folder' => 'banners', 'hint' => 'wide, about 1920×720', 'required' => true])
+    @include('admin.partials.image-field', ['name' => 'mobile_image', 'label' => 'Phone image', 'value' => old('mobile_image', $banner->mobile_image), 'folder' => 'banners', 'hint' => 'optional, taller, about 1080×1200. Without one, phones crop the centre of the desktop image.'])
     <div class="row3">
         <label>Link <input name="link" value="{{ old('link', $banner->link) }}" placeholder="/product-category/photo-frames/"></label>
         <label>Button text <input name="button" value="{{ old('button', $banner->button) }}" placeholder="Shop now"></label>

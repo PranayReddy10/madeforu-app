@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Setting;
+use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Support\Facades\Storage;
 
 if (! function_exists('media_url')) {
@@ -20,7 +21,7 @@ if (! function_exists('media_url')) {
 
 if (! function_exists('media_disk')) {
     /** The disk product, category and banner images live on (public or DigitalOcean Spaces). */
-    function media_disk(): \Illuminate\Contracts\Filesystem\Filesystem
+    function media_disk(): Filesystem
     {
         return Storage::disk(config('store.media_disk', 'public'));
     }

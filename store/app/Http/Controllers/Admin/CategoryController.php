@@ -4,9 +4,9 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Category;
+use App\Models\Media;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
@@ -47,10 +47,7 @@ class CategoryController extends Controller
     public function destroy(Category $category)
     {
         Category::where('parent_id', $category->id)->update(['parent_id' => $category->parent_id]);
-        if ($category->image && ! preg_match('#^https?://#', $category->image)) {
-            Storage::disk('public')->delete($category->image);
-        }
-        $category->delete();
+        $category->delete(); // its image stays in the media library
         // Children moved up a level: rebuild their paths.
         Category::where('parent_id', $category->parent_id)->get()->each->save();
         Cache::forget('menu.categories');
@@ -67,7 +64,12 @@ class CategoryController extends Controller
             'slug' => ['required', 'string', 'max:255', Rule::unique('categories', 'slug')->ignore($category->id)],
             'parent_id' => ['nullable', 'integer', 'exists:categories,id', Rule::notIn($exclude)],
             'description' => 'nullable|string',
-            'image' => 'nullable|image|max:10240',
+            // A path chosen in the media library, or (fallback) an uploaded file
+            'image' => $request->hasFile('image') ? 'image|max:10240' : ['nullable', 'string', 'max:1000', function ($attr, $value, $fail) use ($category) {
+                if ($value !== $category->image && ! Media::acceptable($value)) {
+                    $fail('That image is not in the media library.');
+                }
+            }],
             'icon' => 'nullable|string|max:40',
             'position' => 'nullable|integer',
             'meta_title' => 'nullable|string|max:255',
@@ -88,10 +90,12 @@ class CategoryController extends Controller
             'seo_content' => $data['seo_content'] ?? null,
         ]);
         if ($request->hasFile('image')) {
-            if ($category->image && ! preg_match('#^https?://#', $category->image)) {
-                Storage::disk('public')->delete($category->image);
+            $category->image = MediaController::storeUpload($request->file('image'), 'categories', $data['name'])->path;
+        } elseif ($request->has('image')) {
+            $category->image = ($data['image'] ?? null) ?: null;
+            if ($category->image) {
+                Media::register($category->image, 'categories');
             }
-            $category->image = $request->file('image')->store('categories', 'public');
         }
         $category->save();
         Cache::forget('menu.categories');

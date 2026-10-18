@@ -4,8 +4,9 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Banner;
+use App\Models\Media;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 
 class BannerController extends Controller
 {
@@ -41,23 +42,24 @@ class BannerController extends Controller
 
     public function destroy(Banner $banner)
     {
-        foreach ([$banner->image, $banner->mobile_image] as $img) {
-            if ($img && ! preg_match('#^https?://#', $img)) {
-                Storage::disk('public')->delete($img);
-            }
-        }
-        $banner->delete();
+        $banner->delete(); // its images stay in the media library
 
         return redirect()->route('admin.banners.index')->with('status', 'Banner deleted.');
     }
 
     private function save(Request $request, Banner $banner): void
     {
+        // Each image is a path chosen in the media library, or (fallback) an uploaded file.
+        $pathRule = fn (?string $current) => ['nullable', 'string', 'max:1000', function ($attr, $value, $fail) use ($current) {
+            if ($value !== $current && ! Media::acceptable($value)) {
+                $fail('That image is not in the media library.');
+            }
+        }];
         $data = $request->validate([
             'title' => 'required|string|max:255',
             'subtitle' => 'nullable|string|max:255',
-            'image' => [$banner->exists ? 'nullable' : 'required', 'image', 'max:10240'],
-            'mobile_image' => ['nullable', 'image', 'max:10240'],
+            'image' => $request->hasFile('image') ? ['image', 'max:10240'] : $pathRule($banner->image),
+            'mobile_image' => $request->hasFile('mobile_image') ? ['image', 'max:10240'] : $pathRule($banner->mobile_image),
             'link' => 'nullable|string|max:255',
             'button' => 'nullable|string|max:60',
             'position' => 'nullable|integer',
@@ -71,20 +73,21 @@ class BannerController extends Controller
             'is_active' => $request->boolean('is_active'),
             'show_text' => $request->boolean('show_text'),
         ]);
-        if ($request->hasFile('image')) {
-            if ($banner->image && ! preg_match('#^https?://#', $banner->image)) {
-                Storage::disk('public')->delete($banner->image);
+        foreach (['image', 'mobile_image'] as $field) {
+            if ($request->hasFile($field)) {
+                $banner->{$field} = MediaController::storeUpload($request->file($field), 'banners', $data['title'])->path;
+            } elseif ($request->has($field)) {
+                $banner->{$field} = ($data[$field] ?? null) ?: null;
+                if ($banner->{$field}) {
+                    Media::register($banner->{$field}, 'banners', $data['title']);
+                }
             }
-            $banner->image = $request->file('image')->store('banners', 'public');
         }
-        if ($request->hasFile('mobile_image')) {
-            if ($banner->mobile_image && ! preg_match('#^https?://#', $banner->mobile_image)) {
-                Storage::disk('public')->delete($banner->mobile_image);
-            }
-            $banner->mobile_image = $request->file('mobile_image')->store('banners', 'public');
-        } elseif ($request->boolean('remove_mobile_image') && $banner->mobile_image) {
-            Storage::disk('public')->delete($banner->mobile_image);
+        if ($request->boolean('remove_mobile_image')) {
             $banner->mobile_image = null;
+        }
+        if (! $banner->image) {
+            throw ValidationException::withMessages(['image' => 'Choose a desktop image for the banner.']);
         }
         $banner->save();
     }
