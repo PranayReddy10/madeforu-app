@@ -24,6 +24,13 @@
                     <label>{{ $label }} @if ($help)<small class="muted">{{ $help }}</small>@endif
                         <select name="{{ $name }}">@foreach (S::options($type) as $ov => $ol)<option value="{{ $ov }}" @selected($val === $ov)>{{ $ol }}</option>@endforeach</select>
                     </label>
+                @elseif ($type === 'secret_json')
+                    @php $saved = (bool) \App\Models\Setting::where('key', $key)->whereNotNull('value')->where('value', '!=', '')->exists(); $cred = $saved ? json_decode((string) setting($key), true) : null; @endphp
+                    <label>{{ $label }}
+                        <small class="muted">{{ $saved ? 'Saved ✓'.(! empty($cred['client_email']) ? ' — '.$cred['client_email'] : '').'. Leave blank to keep it.' : 'Not set.' }} {{ $help }}</small>
+                        <textarea name="{{ $name }}" rows="5" class="mono" spellcheck="false" autocomplete="off" placeholder="{{ $saved ? 'Paste a new key only to replace the saved one' : '{ &quot;type&quot;: &quot;service_account&quot;, &quot;client_email&quot;: …, &quot;private_key&quot;: … }' }}"></textarea>
+                    </label>
+                    @if ($saved)<label class="check"><input type="checkbox" name="{{ $name }}_clear" value="1"> Remove saved key</label>@endif
                 @elseif ($type === 'secret')
                     @php $saved = (bool) \App\Models\Setting::where('key', $key)->whereNotNull('value')->where('value', '!=', '')->exists(); $fromEnv = !$saved && setting($key); @endphp
                     <label>{{ $label }}

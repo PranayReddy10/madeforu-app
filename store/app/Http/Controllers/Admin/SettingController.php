@@ -109,7 +109,7 @@ class SettingController extends Controller
             'whatsapp_api.admin_numbers' => ['Your WhatsApp number(s) for new-order alerts', 'text', 'With country code, comma separated: 919876543210'],
         ],
         'Google Analytics & Search Console reports' => [
-            'google.service_account' => ['Google service account key (JSON)', 'secret', 'Google Cloud → IAM → Service accounts → Keys → Add key → JSON. Paste the whole file. Enable “Google Analytics Data API” and “Google Search Console API”.'],
+            'google.service_account' => ['Google service account key (JSON)', 'secret_json', 'Google Cloud → IAM → Service accounts → Keys → Add key → JSON. Paste the whole file. Enable “Google Analytics Data API” and “Google Search Console API”.'],
             'google.ga4_property' => ['GA4 property ID', 'text', 'Numbers only, e.g. 412345678 (GA4 → Admin → Property details). Add the service account email as a Viewer.'],
             'google.search_console_site' => ['Search Console property', 'text', 'sc-domain:madeforu.co.in (domain property) or https://madeforu.co.in/. Add the service account email as a user (Full).'],
         ],
@@ -160,6 +160,17 @@ class SettingController extends Controller
                     $type === 'number' => 'nullable|numeric|min:0',
                     $type === 'bool' => 'nullable',
                     $type === 'textarea' => 'nullable|string|max:500',
+                    $type === 'secret' => 'nullable|string|max:2000',
+                    // A Google key file is ~2,300 characters; check it is one before saving.
+                    $type === 'secret_json' => ['nullable', 'string', 'max:20000', function ($attr, $value, $fail) {
+                        if (trim((string) $value) === '') {
+                            return;
+                        }
+                        $json = json_decode(trim((string) $value), true);
+                        if (! is_array($json) || empty($json['client_email']) || empty($json['private_key'])) {
+                            $fail('That is not a Google service account key. Paste the whole downloaded .json file — it starts with { and contains "client_email" and "private_key".');
+                        }
+                    }],
                     default => 'nullable|string|max:255',
                 };
             }
@@ -171,7 +182,7 @@ class SettingController extends Controller
             foreach ($fields as $key => [$label, $type]) {
                 $name = self::inputName($key);
                 // Secrets are never shown again; an empty box keeps the saved one.
-                if ($type === 'secret') {
+                if ($type === 'secret' || $type === 'secret_json') {
                     if ($request->boolean($name.'_clear')) {
                         $values[$key] = '';
                     } elseif (trim((string) $request->input($name, '')) !== '') {
