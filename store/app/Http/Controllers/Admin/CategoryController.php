@@ -19,7 +19,7 @@ class CategoryController extends Controller
 
     public function create()
     {
-        return view('admin.categories.form', ['category' => new Category(['is_active' => true, 'show_on_home' => true]), 'parents' => Category::orderBy('path')->get()]);
+        return view('admin.categories.form', ['category' => new Category(['is_active' => true, 'show_on_home' => true, 'show_in_menu' => true]), 'parents' => Category::orderBy('path')->get()]);
     }
 
     public function store(Request $request)
@@ -85,6 +85,7 @@ class CategoryController extends Controller
             'position' => $data['position'] ?? 0,
             'is_active' => $request->boolean('is_active'),
             'show_on_home' => $request->boolean('show_on_home'),
+            'show_in_menu' => $request->boolean('show_in_menu'),
             'meta_title' => $data['meta_title'] ?? null,
             'meta_description' => $data['meta_description'] ?? null,
             'seo_content' => $data['seo_content'] ?? null,

@@ -13,7 +13,7 @@ class Category extends Model
 {
     protected $guarded = ['id'];
 
-    protected $casts = ['is_active' => 'boolean', 'show_on_home' => 'boolean'];
+    protected $casts = ['is_active' => 'boolean', 'show_on_home' => 'boolean', 'show_in_menu' => 'boolean'];
 
     protected static function booted(): void
     {

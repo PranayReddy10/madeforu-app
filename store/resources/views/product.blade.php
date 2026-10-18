@@ -37,6 +37,7 @@
         </div>
 
         <div class="pdp-info">
+            @if($product->primaryCategory)<a href="{{ $product->primaryCategory->url() }}" class="pdp-cat">{{ $product->primaryCategory->name }}</a>@endif
             <h1>{{ $product->name }}</h1>
             @if($product->rating_count)
                 <a href="#reviews" class="stars-line"><span class="stars-sm"><span style="--r: {{ $product->rating_avg }}"></span></span> {{ number_format($product->rating_avg, 1) }} · {{ $product->rating_count }} {{ \Illuminate\Support\Str::plural('review', $product->rating_count) }}</a>
@@ -45,8 +46,8 @@
             <div class="pdp-price" data-price-box>
                 <b data-price>{{ money($product->currentPrice()) }}</b>
                 <s data-regular @if(!$off) hidden @endif>{{ money($product->regularPrice()) }}</s>
-                <span class="save" data-save @if(!$off) hidden @endif>Save {{ $off }}%</span>
-                <small class="muted">Inclusive of all taxes</small>
+                <span class="save" data-save @if(!$off) hidden @endif>You save {{ money($product->regularPrice() - $product->currentPrice()) }} ({{ $off }}% off)</span>
+                <small class="muted">Inclusive of all taxes @if((float) setting('free_shipping_over') > 0)· Free delivery over {{ money(setting('free_shipping_over')) }}@endif</small>
             </div>
             @php $left = \App\Services\Stock::available($product); $low = \App\Services\Stock::lowThreshold(); @endphp
             @php $showLeft = $left !== null && $left > 0 && $left <= $low; @endphp

@@ -74,4 +74,19 @@ class PagesAndHomeTest extends TestCase
             ->assertSee('Offers you’ll love')->assertSee('Square Magnet')
             ->assertSee('Questions, answered')->assertSee('"FAQPage"', false);
     }
+
+    public function test_categories_can_be_left_out_of_the_top_menu(): void
+    {
+        $product = Product::create(['name' => 'Mug', 'slug' => 'mug', 'price' => 299, 'is_active' => true, 'in_stock' => true, 'type' => 'simple']);
+        foreach (['Mugs' => true, 'Custom Mugs' => false] as $name => $inMenu) {
+            Category::create(['name' => $name, 'slug' => Str::slug($name), 'is_active' => true, 'show_in_menu' => $inMenu])->products()->attach($product);
+        }
+
+        $html = $this->get('/')->assertOk()->getContent();
+        $top = Str::betweenFirst($html, 'class="cat-nav"', '</nav>');
+        $this->assertStringContainsString('>Mugs<', $top);
+        $this->assertStringNotContainsString('Custom Mugs', $top);
+        $this->assertStringContainsString('data-nav-more', $top);
+        $this->assertStringContainsString('Custom Mugs', $html);   // still in the side menu
+    }
 }
