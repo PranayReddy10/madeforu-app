@@ -155,7 +155,7 @@
             <table class="specs">
                 @foreach($infoAttrs as $a)<tr><th>{{ $a->name }}</th><td>{{ implode(', ', $a->values) }}</td></tr>@endforeach
                 @if($product->sku)<tr><th>SKU</th><td>{{ $product->sku }}</td></tr>@endif
-                @if($product->weight_kg)<tr><th>Weight</th><td>{{ rtrim(rtrim(number_format($product->weight_kg, 3), '0'), '.') }} kg</td></tr>@endif
+                @if($product->weight_kg)<tr><th>Weight</th><td>{{ \App\Services\Parcel::label(\App\Services\Parcel::itemGrams($product)) }}</td></tr>@endif
                 @if($product->length_cm && $product->width_cm && $product->height_cm)<tr><th>Packed size</th><td>{{ collect([$product->length_cm, $product->width_cm, $product->height_cm])->map(fn ($v) => rtrim(rtrim(number_format($v, 1), '0'), '.'))->implode(' × ') }} cm</td></tr>@endif
                 @if($product->packaging)<tr><th>Ships in</th><td>{{ $product->packaging === 'box' ? 'A sturdy carton box' : 'A padded courier flyer' }}</td></tr>@endif
                 <tr><th>Brand</th><td>{{ $product->brand }}</td></tr>

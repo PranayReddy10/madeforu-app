@@ -117,10 +117,36 @@ class LiveShippingTest extends TestCase
         $this->get(route('admin.products.edit', $mug))->assertOk()->assertSee('name="length_cm"', false)->assertSee('Carton box');
         $this->put(route('admin.products.update', $mug), [
             'name' => $mug->name, 'slug' => $mug->slug, 'type' => $mug->type, 'price' => $mug->price,
-            'weight_kg' => 0.45, 'length_cm' => 15, 'width_cm' => 12, 'height_cm' => 11, 'packaging' => 'flyer', 'is_active' => 1, 'in_stock' => 1,
+            'weight_g' => 450, 'length_cm' => 15, 'width_cm' => 12, 'height_cm' => 11, 'packaging' => 'flyer', 'is_active' => 1, 'in_stock' => 1,
         ])->assertSessionHasNoErrors();
         $mug->refresh();
+        $this->assertEquals(0.45, (float) $mug->weight_kg);
+        $this->get(route('admin.products.edit', $mug))->assertSee('name="weight_g"', false)->assertSee('value="450"', false);
+        $this->put(route('admin.products.update', $mug), ['name' => $mug->name, 'slug' => $mug->slug, 'type' => $mug->type, 'price' => $mug->price, 'weight_g' => 450, 'length_cm' => 250])
+            ->assertSessionHasErrors(['length_cm' => 'Sizes are in cm — for 120 mm enter 12.']);
         $this->assertEquals([15, 12, 11, 'flyer'], [(float) $mug->length_cm, (float) $mug->width_cm, (float) $mug->height_cm, $mug->packaging]);
-        $this->get('/product/'.$mug->slug.'/')->assertOk()->assertSee('15 × 12 × 11 cm')->assertSee('padded courier flyer');
+        $this->get('/product/'.$mug->slug.'/')->assertOk()->assertSee('15 × 12 × 11 cm')->assertSee('450 g')->assertSee('padded courier flyer');
+    }
+
+    public function test_weight_typed_in_grams_and_size_in_mm_are_not_quoted_as_huge_parcels(): void
+    {
+        $mug = Product::where('slug', 'magic-photo-mug')->first();
+        $mug->update(['weight_kg' => 350, 'length_cm' => 250, 'width_cm' => 200, 'height_cm' => 160]);   // grams and mm by mistake
+        $p = Parcel::of([[$mug, 1]]);
+        $this->assertSame(350, $p->grams);
+        $this->assertEquals([25, 20, 16], [$p->length, $p->width, $p->height]);
+        $this->assertSame(1600, $p->chargeableGrams());   // 25 × 20 × 16 ÷ 5, not 250 × 200 × 160
+    }
+
+    public function test_admin_rate_tester_shows_parcel_and_delhivery_reply(): void
+    {
+        $mug = $this->mug();
+        $this->actingAs(User::factory()->create(['is_admin' => true]));
+        $this->get(route('admin.products.edit', $mug))->assertSee('Test the delivery charge');
+        $this->getJson(route('admin.products.rate', [$mug, 'pin' => '500001', 'qty' => 2]))->assertOk()
+            ->assertJsonPath('parcel.actual_g', 800)->assertJsonPath('parcel.chargeable_g', 800)
+            ->assertJsonPath('prepaid.total', 63.2)->assertJsonPath('prepaid.sent.cgm', 800)->assertJsonPath('cod.total', 96.8)
+            ->assertJsonPath('customer_pays.shipping', 75);
+        $this->actingAs(User::factory()->create())->getJson(route('admin.products.rate', [$mug, 'pin' => '500001']))->assertForbidden();
     }
 }

@@ -125,6 +125,7 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'admin'])->group(fun
     Route::post('analytics/index-check', [Admin\AnalyticsController::class, 'checkIndex'])->name('analytics.index-check');
     Route::post('products/personalisation', [Admin\ProductController::class, 'bulkPersonalisation'])->name('products.personalisation');
     Route::resource('products', Admin\ProductController::class)->except('show');
+    Route::get('products/{product}/delivery-rate', [Admin\ProductController::class, 'deliveryRate'])->name('products.rate');
     Route::post('products/{product}/images', [Admin\ProductController::class, 'uploadImages'])->name('products.images');
     Route::delete('product-images/{image}', [Admin\ProductController::class, 'deleteImage'])->name('products.images.delete');
     Route::resource('categories', Admin\CategoryController::class)->except('show');

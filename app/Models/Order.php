@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Services\OrderEmails;
+use App\Services\Parcel;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -58,10 +59,9 @@ class Order extends Model
         if ($this->weight_grams) {
             return $this->weight_grams;
         }
-        $default = (int) setting('delhivery.default_weight', 300);
         $this->loadMissing('items.product');
 
-        return max(50, (int) $this->items->sum(fn ($i) => $i->qty * ($i->product?->weight_kg ? (int) round($i->product->weight_kg * 1000) : $default)));
+        return max(50, (int) $this->items->sum(fn ($i) => $i->qty * Parcel::itemGrams($i->product)));
     }
 
     public function statusLabel(): string

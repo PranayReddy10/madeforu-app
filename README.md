@@ -221,7 +221,7 @@ Hi {{1}}, you left {{2}} in your MadeForU cart 💝 Your photos are saved — fi
 
 ## Delivery charges and parcel sizes
 
-Each product has a weight, a packed size (length × width × height in cm) and how it ships (flyer or carton box) under **Products → Edit → Basics**. These go to Delhivery with every shipment and show on the product page under Specifications.
+Each product has a packed weight in grams, a packed size (length × width × height in cm) and how it ships (flyer or carton box) under **Products → Edit → Basics**. These go to Delhivery with every shipment and show on the product page under Specifications.
 
 **Settings → Shipping & payment → How delivery charges are worked out**:
 
@@ -232,6 +232,8 @@ Each product has a weight, a packed size (length × width × height in cm) and h
   - Optional: a packing/handling amount added to each rate, and rounding up (e.g. to ₹5).
   - COD charge: either your own COD charge, or Delhivery's (their COD price minus their prepaid price).
   - If Delhivery doesn't answer, the flat fee is used. Rates are cached for 12 hours.
+  - **Test the delivery charge** (under the size fields on a saved product) shows the parcel weight, volumetric weight, what Delhivery is charged for, its prepaid and COD price, and Delhivery's full reply.
+  - Old weights over 30 "kg" are read as grams, and sides of 150 "cm" or more as millimetres, so a unit mix-up doesn't quote a huge parcel.
   - Free shipping over the threshold still applies.
 
 With **Create the Delhivery shipment automatically** on, COD orders are booked the moment they're placed, and online orders the moment payment succeeds. Each one gets an AWB straight away and appears in Delhivery One (Shipments → Ready to ship / pending pickup), where you can manage it, print labels or request pickup. Orders whose payment was never completed are never booked.

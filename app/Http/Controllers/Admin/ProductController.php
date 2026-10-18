@@ -7,6 +7,9 @@ use App\Models\Category;
 use App\Models\Media;
 use App\Models\Product;
 use App\Models\ProductImage;
+use App\Services\Cart;
+use App\Services\Delhivery;
+use App\Services\Parcel;
 use App\Services\Stock;
 use App\Support\Personalisation;
 use Illuminate\Http\Request;
@@ -95,6 +98,25 @@ class ProductController extends Controller
         return view('admin.products.form', ['product' => $product, 'categories' => Category::orderBy('path')->get()]);
     }
 
+    /** Admin tester: the parcel this product makes and what Delhivery charges for it to a PIN. */
+    public function deliveryRate(Request $request, Product $product, Delhivery $delhivery)
+    {
+        $pin = preg_replace('/\D/', '', (string) $request->query('pin'));
+        $qty = max(1, min(20, $request->integer('qty', 1)));
+        $parcel = Parcel::of([[$product, $qty]]);
+        $price = (float) ($product->isOnSale() ? $product->sale_price : $product->price) * $qty;
+        $prepaid = $delhivery->rateDetails($pin, $parcel->chargeableGrams());
+        $cod = $delhivery->rateDetails($pin, $parcel->chargeableGrams(), true, $price);
+        $quote = Cart::shippingQuote([[$product, $qty]], $pin, true, $price);
+
+        return response()->json([
+            'parcel' => ['actual_g' => $parcel->grams, 'volumetric_g' => $parcel->volumetricGrams(), 'chargeable_g' => $parcel->chargeableGrams(),
+                'size_cm' => $parcel->length ? [$parcel->length, $parcel->width, $parcel->height] : null, 'packaging' => $parcel->packaging],
+            'prepaid' => $prepaid, 'cod' => $cod,
+            'customer_pays' => $quote ? ['shipping' => $quote['shipping'], 'cod_charge' => $quote['cod']] : null,
+        ]);
+    }
+
     public function update(Request $request, Product $product)
     {
         $this->save($request, $product);
@@ -146,10 +168,11 @@ class ProductController extends Controller
             'categories.*' => 'integer|exists:categories,id',
             'primary_category_id' => 'nullable|integer|exists:categories,id',
             'production_days' => 'nullable|integer|min:0|max:60',
-            'weight_kg' => 'nullable|numeric|min:0',
-            'length_cm' => 'nullable|numeric|min:0|max:500',
-            'width_cm' => 'nullable|numeric|min:0|max:500',
-            'height_cm' => 'nullable|numeric|min:0|max:500',
+            'weight_g' => 'nullable|integer|min:0|max:30000',
+            'weight_kg' => 'nullable|numeric|min:0|max:30',
+            'length_cm' => 'nullable|numeric|min:0|max:150',
+            'width_cm' => 'nullable|numeric|min:0|max:150',
+            'height_cm' => 'nullable|numeric|min:0|max:150',
             'packaging' => 'nullable|in:flyer,box',
             'stock_qty' => 'nullable|integer|min:0',
             'variants.*.stock_qty' => 'nullable|integer|min:0',
@@ -208,7 +231,7 @@ class ProductController extends Controller
             'fields.*.extra_price' => 'nullable|numeric|min:0',
             'fields.*.position' => 'nullable|integer',
             'fields.*.slots' => 'nullable|string|max:1000',
-        ]);
+        ], ['weight_g.max' => 'Weight is in grams — for 1.5 kg enter 1500.', 'length_cm.max' => 'Sizes are in cm — for 120 mm enter 12.', 'width_cm.max' => 'Sizes are in cm — for 120 mm enter 12.', 'height_cm.max' => 'Sizes are in cm — for 120 mm enter 12.']);
 
         $stockBefore = $product->stock_qty;
         DB::transaction(function () use ($request, $product, $data) {
@@ -228,7 +251,7 @@ class ProductController extends Controller
                 'in_stock' => $request->boolean('in_stock'),
                 'noindex' => $request->boolean('noindex'),
                 'production_days' => $data['production_days'] ?? 3,
-                'weight_kg' => $data['weight_kg'] ?? null,
+                'weight_kg' => $request->has('weight_g') ? ($data['weight_g'] ? $data['weight_g'] / 1000 : null) : ($data['weight_kg'] ?? null),
                 'length_cm' => $data['length_cm'] ?? null,
                 'width_cm' => $data['width_cm'] ?? null,
                 'height_cm' => $data['height_cm'] ?? null,

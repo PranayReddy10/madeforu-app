@@ -481,3 +481,6 @@ input[type=file][hidden] { display: none; }
 .addr-edit { margin-top: 10px; }
 .addr-edit summary { cursor: pointer; list-style: none; }
 .addr-edit form { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line); }
+
+.rate-test { margin-top: 10px; padding: 10px 12px; border: 1px dashed var(--line, #ddd); border-radius: 8px; }
+.rate-test .row-inline { margin: 6px 0; }
