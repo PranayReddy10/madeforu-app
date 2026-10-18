@@ -249,7 +249,7 @@
         var variants = JSON.parse(form.dataset.variants || '[]');
         var groups = $$('.opt-group', form);
         var variantInput = $('[data-variant-input]', form);
-        var priceEls = $$('[data-price]'), regEl = $('[data-regular]'), saveEl = $('[data-save]');
+        var priceEls = $$('[data-price]').filter(function (el) { return !el.matches('option, input'); }), regEl = $('[data-regular]'), saveEl = $('[data-save]');
         var base = null, baseRegular = null, chosenVariant = null;
         var firstPrice = priceEls[0] ? priceEls[0].textContent : '';
 
@@ -357,6 +357,20 @@
             base = +m; baseRegular = regEl && !regEl.hidden ? +regEl.textContent.replace(/[^\d.]/g, '') : base;
         }
         $$('[data-extra-select]', form).forEach(function (s) { s.addEventListener('change', render); });
+        // Options that set the photo count (Print side: One side → 1 photo, Two sides → 2), per item box.
+        function photoRule(block) {
+            var u = $('[data-photo-target]', block);
+            if (!u || !u.limit) return;
+            var n = 0;
+            $$('[data-extra-select]', block).forEach(function (s) { var o = s.selectedOptions[0]; if (o && o.dataset.photos) n = +o.dataset.photos; });
+            $$('[data-extra-choice]:checked', block).forEach(function (r) { if (r.dataset.photos) n = +r.dataset.photos; });
+            u.limit(n);
+        }
+        form.addEventListener('change', function (e) {
+            if (!e.target.matches('[data-extra-select], [data-extra-choice]')) return;
+            var block = e.target.closest('[data-item-block]') || form;
+            photoRule(block);
+        });
         // Picture choices (shape, style…): reprice and show the chosen name, in every item box.
         form.addEventListener('change', function (e) {
             if (!e.target.matches('[data-extra-choice]')) return;
@@ -367,6 +381,7 @@
         syncBlocks(); render();
 
         $$('[data-upload]', form).forEach(function (u) { uploader(u, form.dataset.uploadUrl); });
+        $$('[data-item-block]', form).forEach(photoRule);
 
         var errBox = $('[data-form-error]', form);
         function showError(msg) { errBox.textContent = msg; errBox.hidden = false; errBox.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
@@ -421,24 +436,34 @@
 
     /* Photo uploader: N slots, each holds one uploaded photo; picking several files fills the next empty slots. */
     function uploader(u, url) {
-        var slots = $$('[data-slot]', u), countEl = $('[data-count]', u), name = u.dataset.name, max = +u.dataset.max;
+        var slots = $$('[data-slot]', u), countEl = $('[data-count]', u), name = u.dataset.name;
         function update() {
             var n = $$('input[type=hidden]', u).length;
             countEl.textContent = n; u.classList.toggle('done', n >= +u.dataset.min);
             u.dataset.busy = $$('.slot.busy', u).length ? '1' : '0';
         }
-        function empty() { return slots.filter(function (s) { return !s.classList.contains('filled') && !s.classList.contains('busy'); }); }
+        function empty() { return slots.filter(function (s) { return !s.hidden && !s.classList.contains('filled') && !s.classList.contains('busy'); }); }
         function clear(slot) {
             slot.classList.remove('filled', 'busy');
             $$('img, .rm, .warn, .noprev, .bar, input[type=hidden]', slot).forEach(function (x) { x.remove(); });
             update();
         }
         u.reset = function () { slots.forEach(clear); };
+        // An option such as "Two sides" sets how many photos this field takes: show that many boxes, drop extra photos.
+        u.limit = function (n) {
+            var fromOption = n > 0;
+            n = fromOption ? n : +u.dataset.baseMax;
+            u.dataset.max = n; u.dataset.min = fromOption ? n : u.dataset.baseMin;
+            slots.forEach(function (s, i) { if (i >= n && (s.classList.contains('filled') || s.classList.contains('busy'))) clear(s); s.hidden = i >= n; });
+            var ml = $('[data-max-label]', u); if (ml) ml.textContent = n;
+            update();
+        };
         slots.forEach(function (slot) {
             var input = $('input[type=file]', slot);
             input.addEventListener('change', function () {
                 var files = Array.prototype.slice.call(input.files), free = empty();
                 if (!slot.classList.contains('filled') && free.indexOf(slot) > 0) { free.splice(free.indexOf(slot), 1); free.unshift(slot); }
+                var max = +u.dataset.max;
                 if (files.length > free.length) toast('Only ' + max + ' photo' + (max > 1 ? 's' : '') + ' for this one — extra photos were skipped.');
                 files.slice(0, free.length).forEach(function (f, i) { send(free[i], f); });
                 input.value = '';

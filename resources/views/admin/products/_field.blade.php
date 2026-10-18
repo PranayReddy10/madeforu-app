@@ -19,11 +19,11 @@
     <label data-show="images">Photo labels <small class="muted">optional — one per line, shown on each upload box, e.g. “His photo” / “Her photo”</small>
         <textarea name="fields[{{ $i }}][slots]" rows="2" placeholder="His photo&#10;Her photo">{{ $f['slots'] ?? '' }}</textarea>
     </label>
-    <label data-show="select">Choices — one per line, <code>Label|extra price</code>
-        <textarea name="fields[{{ $i }}][options]" rows="3" placeholder="Gift wrap|49&#10;No wrap|0">{{ $f['options'] ?? '' }}</textarea>
+    <label data-show="select">Choices — one per line, <code>Label|extra price</code>, or <code>Label|extra price|photos</code> when the option changes how many photos the customer uploads
+        <textarea name="fields[{{ $i }}][options]" rows="3" placeholder="One side|0|1&#10;Two sides|49|2">{{ $f['options'] ?? '' }}</textarea>
     </label>
     <div data-show="choice" class="choice-editor" data-choices data-base="fields[{{ $i }}][choices]">
-        <span class="lbl">Options <small class="muted">— a picture for each (shape, style, colour…), with an extra price if it costs more</small></span>
+        <span class="lbl">Options <small class="muted">— a picture for each (shape, style, colour…), with an extra price if it costs more, and the number of photos it needs (blank = as the photo field)</small></span>
         <div class="choice-list" data-choice-list>
             @foreach (($f['choices'] ?? []) as $k => $c)
                 @include('admin.products._choice', ['base' => "fields[{$i}][choices]", 'k' => $k, 'c' => $c])

@@ -108,10 +108,15 @@ class Cart
         $errors = [];
         $clean = [];
         $sessionId = session()->getId();
+        $photoField = $product->photoFieldId();
+        $photosNeeded = $photoField ? $product->photosFor($custom) : null;
         foreach ($product->customizationFields as $field) {
             $value = $custom[$field->id] ?? null;
             $name = 'custom.'.$field->id;
             if ($field->type === 'images') {
+                if ($field->id === $photoField && $photosNeeded) {   // the chosen option sets the count, e.g. Two sides → 2
+                    $field = (clone $field)->forceFill(['min_files' => $photosNeeded, 'max_files' => $photosNeeded]);
+                }
                 $tokens = array_values(array_filter((array) $value, 'is_string'));
                 $owned = CustomerUpload::whereIn('token', $tokens)->where('session_id', $sessionId)->pluck('token')->all();
                 $tokens = array_values(array_intersect($tokens, $owned));

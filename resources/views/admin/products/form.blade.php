@@ -17,7 +17,7 @@
     $fields = old('fields', $product->exists ? $product->customizationFields->map(fn ($f) => [
         'id' => $f->id, 'type' => $f->type, 'label' => $f->label, 'help' => $f->help, 'required' => $f->required,
         'min_files' => $f->min_files, 'max_files' => $f->max_files, 'max_length' => $f->max_length,
-        'options' => $f->type === 'select' ? collect($f->options ?? [])->map(fn ($o) => $o['label'].'|'.($o['price'] ?? 0))->implode("\n") : '',
+        'options' => $f->type === 'select' ? collect($f->options ?? [])->map(fn ($o) => $o['label'].'|'.($o['price'] ?? 0).(! empty($o['photos']) ? '|'.$o['photos'] : ''))->implode("\n") : '',
         'choices' => $f->type === 'choice' ? array_values($f->options ?? []) : [],
         'slots' => $f->type === 'images' ? collect($f->options ?? [])->pluck('label')->implode("\n") : '',
         'extra_price' => $f->extra_price, 'position' => $f->position,

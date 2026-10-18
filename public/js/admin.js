@@ -524,12 +524,13 @@ document.addEventListener('click', function (e) {
         row.className = 'choice-row'; row.setAttribute('data-choice-row', '');
         row.innerHTML = '<img class="preview" hidden alt=""><input type="hidden"><button type="button" class="btn small ghost" data-media-pick data-multiple="0" data-folder="options">Picture</button>'
             + '<input placeholder="e.g. Heart" maxlength="60"><input type="number" step="0.01" min="0" value="0" title="Extra price (₹)" class="price-in">'
+            + '<input type="number" min="1" max="50" title="Photos needed with this option (blank = as the photo field)" placeholder="photos" class="price-in">'
             + '<button type="button" class="link danger" data-choice-remove aria-label="Remove option">✕</button>';
         row.querySelector('img').setAttribute('data-preview-for', name + '[image]');
         row.querySelector('input[type=hidden]').name = name + '[image]';
         row.querySelector('[data-media-pick]').setAttribute('data-input', name + '[image]');
         var ins = row.querySelectorAll('input:not([type=hidden])');
-        ins[0].name = name + '[label]'; ins[1].name = name + '[price]';
+        ins[0].name = name + '[label]'; ins[1].name = name + '[price]'; ins[2].name = name + '[photos]';
         list.appendChild(row); ins[0].focus();
         return;
     }

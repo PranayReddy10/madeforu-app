@@ -159,6 +159,42 @@ class Product extends Model
         return $this->customizationFields->contains(fn ($f) => $f->type === 'images');
     }
 
+    /**
+     * The photo field whose count follows a chosen option (e.g. Print side: One side → 1 photo,
+     * Two sides → 2): the product's first photo field, when any option sets a photo count.
+     */
+    public function photoFieldId(): ?int
+    {
+        $fields = $this->customizationFields;
+        $driven = $fields->contains(fn ($f) => in_array($f->type, ['select', 'choice'], true) && collect($f->options ?? [])->contains(fn ($o) => ! empty($o['photos'])));
+
+        return $driven ? $fields->firstWhere('type', 'images')?->id : null;
+    }
+
+    /** The most photo boxes the field can need: its own max, or the largest option count. */
+    public function photoSlots(CustomizationField $field): int
+    {
+        $most = $field->id === $this->photoFieldId()
+            ? (int) $this->customizationFields->flatMap(fn ($f) => in_array($f->type, ['select', 'choice'], true) ? collect($f->options ?? [])->pluck('photos') : [])->filter()->max()
+            : 0;
+
+        return max($field->max_files, $most);
+    }
+
+    /** Photos needed for the options picked in $custom (field id → value); null = no option sets it. */
+    public function photosFor(array $custom): ?int
+    {
+        $n = null;
+        foreach ($this->customizationFields as $f) {
+            if (in_array($f->type, ['select', 'choice'], true) && isset($custom[$f->id]) && is_string($custom[$f->id])) {
+                $photos = collect($f->options ?? [])->firstWhere('label', trim($custom[$f->id]))['photos'] ?? null;
+                $n = $photos ? (int) $photos : $n;
+            }
+        }
+
+        return $n;
+    }
+
     public function uploadCount(): int
     {
         return (int) $this->customizationFields->where('type', 'images')->sum('max_files');
