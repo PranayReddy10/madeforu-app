@@ -16,6 +16,9 @@
         <label data-show="text textarea">Max characters <input type="number" min="1" name="fields[{{ $i }}][max_length]" value="{{ $f['max_length'] ?? '' }}"></label>
         <label>Extra price (₹) <input type="number" step="0.01" min="0" name="fields[{{ $i }}][extra_price]" value="{{ $f['extra_price'] ?? 0 }}"></label>
     </div>
+    <label data-show="images">Photo labels <small class="muted">optional — one per line, shown on each upload box, e.g. “His photo” / “Her photo”</small>
+        <textarea name="fields[{{ $i }}][slots]" rows="2" placeholder="His photo&#10;Her photo">{{ $f['slots'] ?? '' }}</textarea>
+    </label>
     <label data-show="select">Choices — one per line, <code>Label|extra price</code>
         <textarea name="fields[{{ $i }}][options]" rows="3" placeholder="Gift wrap|49&#10;No wrap|0">{{ $f['options'] ?? '' }}</textarea>
     </label>

@@ -87,7 +87,7 @@
                                         @for($i = 0; $i < $f->max_files; $i++)
                                             <label class="slot" data-slot>
                                                 <input type="file" accept="image/*,.heic,.heif" @if($f->max_files > 1) multiple @endif hidden>
-                                                <span class="slot-empty"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><small>{{ $f->max_files > 1 ? 'Photo '.($i + 1) : 'Add photo' }}</small></span>
+                                                <span class="slot-empty"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><small>{{ $f->options[$i]['label'] ?? ($f->max_files > 1 ? 'Photo '.($i + 1) : 'Add photo') }}</small></span>
                                             </label>
                                         @endfor
                                     </div>

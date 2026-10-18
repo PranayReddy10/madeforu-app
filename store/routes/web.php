@@ -97,6 +97,7 @@ Route::get('/{key}.txt', [SitemapController::class, 'indexNowKey'])->where('key'
 
 Route::prefix('admin')->name('admin.')->middleware(['auth', 'admin'])->group(function () {
     Route::get('/', [Admin\DashboardController::class, 'index'])->name('dashboard');
+    Route::post('products/personalisation', [Admin\ProductController::class, 'bulkPersonalisation'])->name('products.personalisation');
     Route::resource('products', Admin\ProductController::class)->except('show');
     Route::post('products/{product}/images', [Admin\ProductController::class, 'uploadImages'])->name('products.images');
     Route::delete('product-images/{image}', [Admin\ProductController::class, 'deleteImage'])->name('products.images.delete');
@@ -105,6 +106,8 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'admin'])->group(fun
     Route::get('orders/{order}', [Admin\OrderController::class, 'show'])->name('orders.show');
     Route::put('orders/{order}', [Admin\OrderController::class, 'update'])->name('orders.update');
     Route::get('orders/{order}/uploads.zip', [Admin\OrderController::class, 'downloadUploads'])->name('orders.uploads');
+    Route::get('orders/{order}/uploads/{upload}', [Admin\OrderController::class, 'downloadUpload'])->name('orders.upload');
+    Route::get('orders/{order}/production', [Admin\OrderController::class, 'productionSheet'])->name('orders.production');
     Route::post('orders/{order}/ship', [Admin\OrderController::class, 'ship'])->name('orders.ship');
     Route::get('orders/{order}/invoice.pdf', [Admin\OrderController::class, 'invoice'])->name('orders.invoice');
     Route::post('orders/{order}/whatsapp', [Admin\OrderController::class, 'whatsapp'])->name('orders.whatsapp');

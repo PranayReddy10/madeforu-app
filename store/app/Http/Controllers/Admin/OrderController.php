@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\CustomerUpload;
 use App\Models\NotificationLog;
 use App\Models\Order;
+use App\Models\OrderItem;
 use App\Services\Delhivery;
 use App\Services\Invoice;
 use App\Services\OrderNotifier;
@@ -13,6 +14,7 @@ use App\Services\Shipping;
 use App\Services\Stock;
 use App\Services\WhatsApp;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use ZipArchive;
 
 class OrderController extends Controller
@@ -44,7 +46,7 @@ class OrderController extends Controller
     {
         $order->load('items.uploads', 'items.product', 'user');
 
-        return view('admin.orders.show', compact('order'));
+        return view('admin.orders.show', ['order' => $order, 'sheet' => self::production($order)]);
     }
 
     public function update(Request $request, Order $order)
@@ -172,6 +174,69 @@ class OrderController extends Controller
         return back()->with('status', 'Delhivery pickup requested for '.$data['pickup_date'].' at '.$data['pickup_time'].'.');
     }
 
+    /**
+     * What to make, item by item: the photos (with their slot labels) and the text to print.
+     *
+     * @return array<int, array{item: OrderItem, n: int, parts: array}>
+     */
+    public static function production(Order $order): array
+    {
+        $order->loadMissing('items.uploads', 'items.product');
+        $out = [];
+        foreach ($order->items->values() as $i => $item) {
+            $parts = [];
+            foreach ($item->customization ?? [] as $c) {
+                if (($c['type'] ?? '') === 'images') {
+                    $photos = [];
+                    foreach (array_values($c['files'] ?? []) as $k => $token) {
+                        $u = $item->uploads->firstWhere('token', $token);
+                        if ($u) {
+                            $slot = $c['slots'][$k] ?? (count($c['files']) > 1 ? 'Photo '.($k + 1) : 'Photo');
+                            $photos[] = ['upload' => $u, 'slot' => $slot, 'filename' => self::photoName($order, $i + 1, $slot, $k + 1, $u)];
+                        }
+                    }
+                    $parts[] = ['type' => 'images', 'label' => $c['label'], 'photos' => $photos];
+                } else {
+                    $parts[] = ['type' => $c['type'] ?? 'text', 'label' => $c['label'], 'value' => (string) ($c['value'] ?? '')];
+                }
+            }
+            $out[] = ['item' => $item, 'n' => $i + 1, 'parts' => $parts];
+        }
+
+        return $out;
+    }
+
+    /** MFU261018001-item1-his-photo.jpg */
+    private static function photoName(Order $order, int $item, string $slot, int $k, CustomerUpload $u): string
+    {
+        $ext = strtolower(pathinfo($u->path, PATHINFO_EXTENSION) ?: 'jpg');
+
+        return $order->number.'-item'.$item.'-'.(Str::slug($slot) ?: 'photo-'.$k).'.'.$ext;
+    }
+
+    /** Printable sheet for the workshop. */
+    public function productionSheet(Order $order)
+    {
+        return view('admin.orders.production', ['order' => $order, 'sheet' => self::production($order)]);
+    }
+
+    /** One original photo, full resolution, with a name that says where it goes. */
+    public function downloadUpload(Order $order, CustomerUpload $upload)
+    {
+        foreach (self::production($order) as $row) {
+            foreach ($row['parts'] as $part) {
+                foreach ($part['photos'] ?? [] as $p) {
+                    if ($p['upload']->is($upload)) {
+                        abort_unless(is_file($upload->absolutePath()), 404, 'The photo file is missing on the server.');
+
+                        return response()->download($upload->absolutePath(), $p['filename']);
+                    }
+                }
+            }
+        }
+        abort(404);
+    }
+
     public function downloadUploads(Order $order)
     {
         $order->load('items.uploads');
@@ -180,17 +245,27 @@ class OrderController extends Controller
         $zip = new ZipArchive;
         $zip->open($tmp, ZipArchive::CREATE | ZipArchive::OVERWRITE);
         $count = 0;
-        foreach ($order->items->values() as $i => $item) {
-            foreach ($item->uploads->values() as $n => $u) {
-                /** @var CustomerUpload $u */
-                $file = $u->absolutePath();
-                if (is_file($file)) {
-                    $ext = pathinfo($u->path, PATHINFO_EXTENSION) ?: 'jpg';
-                    $zip->addFile($file, $order->number.'-'.($i + 1).'-'.($n + 1).'.'.$ext);
-                    $count++;
+        $notes = ['Order '.$order->number.' — '.$order->name.' — '.$order->created_at->format('d M Y'), ''];
+        foreach (self::production($order) as $row) {
+            $item = $row['item'];
+            $folder = 'item'.$row['n'].'-'.Str::slug(Str::limit($item->name, 40, '')).'/';
+            $notes[] = 'Item '.$row['n'].': '.$item->name.' × '.$item->qty.($item->options ? ' ('.collect($item->options)->map(fn ($v, $k) => "$k: $v")->implode(', ').')' : '');
+            foreach ($row['parts'] as $part) {
+                if ($part['type'] === 'images') {
+                    foreach ($part['photos'] as $p) {
+                        if (is_file($p['upload']->absolutePath())) {
+                            $zip->addFile($p['upload']->absolutePath(), $folder.$p['filename']);
+                            $notes[] = '  '.$p['slot'].': '.$p['filename'];
+                            $count++;
+                        }
+                    }
+                } elseif ($part['value'] !== '') {
+                    $notes[] = '  '.$part['label'].': '.$part['value'];
                 }
             }
+            $notes[] = '';
         }
+        $zip->addFromString('order-details.txt', implode("\r\n", $notes));
         $zip->close();
         if (! $count) {
             @unlink($tmp);

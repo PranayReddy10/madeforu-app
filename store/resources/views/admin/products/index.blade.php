@@ -22,15 +22,37 @@
     <button class="btn ghost">Filter</button>
 </form>
 
+<form id="bulk-form" method="post" action="{{ route('admin.products.personalisation') }}" class="card bulk-bar">
+    @csrf
+    <strong>Personalisation</strong>
+    <select name="source" required>
+        <option value="">Choose a setup…</option>
+        <optgroup label="Presets">
+            @foreach (\App\Support\Personalisation::presets() as $k => $p)<option value="{{ $k }}">{{ $p[0] }}</option>@endforeach
+        </optgroup>
+        <optgroup label="Copy from product">
+            @foreach (\App\Models\Product::has('customizationFields')->orderBy('name')->get(['id', 'name']) as $src)<option value="product:{{ $src->id }}">{{ \Illuminate\Support\Str::limit($src->name, 60) }}</option>@endforeach
+        </optgroup>
+    </select>
+    <span class="muted small">apply to</span>
+    <select name="category">
+        <option value="">the products ticked below</option>
+        @foreach ($categories as $c)<option value="{{ $c->id }}">every product in {{ $c->name }}</option>@endforeach
+    </select>
+    <button class="btn" data-confirm="Replace the personalisation fields on these products? Past orders are not affected.">Apply</button>
+</form>
+
 <div class="card">
 <table class="tbl">
-    <thead><tr><th></th><th>Product</th><th>Price</th><th>Category</th><th>SEO</th><th>Status</th><th></th></tr></thead>
+    <thead><tr><th><input type="checkbox" data-check-all title="Select all"></th><th></th><th>Product</th><th>Price</th><th>Category</th><th>SEO</th><th>Status</th><th></th></tr></thead>
     <tbody>
     @forelse ($products as $p)
         @php $seoScore = \App\Http\Controllers\Admin\SeoController::score($p); @endphp
         <tr>
+            <td><input type="checkbox" name="ids[]" value="{{ $p->id }}" form="bulk-form" data-check></td>
             <td><img class="thumb" src="{{ $p->mainImageUrl() }}" alt="" loading="lazy"></td>
-            <td><a href="{{ route('admin.products.edit', $p) }}"><strong>{{ $p->name }}</strong></a><br><small class="muted">{{ $p->sku ?: '—' }} · {{ $p->type }}</small></td>
+            <td><a href="{{ route('admin.products.edit', $p) }}"><strong>{{ $p->name }}</strong></a><br><small class="muted">{{ $p->sku ?: '—' }} · {{ $p->type }}</small>
+                <br><small class="perso">{{ $p->customizationFields->map(fn ($f) => $f->type === 'images' ? '📷 '.$f->max_files.' '.\Illuminate\Support\Str::plural('photo', $f->max_files) : $f->label)->implode(' + ') ?: 'No personalisation' }}</small></td>
             <td>
                 {{ money($p->currentPrice()) }}
                 @if ($p->discountPercent())<br><small class="muted"><s>{{ money($p->regularPrice()) }}</s> −{{ $p->discountPercent() }}%</small>@endif
@@ -50,7 +72,7 @@
             <td class="nowrap"><a href="{{ $p->url() }}" target="_blank" rel="noopener">View</a></td>
         </tr>
     @empty
-        <tr><td colspan="7" class="muted">No products found.</td></tr>
+        <tr><td colspan="8" class="muted">No products found.</td></tr>
     @endforelse
     </tbody>
 </table>
