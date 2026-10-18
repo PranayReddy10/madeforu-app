@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Order;
+use App\Models\OrderItem;
 use App\Models\Setting;
 use App\Models\User;
 use App\Services\Delhivery;
@@ -71,5 +72,33 @@ class OrdersListTest extends TestCase
         $this->post(route('admin.orders.bulk'), ['action' => 'delivered', 'ids' => [$a->id, $b->id]])->assertSessionHas('status');
         $this->assertSame(['delivered', 'paid'], [$a->fresh()->status, $a->fresh()->payment_status]);   // COD collected
         $this->assertNotNull($b->fresh()->delivered_at);
+    }
+
+    public function test_shipment_data_is_cleaned_and_a_partly_saved_order_is_retried(): void
+    {
+        $o = $this->order(['name' => 'Priya 😊 R.', 'phone' => '+91 98480 12345', 'address_line1' => 'Flat #4 & 5; Sai Residency', 'address_line2' => 'Near "Temple" | Road 3']);
+        OrderItem::create(['order_id' => $o->id, 'name' => 'Personalized Coffee Mug | Custom Photo Mug', 'qty' => 2, 'unit_price' => 150, 'line_total' => 300]);
+        Http::fake(['track.delhivery.com/api/cmu/create.json' => Http::sequence()
+            ->push(['packages' => [['status' => 'Fail', 'remarks' => ['Duplicate order id']]]])
+            ->push(['packages' => [['status' => 'Success', 'waybill' => 'AWB9']]])]);
+
+        $this->assertSame('AWB9', app(Delhivery::class)->createShipment($o));
+
+        $sent = collect(Http::recorded())->map(fn ($p) => json_decode($p[0]['data'], true)['shipments'][0]);
+        $this->assertSame([$o->number, $o->number.'-2'], $sent->pluck('order')->all());
+        $s = $sent[0];
+        $this->assertSame(['Priya R', '9848012345', 'Flat 4 and 5 Sai Residency, Near Temple Road 3', 'Personalized Coffee Mug x2'], [$s['name'], $s['phone'], $s['add'], $s['products_desc']]);
+
+        $this->assertStringContainsString('fraud check', Delhivery::explain('Crashing while saving package due to exception suspicious order/consignee.'));
+    }
+
+    public function test_shipping_details_can_be_corrected_on_the_order(): void
+    {
+        $o = $this->order();
+        $this->put(route('admin.orders.update', $o), ['status' => 'confirmed', 'payment_status' => 'unpaid', 'name' => 'Priya Sharma', 'phone' => '+91 98480 12345',
+            'address_line1' => 'H.No 5-6, Kukatpally', 'city' => 'Hyderabad', 'state' => 'Telangana', 'pincode' => '500072'])->assertSessionHasNoErrors();
+        $o->refresh();
+        $this->assertSame(['Priya Sharma', '9848012345', '500072'], [$o->name, $o->phone, $o->pincode]);
+        $this->get(route('admin.orders.show', $o))->assertSee('Edit name, phone');
     }
 }

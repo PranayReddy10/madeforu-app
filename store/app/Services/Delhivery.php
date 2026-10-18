@@ -26,6 +26,15 @@ class Delhivery
         return trim((string) setting('delhivery.pickup_location'));
     }
 
+    /** Plain text Delhivery accepts: no symbols, emojis or line breaks. */
+    public static function clean(?string $s, int $max): string
+    {
+        $s = str_replace('&', ' and ', (string) $s);
+        $s = preg_replace('/[^\p{L}\p{N} ,.\-\/()]+/u', ' ', $s);
+
+        return Str::limit(trim(preg_replace(['/\s+/', '/\s+,/', '/,{2,}/'], [' ', ',', ','], $s), ' ,.-'), $max, '');
+    }
+
     /** Delhivery's own wording, plus what to do about the errors shop owners actually meet. */
     public static function explain(string $why): string
     {
@@ -34,6 +43,11 @@ class Delhivery
             return 'the pickup location “'.($name ?: 'not set').'” is not a warehouse in your Delhivery account. '
                 .'The name must match exactly — capital and small letters too (“madeforu” and “MADEFORU” are different names to Delhivery): copy it from Delhivery One → Settings → Pickup locations into '
                 .'Admin → Settings → Delhivery shipping, or register your address from Admin → Orders → Delhivery. (Delhivery said: '.$why.')';
+        }
+        if (stripos($why, 'suspicious') !== false) {
+            return 'Delhivery’s fraud check flagged this order. It usually means test or dummy details (a name like “test”, phone 9876543210, '
+                .'an address like “12 MG Road”) or an incomplete address. Check the name, phone and address on the order — fix them with Edit on the order page — '
+                .'and press Retry. If it is a real customer and keeps failing, ask Delhivery support to clear it. (Delhivery said: '.$why.')';
         }
         if (stripos($why, 'Unauthorized') !== false || stripos($why, 'token') !== false && stripos($why, 'invalid') !== false) {
             return 'the API token was refused. Check it in Admin → Settings → Delhivery shipping, and that Mode (Live/Test) matches the token. (Delhivery said: '.$why.')';
@@ -118,40 +132,47 @@ class Delhivery
     {
         $order->loadMissing('items');
         $cod = $order->payment_method === 'cod' && $order->payment_status !== 'paid';
+        // Delhivery's fraud check ("suspicious order/consignee") trips on symbols, emojis and long product titles.
         $shipment = [
-            'name' => Str::limit($order->name, 100, ''),
-            'add' => trim($order->address_line1.', '.$order->address_line2, ', '),
-            'pin' => $order->pincode,
-            'city' => $order->city,
-            'state' => $order->state,
+            'name' => self::clean($order->name, 80),
+            'add' => self::clean(trim($order->address_line1.', '.$order->address_line2, ', '), 240),
+            'pin' => preg_replace('/\D/', '', (string) $order->pincode),
+            'city' => self::clean($order->city, 60),
+            'state' => self::clean($order->state, 60),
             'country' => 'India',
-            'phone' => $order->phone,
+            'phone' => substr(preg_replace('/\D/', '', (string) $order->phone), -10),
             'order' => $order->number,
             'payment_mode' => $cod ? 'COD' : 'Prepaid',
             'cod_amount' => $cod ? (string) round((float) $order->total, 2) : '0',
             'total_amount' => (string) round((float) $order->total, 2),
-            'products_desc' => Str::limit($order->items->map(fn ($i) => $i->name.' x'.$i->qty)->implode(', '), 240, ''),
+            'products_desc' => self::clean($order->items->map(fn ($i) => trim(Str::before($i->name, '|')).' x'.$i->qty)->implode(', '), 200),
             'quantity' => (string) $order->items->sum('qty'),
             'weight' => (string) $order->shippingWeight(),
-            'seller_name' => config('store.name'),
+            'seller_name' => self::clean((string) config('store.name'), 60),
             'shipping_mode' => setting('delhivery.shipping_mode') === 'Express' ? 'Express' : 'Surface',
             'waybill' => '',
             'order_date' => $order->created_at->toDateTimeString(),
         ];
-        $payload = ['shipments' => [$shipment], 'pickup_location' => ['name' => self::pickupName()]];
-
-        // Delhivery wants form fields: format=json&data=<json>
-        $res = $this->http()->asForm()->post($this->base().'/api/cmu/create.json', [
-            'format' => 'json',
-            'data' => json_encode($payload, JSON_UNESCAPED_UNICODE),
-        ]);
-        $pkg = $res->json('packages.0');
-        if (! $res->successful() || ! $pkg || strtolower((string) ($pkg['status'] ?? '')) !== 'success' || empty($pkg['waybill'])) {
+        // A failed attempt can leave the order number "partially saved" at Delhivery; a retry then gets
+        // "duplicate order id", so try once more with -2, -3.
+        foreach (['', '-2', '-3'] as $suffix) {
+            $shipment['order'] = $order->number.$suffix;
+            $payload = ['shipments' => [$shipment], 'pickup_location' => ['name' => self::pickupName()]];
+            // Delhivery wants form fields: format=json&data=<json>
+            $res = $this->http()->asForm()->post($this->base().'/api/cmu/create.json', [
+                'format' => 'json',
+                'data' => json_encode($payload, JSON_UNESCAPED_UNICODE),
+            ]);
+            $pkg = $res->json('packages.0');
+            if ($res->successful() && $pkg && strtolower((string) ($pkg['status'] ?? '')) === 'success' && ! empty($pkg['waybill'])) {
+                return (string) $pkg['waybill'];
+            }
             $why = collect((array) ($pkg['remarks'] ?? []))->filter()->implode(' ') ?: ($res->json('rmk') ?: Str::limit($res->body(), 300));
-            throw new RuntimeException('Delhivery did not accept the shipment: '.self::explain($why));
+            if (stripos($why, 'duplicate') === false && stripos($why, 'already exist') === false) {
+                break;
+            }
         }
-
-        return (string) $pkg['waybill'];
+        throw new RuntimeException('Delhivery did not accept the shipment: '.self::explain($why));
     }
 
     /**

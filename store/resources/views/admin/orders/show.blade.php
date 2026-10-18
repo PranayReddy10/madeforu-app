@@ -75,6 +75,26 @@
             <h2>Ship to <button type="button" class="link small" data-copy="{{ $order->name }}, {{ $order->address_line1 }}{{ $order->address_line2 ? ', '.$order->address_line2 : '' }}, {{ $order->city }}, {{ $order->state }} {{ $order->pincode }}, {{ $order->phone }}">Copy</button></h2>
             <p class="od-addr">{{ $order->address_line1 }}@if ($order->address_line2)<br>{{ $order->address_line2 }}@endif<br>{{ $order->city }}, {{ $order->state }} <b>{{ $order->pincode }}</b></p>
             <a class="link small" href="https://www.google.com/maps/search/?api=1&query={{ rawurlencode($order->address_line1.' '.$order->city.' '.$order->pincode) }}" target="_blank" rel="noopener">Open in Maps ↗</a>
+            <details class="addr-edit" @if ($errors->hasAny(['name', 'phone', 'address_line1', 'city', 'state', 'pincode'])) open @endif>
+                <summary class="link small">✎ Edit name, phone &amp; address</summary>
+                <form method="post" action="{{ route('admin.orders.update', $order) }}">
+                    @csrf @method('PUT')
+                    @foreach (['status', 'payment_status', 'courier', 'tracking_number', 'notes'] as $keep)<input type="hidden" name="{{ $keep }}" value="{{ $order->$keep }}">@endforeach
+                    <div class="row2">
+                        <label>Name <input name="name" value="{{ old('name', $order->name) }}" required></label>
+                        <label>Phone <input name="phone" value="{{ old('phone', $order->phone) }}" required></label>
+                    </div>
+                    <label>Address <input name="address_line1" value="{{ old('address_line1', $order->address_line1) }}" required></label>
+                    <label>Landmark / area <input name="address_line2" value="{{ old('address_line2', $order->address_line2) }}"></label>
+                    <div class="row3">
+                        <label>City <input name="city" value="{{ old('city', $order->city) }}" required></label>
+                        <label>State <input name="state" value="{{ old('state', $order->state) }}" required></label>
+                        <label>PIN <input name="pincode" value="{{ old('pincode', $order->pincode) }}" required pattern="\d{6}"></label>
+                    </div>
+                    @if ($errors->any())<p class="err small">{{ $errors->first() }}</p>@endif
+                    <button class="btn small">Save details</button>
+                </form>
+            </details>
         </section>
     </div>
 
