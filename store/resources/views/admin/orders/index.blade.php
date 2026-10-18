@@ -22,7 +22,7 @@
                     @csrf
                     <p class="muted small">Or, if it already exists in Delhivery One → Settings → Pickup locations, copy that exact name into <a href="{{ route('admin.settings') }}#delhivery-shipping">Settings → Delhivery shipping</a>.</p>
                     <div class="row3">
-                        <label>Pickup location name <input name="name" value="{{ setting('delhivery.pickup_location') ?: strtoupper(config('store.name')).' HYD' }}" required maxlength="60"></label>
+                        <label>Pickup location name <input name="name" value="{{ setting('delhivery.pickup_location') ?: strtolower(config('store.name')) }}" required maxlength="60"></label>
                         <label>Phone <input name="phone" value="{{ config('store.phone') }}" required></label>
                         <label>PIN code <input name="pin" value="{{ setting('delhivery.pickup_pincode') ?: config('store.postcode') }}" required pattern="\d{6}"></label>
                     </div>
