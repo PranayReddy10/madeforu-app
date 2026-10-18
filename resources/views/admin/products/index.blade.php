@@ -72,7 +72,7 @@
             <td class="nowrap"><a href="{{ $p->url() }}" target="_blank" rel="noopener">View</a></td>
         </tr>
     @empty
-        <tr><td colspan="8" class="muted">No products found.</td></tr>
+        <tr><td colspan="8" class="muted">No products found.@unless (request()->query()) <a href="{{ route('admin.import') }}">Import them from WordPress →</a>@endunless</td></tr>
     @endforelse
     </tbody>
 </table>

@@ -76,6 +76,8 @@ php artisan test
 
 ## Move the catalogue from WordPress
 
+**Easiest:** log in to `/admin/`, open **Import**, paste the WooCommerce consumer key and secret, and press **Start import**. The cron job runs it within a minute (or press **Run now**), and the page shows the progress log. It brings products, categories, images, pages, reviews, customers and past orders. Run it again any time; nothing is duplicated. The database on each server starts empty, so do this once on Hostinger.
+
 Run this while the WordPress site is still online:
 
 ```bash
@@ -118,7 +120,7 @@ You need a Business plan or higher, for SSH. Set the PHP version to **8.3** unde
    php artisan migrate --force
    ln -s ../storage/app/public public/storage   # optional: Hostinger blocks `php artisan storage:link`, and the site serves /storage/ files without it
    php artisan store:admin you@madeforu.co.in
-   php artisan store:import-woo https://madeforu.co.in --key=ck_… --secret=cs_… --customers   # while WP is still live
+   php artisan store:import-woo https://madeforu.co.in --key=ck_… --secret=cs_… --customers   # while WP is still live (or use Admin → Import)
    php artisan optimize
    ```
 

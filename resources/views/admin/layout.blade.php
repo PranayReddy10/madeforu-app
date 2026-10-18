@@ -27,6 +27,7 @@
                     ['admin.pages.index', 'Pages', 'admin/pages*'],
                     ['admin.redirects.index', 'Redirects', 'admin/redirects*'],
                     ['admin.seo', 'SEO', 'admin/seo*'],
+                    ['admin.import', 'Import', 'admin/import*'],
                     ['admin.settings', 'Settings', 'admin/settings*'],
                 ];
             @endphp

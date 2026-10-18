@@ -143,6 +143,9 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'admin'])->group(fun
     Route::get('seo', [Admin\SeoController::class, 'index'])->name('seo');
     Route::get('settings', [Admin\SettingController::class, 'edit'])->name('settings');
     Route::put('settings', [Admin\SettingController::class, 'update']);
+    Route::get('import', [Admin\ImportController::class, 'index'])->name('import');
+    Route::post('import', [Admin\ImportController::class, 'store'])->name('import.store');
+    Route::post('import/run', [Admin\ImportController::class, 'run'])->name('import.run');
     Route::get('media', [Admin\MediaController::class, 'index'])->name('media.index');
     Route::post('media', [Admin\MediaController::class, 'store'])->name('media.store');
     Route::put('media/{media}', [Admin\MediaController::class, 'update'])->name('media.update');
