@@ -31,6 +31,9 @@ class HomeLayout
         'text' => ['Text block', true, 'Headline and text — good for SEO.'],
     ];
 
+    /** How a row of products is laid out (on phones and computers). */
+    public const LAYOUTS = ['rail' => 'Swipe row', 'grid4' => 'Grid — 4 products (2 × 2 on phones)', 'grid6' => 'Grid — 6 products (2 × 3 on phones)', 'feature' => 'One big + 4 small'];
+
     public const SOURCES = ['bestsellers' => 'Bestsellers', 'newest' => 'Newest', 'featured' => 'Featured (ticked on the product)', 'sale' => 'On sale', 'category' => 'From one category', 'manual' => 'Products I pick'];
 
     public static function get(): array
@@ -53,13 +56,13 @@ class HomeLayout
     public static function make(string $type, array $values = []): array
     {
         $blank = match ($type) {
-            'products' => ['title' => 'Bestsellers', 'subtitle' => '', 'source' => 'bestsellers', 'category_id' => null, 'product_ids' => [], 'limit' => 12],
-            'category_row' => ['category_id' => null],
+            'products' => ['title' => 'Bestsellers', 'subtitle' => '', 'source' => 'bestsellers', 'category_id' => null, 'product_ids' => [], 'limit' => 12, 'layout' => 'rail'],
+            'category_row' => ['category_id' => null, 'layout' => 'rail'],
             'promo' => ['image' => '', 'mobile_image' => '', 'title' => '', 'text' => '', 'button' => 'Shop now', 'link' => '/shop/'],
             'text' => ['title' => '', 'body' => ''],
-            'categories' => ['title' => 'Shop by category', 'subtitle' => 'Every one made with your photos'],
+            'categories' => ['title' => 'Shop by category', 'subtitle' => 'Every one made with your photos', 'layout' => 'scroll'],
             'price_tiles' => ['title' => 'Gifts for every budget', 'subtitle' => 'Personalised, without the guesswork', 'amounts' => '199, 299, 499, 999'],
-            'offers' => ['eyebrow' => 'Limited-time prices', 'title' => 'Offers you’ll love'],
+            'offers' => ['eyebrow' => 'Limited-time prices', 'title' => 'Offers you’ll love', 'layout' => 'rail'],
             'steps' => ['eyebrow' => 'Simple as 1-2-3', 'title' => 'Made for you in three steps',
                 's1_title' => 'Choose your gift', 's1_text' => 'Magnets, mugs, bottles, keychains, badges — pick the size and style.',
                 's2_title' => 'Upload your photos', 's2_text' => 'Straight from your phone gallery. Add names, dates or a message.',
@@ -85,16 +88,16 @@ class HomeLayout
     {
         return [
             self::make('slider'), self::make('usp'), self::make('categories'),
-            self::make('products', ['title' => 'Bestsellers', 'subtitle' => 'Loved by our customers', 'source' => 'bestsellers']),
+            self::make('products', ['title' => 'Bestsellers', 'subtitle' => 'Loved by our customers', 'source' => 'bestsellers', 'layout' => 'grid4']),
             self::make('price_tiles'),
-            self::make('category_row'),
-            self::make('offers'),
+            self::make('category_row', ['layout' => 'rail']),
+            self::make('offers', ['layout' => 'rail']),
             self::make('steps'),
-            self::make('category_row'),
-            self::make('category_row'),
+            self::make('category_row', ['layout' => 'grid4']),
+            self::make('category_row', ['layout' => 'rail']),
             self::make('custom_band'), self::make('reviews'),
-            self::make('products', ['title' => 'Just arrived', 'subtitle' => 'New ways to say it', 'source' => 'newest']),
-            self::make('products', ['title' => 'Handpicked for you', 'subtitle' => 'Our favourite pieces this season', 'source' => 'featured']),
+            self::make('products', ['title' => 'Just arrived', 'subtitle' => 'New ways to say it', 'source' => 'newest', 'layout' => 'feature']),
+            self::make('products', ['title' => 'Handpicked for you', 'subtitle' => 'Our favourite pieces this season', 'source' => 'featured', 'layout' => 'grid6']),
             self::make('why'), self::make('instagram'), self::make('faq'),
             self::make('text', ['title' => 'Personalised gifts online in India', 'body' => '<p>'.config('store.name').' makes custom photo gifts for birthdays, anniversaries, weddings, Valentine\'s Day, Raksha Bandhan and every moment in between. Upload your photos, add a name or a message, and we make each gift by hand in '.config('store.city').' after you order. Choose from personalised photo magnets, custom mugs, bottles, keychains, badges and more, with cash on delivery and tracked shipping across India.</p>']),
         ];
@@ -119,6 +122,8 @@ class HomeLayout
     {
         $out = [];
         $seen = [];
+        $mix = ['grid4', 'rail', 'grid4', 'rail', 'feature', 'grid6'];
+        $rows = 0;
         foreach ($sections as $s) {
             $type = $s['type'] ?? null;
             if (! is_string($type) || ! isset(self::TYPES[$type]) || (! self::TYPES[$type][1] && isset($seen[$type]))) {
@@ -129,6 +134,10 @@ class HomeLayout
             $base = self::make($type, ['id' => $id]);
             $clean = $base;
             $clean['on'] = filter_var($s['on'] ?? false, FILTER_VALIDATE_BOOLEAN);
+            if (in_array($type, ['products', 'category_row'], true) && ! array_key_exists('layout', $s)) {
+                $s['layout'] = $mix[$rows % count($mix)];
+            }
+            $rows += in_array($type, ['products', 'category_row'], true) ? 1 : 0;
             foreach ($base as $k => $default) {
                 if (in_array($k, ['id', 'type', 'on'], true) || ! array_key_exists($k, $s)) {
                     continue;
@@ -141,6 +150,7 @@ class HomeLayout
                     $k === 'category_id' => (int) $v ?: null,
                     $k === 'limit' => max(2, min(24, (int) $v ?: 12)),
                     $k === 'source' => array_key_exists($v, self::SOURCES) ? $v : 'bestsellers',
+                    $k === 'layout' => $type === 'categories' ? (in_array($v, ['scroll', 'grid'], true) ? $v : 'scroll') : (array_key_exists($v, self::LAYOUTS) ? $v : 'rail'),
                     $k === 'body' => Str::limit((string) $v, 20000, ''),
                     default => Str::limit(trim((string) $v), 600, ''),
                 };

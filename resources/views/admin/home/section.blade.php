@@ -37,8 +37,12 @@
                             @foreach (\App\Support\HomeLayout::SOURCES as $k => $l)<option value="{{ $k }}" @selected($s['source'] === $k)>{{ $l }}</option>@endforeach
                         </select>
                     </label>
-                    <label>How many <input type="number" name="{{ $n('limit') }}" value="{{ $s['limit'] }}" min="2" max="24"></label>
+                    <label>How many <small class="muted">(swipe row)</small><input type="number" name="{{ $n('limit') }}" value="{{ $s['limit'] }}" min="2" max="24"></label>
                 </div>
+                <label>Layout
+                    <select name="{{ $n('layout') }}">@foreach (\App\Support\HomeLayout::LAYOUTS as $k => $l)<option value="{{ $k }}" @selected($s['layout'] === $k)>{{ $l }}</option>@endforeach</select>
+                </label>
+
                 <label data-hb-when="category" @if ($s['source'] !== 'category') hidden @endif>Category
                     <select name="{{ $n('category_id') }}"><option value="">Choose…</option>@foreach ($categories as $c)<option value="{{ $c->id }}" @selected($s['category_id'] == $c->id)>{{ str_repeat('— ', substr_count($c->path, '/')) }}{{ $c->name }}</option>@endforeach</select>
                 </label>
@@ -49,6 +53,9 @@
             @case('category_row')
                 <label>Category
                     <select name="{{ $n('category_id') }}"><option value="">Automatic — the next biggest category</option>@foreach ($categories as $c)<option value="{{ $c->id }}" @selected($s['category_id'] == $c->id)>{{ str_repeat('— ', substr_count($c->path, '/')) }}{{ $c->name }}</option>@endforeach</select>
+                </label>
+                <label>Layout
+                    <select name="{{ $n('layout') }}">@foreach (\App\Support\HomeLayout::LAYOUTS as $k => $l)<option value="{{ $k }}" @selected($s['layout'] === $k)>{{ $l }}</option>@endforeach</select>
                 </label>
                 <p class="muted small">The picture is the category's image (Admin → Categories), or its first product.</p>
                 @break
@@ -107,6 +114,27 @@
                     @endforeach
                 </div>
                 <button type="button" class="btn small ghost" data-hb-faq-add>+ Add a question</button>
+                @break
+            @case('offers')
+                <div class="row2">
+                    <label>Small line above <input name="{{ $n('eyebrow') }}" value="{{ $s['eyebrow'] }}"></label>
+                    <label>Heading <input name="{{ $n('title') }}" value="{{ $s['title'] }}" data-hb-title></label>
+                </div>
+                <label>Layout
+                    <select name="{{ $n('layout') }}">@foreach (\App\Support\HomeLayout::LAYOUTS as $k => $l)<option value="{{ $k }}" @selected($s['layout'] === $k)>{{ $l }}</option>@endforeach</select>
+                </label>
+                @break
+            @case('categories')
+                <div class="row2">
+                    <label>Heading <input name="{{ $n('title') }}" value="{{ $s['title'] }}" data-hb-title></label>
+                    <label>Line under the heading <input name="{{ $n('subtitle') }}" value="{{ $s['subtitle'] }}"></label>
+                </div>
+                <label>Layout
+                    <select name="{{ $n('layout') }}">
+                        <option value="scroll" @selected($s['layout'] === 'scroll')>Round icons in one swipe row</option>
+                        <option value="grid" @selected($s['layout'] === 'grid')>Square tiles, 4 per line on phones</option>
+                    </select>
+                </label>
                 @break
             @default
                 @foreach (['eyebrow' => 'Small line above', 'title' => 'Heading', 'subtitle' => 'Line under the heading', 'text' => 'Text', 'amounts' => 'Amounts (₹, comma separated)'] as $f => $label)
