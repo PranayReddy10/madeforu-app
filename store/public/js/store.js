@@ -225,18 +225,57 @@
             groups.forEach(function (g) { var c = $('input:checked', g); if (c) sel[g.dataset.attr] = c.value; });
             return sel;
         }
-        function extras() {
+        // Quantity and per-item personalisation: with "Different for each", item 2, 3… get their own box.
+        var qtyInput = $('input[name=qty]', form), eachEl = $('[data-each]');
+        var choice = $('[data-each-choice]', form), tpl = $('[data-item-template]', form), blocksBox = $('[data-item-blocks]', form);
+        function qty() { return Math.max(1, Math.min(99, +qtyInput.value || 1)); }
+        function eachMode() { return !!choice && qty() > 1 && $('input[name=custom_each]:checked', form).value === '1'; }
+        function liveBlocks() { return $$('[data-item-block]', form).filter(function (b) { return !b.hidden; }); }
+        function syncBlocks() {
+            if (!choice) return;
+            var n = qty(), each = eachMode();
+            choice.hidden = n < 2;
+            $$('[data-qty-label]', form).forEach(function (l) { l.textContent = n; });
+            var tag = $('[data-item-tag]', form); if (tag) tag.hidden = !each;
+            for (var i = blocksBox.children.length + 1; each && i < n; i++) {
+                var div = document.createElement('div');
+                div.innerHTML = tpl.innerHTML.replace(/__N__/g, i).replace(/__NUM__/g, i + 1);
+                var block = div.firstElementChild;
+                blocksBox.appendChild(block);
+                $$('[data-upload]', block).forEach(function (u) { uploader(u, form.dataset.uploadUrl); });
+                $$('[data-extra-select]', block).forEach(function (s) { s.addEventListener('change', render); });
+            }
+            // Extra boxes are hidden and switched off (not sent) rather than deleted, so photos survive a change of mind.
+            Array.prototype.forEach.call(blocksBox.children, function (b, k) {
+                var on = each && k + 1 < n;
+                b.hidden = !on;
+                $$('input, select, textarea', b).forEach(function (x) { x.disabled = !on; });
+            });
+        }
+        function extras(block) {
             var e = 0;
-            $$('[data-extra-select]', form).forEach(function (s) { var o = s.selectedOptions[0]; e += o ? +(o.dataset.price || 0) : 0; });
+            $$('[data-extra-select]', block).forEach(function (s) { var o = s.selectedOptions[0]; e += o ? +(o.dataset.price || 0) : 0; });
             return e;
         }
         function render() {
-            if (base === null) { priceEls.forEach(function (p) { p.textContent = firstPrice; }); return; }
-            var now = base + extras(), reg = baseRegular + extras();
+            if (base === null) { priceEls.forEach(function (p) { p.textContent = firstPrice; }); if (eachEl) eachEl.hidden = true; return; }
+            var n = qty(), blocks = liveBlocks(), now = 0, reg = 0;
+            if (eachMode()) {
+                blocks.forEach(function (b) { now += base + extras(b); reg += baseRegular + extras(b); });
+            } else {
+                var e = blocks.length ? extras(blocks[0]) : 0;
+                now = (base + e) * n; reg = (baseRegular + e) * n;
+            }
             priceEls.forEach(function (p) { p.textContent = inr(now); });
+            if (eachEl) { eachEl.hidden = n < 2; eachEl.textContent = inr(now / n) + ' each × ' + n; }
             if (regEl) { regEl.textContent = inr(reg); regEl.hidden = !(reg > now); }
             if (saveEl) { saveEl.textContent = 'You save ' + inr(reg - now) + ' (' + Math.round(100 * (reg - now) / reg) + '% off)'; saveEl.hidden = !(reg > now); }
         }
+        if (qtyInput) {
+            qtyInput.addEventListener('change', function () { syncBlocks(); render(); });
+            qtyInput.addEventListener('input', function () { syncBlocks(); render(); });
+        }
+        $$('input[name=custom_each]', form).forEach(function (r) { r.addEventListener('change', function () { syncBlocks(); render(); }); });
         function matchVariant() {
             var sel = selection(), keys = Object.keys(sel);
             groups.forEach(function (g) { var c = $('input:checked', g); $('[data-attr-chosen]', g).textContent = c ? c.value : ''; });
@@ -284,6 +323,7 @@
             base = +m; baseRegular = regEl && !regEl.hidden ? +regEl.textContent.replace(/[^\d.]/g, '') : base;
         }
         $$('[data-extra-select]', form).forEach(function (s) { s.addEventListener('change', render); });
+        syncBlocks(); render();
 
         $$('[data-upload]', form).forEach(function (u) { uploader(u, form.dataset.uploadUrl); });
 
@@ -293,9 +333,15 @@
         form.addEventListener('submit', function (e) {
             errBox.hidden = true;
             if (groups.length && !variantInput.value) { e.preventDefault(); showError('Please choose ' + groups.map(function (g) { return g.dataset.attr.toLowerCase(); }).join(' and ') + '.'); return; }
-            if ($$('[data-upload]', form).some(function (u) { return u.dataset.busy === '1'; })) { e.preventDefault(); showError('Please wait — your photos are still uploading.'); return; }
-            var missing = $$('[data-upload]', form).find(function (u) { return u.dataset.required === '1' && $$('input[type=hidden]', u).length < +u.dataset.min; });
-            if (missing) { e.preventDefault(); showError('Please upload ' + missing.dataset.min + ' photo' + (+missing.dataset.min > 1 ? 's' : '') + ' to personalise this gift.'); missing.scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
+            var uploads = liveBlocks().reduce(function (all, b) { return all.concat($$('[data-upload]', b)); }, []);
+            if (uploads.some(function (u) { return u.dataset.busy === '1'; })) { e.preventDefault(); showError('Please wait — your photos are still uploading.'); return; }
+            var missing = uploads.find(function (u) { return u.dataset.required === '1' && $$('input[type=hidden]', u).length < +u.dataset.min; });
+            if (missing) {
+                e.preventDefault();
+                var item = eachMode() ? ' for item ' + (+missing.closest('[data-item-block]').dataset.itemBlock + 1) : '';
+                showError('Please upload ' + missing.dataset.min + ' photo' + (+missing.dataset.min > 1 ? 's' : '') + item + ' to personalise this gift.');
+                missing.scrollIntoView({ behavior: 'smooth', block: 'center' }); return;
+            }
             if (e.submitter && e.submitter.name === 'buy_now') return; // straight to checkout
             if (!window.fetch) return;
             e.preventDefault();
@@ -309,6 +355,8 @@
                     toast(esc(res.d.message) + ' <a href="/cart">View cart</a>');
                     track(res.d.event);
                     $$('[data-upload]', form).forEach(function (u) { u.reset && u.reset(); });
+                    blocksBox && (blocksBox.innerHTML = '');
+                    if (qtyInput) { qtyInput.value = 1; syncBlocks(); render(); }
                 })
                 .catch(function () { btn.disabled = false; form.submit(); });
         });
