@@ -4,6 +4,10 @@
 @section('content')
 <form class="filters card" method="get">
     <input type="search" name="q" value="{{ request('q') }}" placeholder="Search name or SKU">
+    <select name="stock">
+        <option value="">Any stock</option>
+        @foreach (['low' => 'Low stock', 'out' => 'Out of stock', 'counted' => 'Stock counted'] as $k => $l)<option value="{{ $k }}" @selected(request('stock') === $k)>{{ $l }}</option>@endforeach
+    </select>
     <select name="category">
         <option value="">All categories</option>
         @foreach ($categories as $c)
@@ -36,6 +40,11 @@
             <td>
                 @if ($p->is_active)<span class="badge ok">Active</span>@else<span class="badge">Hidden</span>@endif
                 @if (! $p->in_stock)<span class="badge err">Out of stock</span>@endif
+                @php $counted = $p->type === 'variable' ? $p->variants->whereNotNull('stock_qty') : collect($p->stock_qty !== null ? [$p] : []); @endphp
+                @if ($counted->isNotEmpty())
+                    @php $left = (int) $counted->sum('stock_qty'); @endphp
+                    <span class="badge {{ $left <= \App\Services\Stock::lowThreshold() ? 'err' : '' }}" title="Units in stock">{{ $left }} left</span>
+                @endif
                 @if ($p->is_featured)<span class="badge">★</span>@endif
             </td>
             <td class="nowrap"><a href="{{ $p->url() }}" target="_blank" rel="noopener">View</a></td>

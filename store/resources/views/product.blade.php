@@ -48,6 +48,9 @@
                 <span class="save" data-save @if(!$off) hidden @endif>Save {{ $off }}%</span>
                 <small class="muted">Inclusive of all taxes</small>
             </div>
+            @php $left = \App\Services\Stock::available($product); $low = \App\Services\Stock::lowThreshold(); @endphp
+            @php $showLeft = $left !== null && $left > 0 && $left <= $low; @endphp
+            <p class="stock-note" data-stock-note data-low="{{ $low }}" @unless($showLeft) hidden @endunless>@if($showLeft) 🔥 Only {{ $left }} left — order soon @endif</p>
 
             @if($product->short_description)<div class="prose short">{!! $product->short_description !!}</div>@endif
 

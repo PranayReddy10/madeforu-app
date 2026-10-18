@@ -11,11 +11,13 @@ use App\Models\Order;
 use App\Models\Product;
 use App\Services\Analytics;
 use App\Services\Cart;
+use App\Services\CartRecovery;
 use App\Services\Cashfree;
 use App\Services\Delhivery;
 use App\Services\Invoice;
 use App\Services\Razorpay;
 use App\Services\Seo;
+use App\Services\Stock;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -44,6 +46,7 @@ class CheckoutController extends Controller
         ]);
         $user = auth()->user();
         $last = $user?->orders()->first();
+        $saved = session('checkout.prefill', []);
 
         return view('checkout', [
             'lines' => $lines,
@@ -51,7 +54,8 @@ class CheckoutController extends Controller
             'codTotals' => $this->cart->totals($lines, 'cod'),
             'states' => self::STATES,
             'prefill' => [
-                'name' => $last->name ?? $user?->name, 'email' => $last->email ?? $user?->email, 'phone' => $last->phone ?? $user?->phone,
+                'name' => $last->name ?? $user?->name ?? $saved['name'] ?? null, 'email' => $last->email ?? $user?->email ?? $saved['email'] ?? null,
+                'phone' => $last->phone ?? $user?->phone ?? $saved['phone'] ?? null,
                 'address_line1' => $last?->address_line1, 'address_line2' => $last?->address_line2, 'city' => $last?->city,
                 'state' => $last?->state, 'pincode' => $last?->pincode,
             ],
@@ -91,6 +95,10 @@ class CheckoutController extends Controller
         $lines = $this->cart->lines();
         if ($lines->isEmpty()) {
             return redirect()->route('cart')->with('error', 'Your cart is empty.');
+        }
+        // Someone else may have bought the last one since this was added to the cart.
+        if ($short = $this->cart->stockProblems($lines)) {
+            return redirect()->route('cart')->with('error', implode(' ', $short));
         }
         $method = $data['payment_method'];
         if ($method !== 'cod' && ! in_array($method, self::gateways(), true)) {
@@ -297,6 +305,8 @@ class CheckoutController extends Controller
         foreach ($order->items as $i) {
             Product::whereKey($i->product_id)->increment('sales_count', $i->qty);
         }
+        app(Stock::class)->reduce($order);
+        app(CartRecovery::class)->markRecovered($order);
         Invoice::assign($order);
         // WhatsApp to the customer and the shop, after the customer's page has gone out.
         NotifyOrder::dispatchAfterResponse($order->id, 'confirmed');

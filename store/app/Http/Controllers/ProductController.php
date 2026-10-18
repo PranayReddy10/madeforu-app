@@ -33,6 +33,7 @@ class ProductController extends Controller
             'price' => $v->currentPrice(),
             'regular' => (float) $v->price,
             'in_stock' => $v->in_stock,
+            'stock' => $v->stock_qty,
             'image' => $v->image ? media_url($v->image) : null,
             'sku' => $v->sku,
         ])->values();

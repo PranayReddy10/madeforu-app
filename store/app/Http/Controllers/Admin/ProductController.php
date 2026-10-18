@@ -7,6 +7,7 @@ use App\Models\Category;
 use App\Models\Media;
 use App\Models\Product;
 use App\Models\ProductImage;
+use App\Services\Stock;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -26,6 +27,14 @@ class ProductController extends Controller
         if ($request->filled('active')) {
             $q->where('is_active', $request->query('active') === '1');
         }
+        $low = Stock::lowThreshold();
+        match ($request->query('stock')) {
+            'low' => $q->where(fn ($w) => $w->where(fn ($s) => $s->whereNotNull('stock_qty')->where('stock_qty', '<=', $low))
+                ->orWhereHas('variants', fn ($v) => $v->whereNotNull('stock_qty')->where('stock_qty', '<=', $low))),
+            'out' => $q->where('in_stock', false),
+            'counted' => $q->where(fn ($w) => $w->whereNotNull('stock_qty')->orWhereHas('variants', fn ($v) => $v->whereNotNull('stock_qty'))),
+            default => null,
+        };
 
         return view('admin.products.index', [
             'products' => $q->latest()->paginate(30)->withQueryString(),
@@ -105,6 +114,8 @@ class ProductController extends Controller
             'primary_category_id' => 'nullable|integer|exists:categories,id',
             'production_days' => 'nullable|integer|min:0|max:60',
             'weight_kg' => 'nullable|numeric|min:0',
+            'stock_qty' => 'nullable|integer|min:0',
+            'variants.*.stock_qty' => 'nullable|integer|min:0',
             'brand' => 'nullable|string|max:100',
             'gtin' => 'nullable|string|max:50',
             'hsn_code' => 'nullable|string|max:12',
@@ -157,6 +168,7 @@ class ProductController extends Controller
             'fields.*.position' => 'nullable|integer',
         ]);
 
+        $stockBefore = $product->stock_qty;
         DB::transaction(function () use ($request, $product, $data) {
             $sale = $data['sale_price'] ?? null;
             $product->fill([
@@ -175,6 +187,7 @@ class ProductController extends Controller
                 'noindex' => $request->boolean('noindex'),
                 'production_days' => $data['production_days'] ?? 3,
                 'weight_kg' => $data['weight_kg'] ?? null,
+                'stock_qty' => isset($data['stock_qty']) && $data['stock_qty'] !== '' ? (int) $data['stock_qty'] : null,
                 'brand' => ($data['brand'] ?? null) ?: 'MadeForU',
                 'gtin' => $data['gtin'] ?? null,
                 'hsn_code' => $data['hsn_code'] ?? null,
@@ -245,6 +258,7 @@ class ProductController extends Controller
                     'sale_price' => $vSale !== null && $vSale !== '' && (float) $vSale > 0 ? $vSale : null,
                     'sku' => $v['sku'] ?? null,
                     'in_stock' => ! empty($rawVariants[$i]['in_stock']),
+                    'stock_qty' => isset($v['stock_qty']) && $v['stock_qty'] !== '' ? (int) $v['stock_qty'] : null,
                     'image' => $v['image'] ?? null,
                     'position' => $i,
                 ];
@@ -253,6 +267,7 @@ class ProductController extends Controller
                 }
                 $existing = ! empty($v['id']) ? $product->variants()->whereKey($v['id'])->first() : null;
                 if ($existing) {
+                    Stock::logAdjustment($product, $existing, $existing->stock_qty, $row['stock_qty']);
                     $existing->update($row);
                     $keep[] = $existing->id;
                 } else {
@@ -306,6 +321,7 @@ class ProductController extends Controller
                 $this->storeImages($request->file('new_images'), $product);
             }
         });
+        Stock::logAdjustment($product, null, $stockBefore, $product->fresh()->stock_qty);
     }
 
     /** "Size=A4; Frame=Black" → ['Size' => 'A4', 'Frame' => 'Black'] */

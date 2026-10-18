@@ -12,7 +12,7 @@
     $variants = old('variants', $product->exists ? $product->variants->map(fn ($v) => [
         'id' => $v->id,
         'options' => collect($v->options)->map(fn ($val, $k) => "$k=$val")->implode('; '),
-        'price' => $v->price, 'sale_price' => $v->sale_price, 'sku' => $v->sku, 'in_stock' => $v->in_stock, 'image' => $v->image,
+        'price' => $v->price, 'sale_price' => $v->sale_price, 'sku' => $v->sku, 'in_stock' => $v->in_stock, 'stock_qty' => $v->stock_qty, 'image' => $v->image,
     ])->all() : []);
     $fields = old('fields', $product->exists ? $product->customizationFields->map(fn ($f) => [
         'id' => $f->id, 'type' => $f->type, 'label' => $f->label, 'help' => $f->help, 'required' => $f->required,
@@ -106,7 +106,7 @@
             <p class="muted">Options are written <code>Size=A4; Frame=Black</code>.</p>
             <div class="tbl-wrap">
             <table class="tbl compact">
-                <thead><tr><th>Options</th><th>Price</th><th>Sale</th><th>SKU</th><th>In stock</th><th>Image</th><th></th></tr></thead>
+                <thead><tr><th>Options</th><th>Price</th><th>Sale</th><th>SKU</th><th>In stock</th><th>Stock</th><th>Image</th><th></th></tr></thead>
                 <tbody id="variants" data-rows>
                     @foreach (array_values($variants) as $i => $v)
                         @include('admin.products._variant', ['i' => $i, 'v' => $v])
@@ -158,6 +158,16 @@
             <h2>Publish</h2>
             <label class="check"><input type="checkbox" name="is_active" value="1" @checked(old('is_active', $product->is_active))> Active (visible in store)</label>
             <label class="check"><input type="checkbox" name="in_stock" value="1" @checked(old('in_stock', $product->in_stock))> In stock</label>
+            <label>Stock quantity <small class="muted">blank = made to order (never runs out). Variable products: set stock per variation.</small>
+                <input type="number" name="stock_qty" min="0" step="1" value="{{ old('stock_qty', $product->stock_qty) }}" placeholder="Not counted"></label>
+            @if ($product->exists)
+                @php $moves = \App\Models\StockMovement::where('product_id', $product->id)->latest('id')->take(8)->get(); @endphp
+                @if ($moves->isNotEmpty())
+                    <details class="stock-log"><summary>Stock history</summary>
+                        <ul>@foreach ($moves as $m)<li><b>{{ $m->change > 0 ? '+'.$m->change : $m->change }}</b> → {{ $m->balance }} · {{ $m->reason }}@if ($m->order_id) <a href="{{ route('admin.orders.show', $m->order_id) }}">order</a>@endif <span class="muted small">{{ $m->created_at->format('d M') }}</span></li>@endforeach</ul>
+                    </details>
+                @endif
+            @endif
             <label class="check"><input type="checkbox" name="is_featured" value="1" @checked(old('is_featured', $product->is_featured))> Featured on home page</label>
             <button class="btn full">{{ $product->exists ? 'Save product' : 'Create product' }}</button>
             @if ($product->exists)

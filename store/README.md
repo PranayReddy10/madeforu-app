@@ -184,3 +184,14 @@ Without SSH: run `composer install` on your computer, zip the whole `store` fold
 3. In Admin → Settings → WhatsApp messages: tick "Send automatically", paste the Phone number ID and token, and your own number for new-order alerts.
 
 Every message is logged on the order (sent / failed with Meta's reason), each step is sent once, and a failed message never blocks an order. Resend from the order page.
+
+## Stock and abandoned carts
+
+**Stock.** In Admin → Products, give a product (or each variation) a stock quantity; leave it blank for made-to-order items that never run out. Stock goes down when an order is confirmed and back up if it is cancelled or returned (each move is in the product's stock history). At 0 the product or option shows as out of stock; customers can't add more than is left, and checkout re-checks. At the low-stock level (Settings, default 3) the product page shows "Only N left", you get an email, and the dashboard lists it. Filter Products by Low stock / Out of stock.
+
+**Abandoned carts.** When a shopper types an email or phone at checkout and doesn't order, the cart is saved. Reminders go after 1 hour and 24 hours (change in Settings → Abandoned cart reminders), the second one optionally with a coupon. The link restores the cart — photos included — and opens checkout filled in. Ordering from any device, or unsubscribing, stops them. Admin → Abandoned carts shows every cart, a one-tap WhatsApp message, and recovered revenue.
+
+For WhatsApp reminders (needs the WhatsApp API above), add a **Marketing** template named `cart_reminder`:
+```
+Hi {{1}}, you left {{2}} in your MadeForU cart 💝 Your photos are saved — finish your order here: {{3}}
+```

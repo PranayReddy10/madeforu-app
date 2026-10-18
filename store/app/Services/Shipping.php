@@ -54,6 +54,9 @@ class Shipping
             $changes += ['status' => 'shipped', 'shipped_at' => $order->shipped_at ?? now()];
         }
         $order->update($changes);
+        if (($changes['status'] ?? null) === 'returned') {
+            app(Stock::class)->restore($order, 'returned');
+        }
 
         if (! $wasShipped && in_array($order->status, ['shipped', 'delivered'], true)) {
             $this->notifyShipped($order);

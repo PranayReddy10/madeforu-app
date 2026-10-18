@@ -9,7 +9,16 @@ class ProductVariant extends Model
 {
     protected $guarded = ['id'];
 
-    protected $casts = ['options' => 'array', 'in_stock' => 'boolean', 'price' => 'decimal:2', 'sale_price' => 'decimal:2'];
+    protected $casts = ['options' => 'array', 'in_stock' => 'boolean', 'stock_qty' => 'integer', 'price' => 'decimal:2', 'sale_price' => 'decimal:2'];
+
+    protected static function booted(): void
+    {
+        static::saving(function (ProductVariant $v) {
+            if ($v->stock_qty !== null) {
+                $v->in_stock = $v->stock_qty > 0;
+            }
+        });
+    }
 
     public function product(): BelongsTo
     {

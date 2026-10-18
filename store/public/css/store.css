@@ -306,6 +306,7 @@ html.locked body { position: fixed; left: 0; right: 0; }
 .save { background: var(--mint-l); color: #18694b; font-size: 13px; font-weight: 700; padding: 3px 9px; border-radius: 999px; }
 .pdp-price small { flex-basis: 100%; }
 .short { color: var(--ink-2); }
+.stock-note { display: inline-block; margin: 0 0 12px; padding: 6px 12px; border-radius: 999px; background: #fff1d6; color: #8a5a00; font-weight: 700; font-size: 13px; }
 .opt-group { border: 0; padding: 0; margin: 0 0 16px; }
 .opt-group legend { font-weight: 600; margin-bottom: 8px; padding: 0; }
 .opts { display: flex; flex-wrap: wrap; gap: 8px; }

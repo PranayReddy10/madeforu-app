@@ -20,6 +20,7 @@
                     ['admin.products.index', 'Products', 'admin/products*'],
                     ['admin.categories.index', 'Categories', 'admin/categories*'],
                     ['admin.media.index', 'Media', 'admin/media*'],
+                    ['admin.abandoned.index', 'Abandoned carts', 'admin/abandoned-carts*'],
                     ['admin.reviews.index', 'Reviews', 'admin/reviews*'],
                     ['admin.coupons.index', 'Coupons', 'admin/coupons*'],
                     ['admin.banners.index', 'Banners', 'admin/banners*'],

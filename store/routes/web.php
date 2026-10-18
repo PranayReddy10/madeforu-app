@@ -48,6 +48,9 @@ Route::post('/cart/update', [CartController::class, 'update'])->name('cart.updat
 Route::post('/cart/remove/{line}', [CartController::class, 'remove'])->name('cart.remove');
 Route::post('/cart/coupon', [CartController::class, 'coupon'])->name('cart.coupon')->middleware('throttle:10,1');
 Route::post('/cart/coupon/remove', [CartController::class, 'removeCoupon'])->name('cart.coupon.remove');
+Route::post('/checkout/capture', [CartController::class, 'capture'])->name('checkout.capture')->middleware('throttle:30,1');
+Route::get('/cart/recover/{token}', [CartController::class, 'recover'])->name('cart.recover');
+Route::get('/cart/unsubscribe/{token}', [CartController::class, 'unsubscribe'])->name('cart.unsubscribe');
 
 Route::get('/checkout', [CheckoutController::class, 'index'])->name('checkout');
 Route::post('/checkout', [CheckoutController::class, 'place'])->name('checkout.place')->middleware('throttle:10,1');
@@ -114,6 +117,7 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'admin'])->group(fun
     Route::resource('banners', Admin\BannerController::class)->except('show');
     Route::resource('redirects', Admin\RedirectController::class)->except('show');
     Route::get('reviews', [Admin\ReviewController::class, 'index'])->name('reviews.index');
+    Route::get('abandoned-carts', [Admin\AbandonedCartController::class, 'index'])->name('abandoned.index');
     Route::put('reviews/{review}', [Admin\ReviewController::class, 'update'])->name('reviews.update');
     Route::delete('reviews/{review}', [Admin\ReviewController::class, 'destroy'])->name('reviews.destroy');
     Route::get('seo', [Admin\SeoController::class, 'index'])->name('seo');

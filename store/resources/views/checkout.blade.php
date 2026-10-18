@@ -3,7 +3,7 @@
 @section('content')
 <div class="wrap">
     <header class="listing-head"><h1>Checkout</h1></header>
-    <form method="post" action="{{ route('checkout.place') }}" class="checkout-layout" data-checkout>
+    <form method="post" action="{{ route('checkout.place') }}" class="checkout-layout" data-checkout data-capture="{{ route('checkout.capture') }}">
         @csrf
         <div class="checkout-main">
             <section class="panel">

@@ -35,6 +35,18 @@
             </tbody>
         </table>
     </div>
+    @if ($lowStock->isNotEmpty())
+    <div class="card">
+        <h2>Low stock</h2>
+        <table class="tbl">
+            <tbody>
+            @foreach ($lowStock as $r)
+                <tr><td><a href="{{ route('admin.products.edit', $r['product']) }}">{{ $r['name'] }}</a></td><td class="right"><span class="badge {{ $r['qty'] ? '' : 'err' }}">{{ $r['qty'] ? $r['qty'].' left' : 'Sold out' }}</span></td></tr>
+            @endforeach
+            </tbody>
+        </table>
+    </div>
+    @endif
     <div class="card">
         <h2>Top products</h2>
         <table class="tbl">
