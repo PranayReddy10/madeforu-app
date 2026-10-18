@@ -17,12 +17,11 @@
         </select>
     </label>
     <label>Description <textarea name="description" rows="4">{{ old('description', $category->description) }}</textarea></label>
-    <div class="row3">
-        <label>Image <input type="file" name="image" accept="image/*"></label>
+    @include('admin.partials.image-field', ['name' => 'image', 'label' => 'Image', 'value' => old('image', $category->image), 'folder' => 'categories', 'hint' => 'square works best; shown as the round category icon'])
+    <div class="row2">
         <label>Icon (emoji or short text) <input name="icon" value="{{ old('icon', $category->icon) }}" maxlength="40"></label>
         <label>Order <input type="number" name="position" value="{{ old('position', $category->position ?? 0) }}"></label>
     </div>
-    @if ($category->imageUrl())<img class="preview" src="{{ $category->imageUrl() }}" alt="">@endif
     <label class="check"><input type="checkbox" name="is_active" value="1" @checked(old('is_active', $category->is_active))> Active</label>
     <label class="check"><input type="checkbox" name="show_on_home" value="1" @checked(old('show_on_home', $category->show_on_home))> Show on home page</label>
 

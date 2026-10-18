@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Category;
 use App\Models\CustomizationField;
+use App\Models\Media;
 use App\Models\Page;
 use App\Models\Product;
 use App\Models\ProductImage;
@@ -13,7 +14,6 @@ use App\Models\Review;
 use Closure;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 /**
@@ -127,6 +127,7 @@ class WooImporter
             ]);
             if (! empty($c['image']['src'])) {
                 $cat->image = $this->image($c['image']['src'], 'categories/'.$cat->slug);
+                Media::register($cat->image, 'categories', $cat->name);
             }
             $cat->save();
             $this->catMap[$c['id']] = $cat->id;
@@ -183,13 +184,14 @@ class WooImporter
             if ($srcs->pluck('src')->all() !== $have || ($remote && $this->downloadImages)) {
                 $p->images()->delete();
                 foreach ($srcs as $i => $img) {
-                    ProductImage::create([
+                    $created = ProductImage::create([
                         'product_id' => $p->id,
                         'path' => $this->image($img['src'], 'products/'.$p->slug),
                         'source_url' => $img['src'],
                         'alt' => $img['alt'] ?: $p->name.($i ? ' - '.($i + 1) : ''),
                         'position' => $i,
                     ]);
+                    Media::register($created->path, 'products', $created->alt);
                     $this->stats['images']++;
                 }
             }
@@ -246,6 +248,9 @@ class WooImporter
                 'position' => $i,
             ]);
             $keep[] = $variant->id;
+            if ($variant->image) {
+                Media::register($variant->image, 'products');
+            }
             $this->stats['variants']++;
         }
         $keep ? $p->variants()->whereNotIn('id', $keep)->delete() : $p->variants()->delete();
@@ -479,7 +484,8 @@ class WooImporter
             $p->categories()->sync($catIds);
             if ($p->images()->doesntExist()) {
                 foreach (array_values(array_filter(array_map('trim', explode(',', $r['Images'] ?? '')))) as $i => $src) {
-                    ProductImage::create(['product_id' => $p->id, 'path' => $this->image($src, 'products/'.$p->slug), 'source_url' => $src, 'alt' => $p->name, 'position' => $i]);
+                    $created = ProductImage::create(['product_id' => $p->id, 'path' => $this->image($src, 'products/'.$p->slug), 'source_url' => $src, 'alt' => $p->name, 'position' => $i]);
+                    Media::register($created->path, 'products', $p->name);
                 }
             }
             $p->productAttributes()->delete();
@@ -514,12 +520,15 @@ class WooImporter
             }
             $regular = (float) $r['Regular price'];
             $sale = (float) ($r['Sale price'] ?? 0);
-            ProductVariant::updateOrCreate(['woo_id' => (int) $r['ID']], [
+            $variant = ProductVariant::updateOrCreate(['woo_id' => (int) $r['ID']], [
                 'product_id' => $p->id, 'options' => $options, 'sku' => $r['SKU'] ?: null,
                 'price' => $regular, 'sale_price' => $sale > 0 && $sale < $regular ? $sale : null,
                 'in_stock' => ($r['In stock?'] ?? '1') !== '0', 'position' => $i,
                 'image' => ($src = Arr::first(array_filter(explode(',', $r['Images'] ?? '')))) ? $this->image(trim($src), 'products/'.$p->slug) : null,
             ]);
+            if ($variant->image) {
+                Media::register($variant->image, 'products');
+            }
             $this->stats['variants']++;
         }
     }

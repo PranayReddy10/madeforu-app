@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Cache;
 
 class Page extends Model
 {
@@ -12,7 +13,7 @@ class Page extends Model
 
     protected static function booted(): void
     {
-        $forget = fn () => \Illuminate\Support\Facades\Cache::forget('menu.pages');
+        $forget = fn () => Cache::forget('menu.pages');
         static::saved($forget);
         static::deleted($forget);
     }

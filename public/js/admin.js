@@ -150,3 +150,240 @@
     });
   }
 })();
+
+/* Media library picker: any [data-media-pick] button opens it.
+   data-multiple="1"  → "Use selected" fires a 'media:selected' event on the button (detail: [{path,url,alt}])
+   data-multiple="0"  → fills the input named data-input with the image path and updates its preview
+   data-folder        → folder new uploads are filed under (products, categories, banners) */
+(function () {
+  'use strict';
+  const modal = document.getElementById('media-picker');
+  if (!modal) return;
+  const $ = (s, el) => (el || document).querySelector(s);
+  const $$ = (s, el) => Array.from((el || document).querySelectorAll(s));
+  const csrf = ($('meta[name="csrf-token"]') || {}).content;
+  const grid = $('[data-mp-grid]', modal), more = $('[data-mp-more]', modal), empty = $('[data-mp-empty]', modal);
+  const search = $('[data-mp-search]', modal), folderSel = $('[data-mp-folder]', modal);
+  const useBtn = $('[data-mp-use]', modal), count = $('[data-mp-count]', modal);
+  let state = null, nextUrl = null, loading = false, searchTimer = null;
+
+  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+  function open(btn) {
+    state = { btn, multiple: btn.dataset.multiple === '1', input: btn.dataset.input || '', folder: btn.dataset.folder || 'general', selected: new Map() };
+    $('#mp-title', modal).textContent = state.multiple ? 'Choose images' : 'Choose an image';
+    modal.hidden = false;
+    document.documentElement.classList.add('mp-open');
+    tab('library');
+    updateFoot();
+    load(true);
+    setTimeout(() => search.focus(), 50);
+  }
+  function close() {
+    modal.hidden = true;
+    document.documentElement.classList.remove('mp-open');
+    if (state && state.btn) state.btn.focus();
+    state = null;
+  }
+  function tab(name) {
+    $$('[data-mp-tab]', modal).forEach((t) => { const on = t.dataset.mpTab === name; t.classList.toggle('on', on); t.setAttribute('aria-selected', on); });
+    $$('[data-mp-pane]', modal).forEach((p) => { p.hidden = p.dataset.mpPane !== name; });
+  }
+  function listUrl() {
+    const u = new URL(modal.dataset.listUrl, location.href);
+    if (search.value.trim()) u.searchParams.set('q', search.value.trim());
+    if (folderSel.value) u.searchParams.set('folder', folderSel.value);
+    return u.toString();
+  }
+  function load(reset) {
+    if (loading) return;
+    loading = true;
+    const url = reset ? listUrl() : nextUrl;
+    if (reset) { grid.innerHTML = ''; }
+    fetch(url, { headers: { Accept: 'application/json' }, credentials: 'same-origin' })
+      .then((r) => r.json())
+      .then((d) => {
+        d.data.forEach((m) => grid.appendChild(item(m)));
+        nextUrl = d.next_page_url;
+        more.hidden = !nextUrl;
+        empty.hidden = grid.children.length > 0;
+      })
+      .catch(() => { empty.hidden = false; empty.textContent = 'Could not load the library. Check your connection.'; })
+      .finally(() => { loading = false; });
+  }
+  function item(m, prepend) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'mp-item' + (state && state.selected.has(m.path) ? ' on' : '');
+    b.dataset.path = m.path;
+    b.title = m.name + (m.width ? ' · ' + m.width + '×' + m.height : '');
+    b.setAttribute('aria-label', m.alt || m.name);
+    b.innerHTML = '<img src="' + esc(m.url) + '" alt="" loading="lazy"><span class="mp-check" aria-hidden="true">✓</span><span class="mp-name">' + esc(m.name) + '</span>';
+    b._media = m;
+    b.addEventListener('click', () => toggle(b));
+    b.addEventListener('dblclick', () => { if (!state.multiple) { select(b, true); use(); } });
+    return b;
+  }
+  function select(b, on) {
+    if (!state.multiple && on) { state.selected.clear(); $$('.mp-item.on', grid).forEach((x) => x.classList.remove('on')); }
+    if (on) state.selected.set(b._media.path, b._media); else state.selected.delete(b._media.path);
+    b.classList.toggle('on', on);
+    updateFoot();
+  }
+  function toggle(b) { select(b, !state.selected.has(b._media.path)); }
+  function updateFoot() {
+    const n = state ? state.selected.size : 0;
+    count.textContent = n ? n + ' selected' : 'No image selected';
+    useBtn.disabled = !n;
+  }
+  function use() {
+    if (!state || !state.selected.size) return;
+    const items = Array.from(state.selected.values()).map((m) => ({ path: m.path, url: m.url, alt: m.alt || '' }));
+    const btn = state.btn;
+    if (state.multiple) {
+      btn.dispatchEvent(new CustomEvent('media:selected', { detail: items, bubbles: true }));
+    } else {
+      fill(btn, state.input, items[0]);
+    }
+    close();
+  }
+  function fill(btn, name, m) {
+    const scope = btn.closest('form') || document;
+    let input = name ? scope.querySelector('[name="' + CSS.escape(name) + '"]') : null;
+    if (!input && name) {
+      input = document.createElement('input'); input.type = 'hidden'; input.name = name;
+      (btn.closest('form') || btn.parentNode).appendChild(input);
+    }
+    if (input) { input.value = m ? m.path : ''; input.dispatchEvent(new Event('change', { bubbles: true })); }
+    const previews = [];
+    if (btn.dataset.preview) previews.push(...$$(btn.dataset.preview));
+    if (name) previews.push(...$$('img[data-preview-for="' + CSS.escape(name) + '"]', scope));
+    previews.forEach((img) => { if (m) { img.src = m.url; img.hidden = false; } else { img.removeAttribute('src'); img.hidden = true; } });
+  }
+
+  // Uploads: one request per file so each shows its own progress
+  const fileInput = $('[data-mp-file]', modal), drop = $('[data-mp-drop]', modal), progress = $('[data-mp-progress]', modal);
+  function upload(files) {
+    Array.from(files).forEach((file) => {
+      const li = document.createElement('li');
+      li.innerHTML = '<span class="mp-pname">' + esc(file.name) + '</span><span class="mp-bar"><i></i></span><span class="mp-status">0%</span>';
+      progress.prepend(li);
+      const fd = new FormData();
+      fd.append('files[]', file);
+      fd.append('folder', state ? state.folder : 'general');
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', modal.dataset.uploadUrl);
+      xhr.setRequestHeader('X-CSRF-TOKEN', csrf);
+      xhr.setRequestHeader('Accept', 'application/json');
+      xhr.upload.onprogress = (e) => {
+        if (!e.lengthComputable) return;
+        const p = Math.round(100 * e.loaded / e.total);
+        $('i', li).style.width = p + '%'; $('.mp-status', li).textContent = p + '%';
+      };
+      xhr.onload = () => {
+        let d = {};
+        try { d = JSON.parse(xhr.responseText); } catch (err) { /* not JSON */ }
+        if (xhr.status !== 200) {
+          li.classList.add('err');
+          $('.mp-status', li).textContent = (d.errors && Object.values(d.errors)[0][0]) || d.message || 'Upload failed';
+          return;
+        }
+        li.classList.add('ok');
+        $('.mp-status', li).textContent = 'Done';
+        (d.data || []).forEach((m) => {
+          const b = item(m);
+          grid.prepend(b);
+          empty.hidden = true;
+          if (state) select(b, true);
+        });
+        // Back to the library once every upload in this batch has finished.
+        if (!$$('li:not(.ok):not(.err)', progress).length) tab('library');
+      };
+      xhr.onerror = () => { li.classList.add('err'); $('.mp-status', li).textContent = 'Network error'; };
+      xhr.send(fd);
+    });
+  }
+  fileInput.addEventListener('change', () => { upload(fileInput.files); fileInput.value = ''; });
+  ['dragenter', 'dragover'].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add('over'); }));
+  ['dragleave', 'drop'].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.remove('over'); }));
+  drop.addEventListener('drop', (e) => { if (e.dataTransfer.files.length) upload(e.dataTransfer.files); });
+  // Dropping files anywhere on the open library goes to upload too
+  $('.mp-panel', modal).addEventListener('dragover', (e) => { if (e.dataTransfer.types.includes('Files')) { e.preventDefault(); tab('upload'); } });
+
+  document.addEventListener('click', (e) => {
+    const pick = e.target.closest('[data-media-pick]');
+    if (pick) { e.preventDefault(); open(pick); return; }
+    const clear = e.target.closest('[data-media-clear]');
+    if (clear) { e.preventDefault(); fill(clear, clear.dataset.input, null); }
+  });
+  $$('[data-mp-close]', modal).forEach((b) => b.addEventListener('click', close));
+  $$('[data-mp-tab]', modal).forEach((t) => t.addEventListener('click', () => tab(t.dataset.mpTab)));
+  useBtn.addEventListener('click', use);
+  more.addEventListener('click', () => load(false));
+  search.addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(() => load(true), 250); });
+  folderSel.addEventListener('change', () => load(true));
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !modal.hidden) close(); });
+
+  // Media page: drag files onto the upload card
+  $$('[data-drop-upload]').forEach((form) => {
+    const input = $('input[type=file]', form);
+    ['dragenter', 'dragover'].forEach((ev) => form.addEventListener(ev, (e) => { e.preventDefault(); form.classList.add('over'); }));
+    ['dragleave', 'drop'].forEach((ev) => form.addEventListener(ev, (e) => { e.preventDefault(); form.classList.remove('over'); }));
+    form.addEventListener('drop', (e) => { if (e.dataTransfer.files.length) { input.files = e.dataTransfer.files; form.submit(); } });
+  });
+
+  // Product gallery: rows added from the picker, reordered by drag or arrows
+  const gallery = document.getElementById('gallery');
+  if (gallery) {
+    const tpl = document.getElementById('tpl-gallery');
+    let n = gallery.querySelectorAll('[data-gallery-row]').length + 1000;
+    const refresh = () => {
+      const rows = $$('[data-gallery-row]', gallery);
+      rows.forEach((r, i) => { const badge = $('.g-main', r); if (badge) badge.hidden = i !== 0; });
+      const none = $('[data-gallery-empty]'); if (none) none.hidden = rows.length > 0;
+    };
+    const addImage = (m) => {
+      if ($$('[data-gallery-row] input[name$="[path]"]', gallery).some((i) => i.value === m.path)) return;
+      const holder = document.createElement('div');
+      holder.innerHTML = tpl.innerHTML.replace(/__i__/g, String(n++)).trim();
+      const row = holder.firstElementChild;
+      $('input[name$="[path]"]', row).value = m.path;
+      $('input[name$="[alt]"]', row).value = m.alt || '';
+      $('img', row).src = m.url;
+      gallery.appendChild(row);
+    };
+    document.addEventListener('media:selected', (e) => {
+      if (!e.target.closest('[data-gallery-add]')) return;
+      e.detail.forEach(addImage);
+      refresh();
+    });
+    gallery.addEventListener('click', (e) => {
+      const row = e.target.closest('[data-gallery-row]');
+      if (!row) return;
+      if (e.target.closest('[data-gallery-remove]')) { e.preventDefault(); row.remove(); refresh(); return; }
+      const mv = e.target.closest('[data-move]');
+      if (mv) {
+        e.preventDefault();
+        if (mv.dataset.move === '-1' && row.previousElementSibling) gallery.insertBefore(row, row.previousElementSibling);
+        if (mv.dataset.move === '1' && row.nextElementSibling) gallery.insertBefore(row.nextElementSibling, row);
+        refresh();
+      }
+    });
+    let dragged = null;
+    gallery.addEventListener('dragstart', (e) => {
+      dragged = e.target.closest('[data-gallery-row]');
+      if (dragged) { dragged.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; }
+    });
+    gallery.addEventListener('dragend', () => { if (dragged) dragged.classList.remove('dragging'); dragged = null; refresh(); });
+    gallery.addEventListener('dragover', (e) => {
+      if (!dragged) return;
+      e.preventDefault();
+      const over = e.target.closest('[data-gallery-row]');
+      if (!over || over === dragged) return;
+      const r = over.getBoundingClientRect();
+      const after = (e.clientX - r.left) > r.width / 2;
+      gallery.insertBefore(dragged, after ? over.nextSibling : over);
+    });
+    refresh();
+  }
+})();

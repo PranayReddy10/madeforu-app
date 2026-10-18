@@ -4,12 +4,11 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Category;
+use App\Models\Media;
 use App\Models\Product;
 use App\Models\ProductImage;
-use App\Services\ImageTools;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
@@ -63,9 +62,7 @@ class ProductController extends Controller
 
     public function destroy(Product $product)
     {
-        foreach ($product->images as $img) {
-            $this->deleteFile($img->path);
-        }
+        // Image files stay in the media library; other products may use them.
         $product->delete();
 
         return redirect()->route('admin.products.index')->with('status', 'Product deleted.');
@@ -81,10 +78,9 @@ class ProductController extends Controller
 
     public function deleteImage(ProductImage $image)
     {
-        $this->deleteFile($image->path);
         $image->delete();
 
-        return back()->with('status', 'Image deleted.');
+        return back()->with('status', 'Image removed from the product (it stays in the media library).');
     }
 
     private function save(Request $request, Product $product): void
@@ -120,6 +116,13 @@ class ProductController extends Controller
             'faqs' => 'nullable|array',
             'faqs.*.q' => 'nullable|string|max:500',
             'faqs.*.a' => 'nullable|string|max:3000',
+            'gallery' => 'nullable|array|max:40',
+            'gallery.*.path' => ['required', 'string', 'max:1000', function ($attr, $value, $fail) use ($product) {
+                if (! Media::acceptable($value) && ! ($product->exists && $product->images()->where('path', $value)->exists())) {
+                    $fail('One of the images is not in the media library.');
+                }
+            }],
+            'gallery.*.alt' => 'nullable|string|max:255',
             'images' => 'nullable|array',
             'images.*.alt' => 'nullable|string|max:255',
             'images.*.position' => 'nullable|integer',
@@ -134,7 +137,11 @@ class ProductController extends Controller
             'variants.*.price' => 'nullable|numeric|min:0',
             'variants.*.sale_price' => 'nullable|numeric|min:0',
             'variants.*.sku' => 'nullable|string|max:100',
-            'variants.*.image' => 'nullable|string|max:1000',
+            'variants.*.image' => ['nullable', 'string', 'max:1000', function ($attr, $value, $fail) use ($product) {
+                if (! Media::acceptable($value) && ! ($product->exists && $product->variants()->where('image', $value)->exists())) {
+                    $fail('A variation image is not in the media library.');
+                }
+            }],
             'fields' => 'nullable|array',
             'fields.*.id' => 'nullable|integer',
             'fields.*.type' => 'nullable|in:images,text,textarea,select,color,date',
@@ -185,9 +192,27 @@ class ProductController extends Controller
             }
             $product->categories()->sync($cats);
 
-            // Existing images: alt + order
-            foreach ($data['images'] ?? [] as $id => $img) {
-                $product->images()->whereKey($id)->update(['alt' => $img['alt'] ?? null, 'position' => (int) ($img['position'] ?? 0)]);
+            if ($request->boolean('gallery_present')) {
+                // Gallery from the media picker: the posted order is the display order.
+                $existing = $product->images()->get()->groupBy('path');
+                $keepIds = [];
+                foreach (array_values($data['gallery'] ?? []) as $i => $g) {
+                    $alt = trim((string) ($g['alt'] ?? '')) ?: null;
+                    $img = $existing->get($g['path'])?->shift();
+                    if ($img) {
+                        $img->update(['alt' => $alt, 'position' => $i]);
+                    } else {
+                        $img = $product->images()->create(['path' => $g['path'], 'alt' => $alt ?: $product->name, 'position' => $i]);
+                    }
+                    $keepIds[] = $img->id;
+                    Media::register($g['path'], 'products', $alt);
+                }
+                $product->images()->whereNotIn('id', $keepIds ?: [0])->delete();
+            } else {
+                // Older form: alt + order per existing image
+                foreach ($data['images'] ?? [] as $id => $img) {
+                    $product->images()->whereKey($id)->update(['alt' => $img['alt'] ?? null, 'position' => (int) ($img['position'] ?? 0)]);
+                }
             }
 
             // Attributes: replaced wholesale
@@ -219,6 +244,9 @@ class ProductController extends Controller
                     'image' => $v['image'] ?? null,
                     'position' => $i,
                 ];
+                if ($row['image']) {
+                    Media::register($row['image'], 'products');
+                }
                 $existing = ! empty($v['id']) ? $product->variants()->whereKey($v['id'])->first() : null;
                 if ($existing) {
                     $existing->update($row);
@@ -290,29 +318,13 @@ class ProductController extends Controller
         return $out;
     }
 
+    /** Direct uploads (fallback to the picker): saved to the media library, then added after the existing images. */
     private function storeImages(array $files, Product $product): void
     {
         $pos = (int) $product->images()->max('position');
         foreach ($files as $file) {
-            $name = Str::slug(pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME)) ?: Str::random(8);
-            $ext = strtolower($file->getClientOriginalExtension() ?: $file->extension() ?: 'jpg');
-            $dir = 'products/'.$product->slug;
-            $fname = $name.'.'.$ext;
-            if (Storage::disk('public')->exists($dir.'/'.$fname)) {
-                $fname = $name.'-'.Str::random(5).'.'.$ext;
-            }
-            $path = $file->storeAs($dir, $fname, 'public');
-            if (in_array($ext, ['jpg', 'jpeg', 'png'], true)) {
-                ImageTools::toWebp(Storage::disk('public')->path($path), Storage::disk('public')->path(preg_replace('/\.\w+$/', '.webp', $path)));
-            }
-            $product->images()->create(['path' => $path, 'alt' => $product->name, 'position' => ++$pos]);
-        }
-    }
-
-    private function deleteFile(?string $path): void
-    {
-        if ($path && ! preg_match('#^https?://#', $path)) {
-            Storage::disk('public')->delete([$path, preg_replace('/\.\w+$/', '.webp', $path)]);
+            $media = MediaController::storeUpload($file, 'products', $product->name);
+            $product->images()->create(['path' => $media->path, 'alt' => $product->name, 'position' => ++$pos]);
         }
     }
 }

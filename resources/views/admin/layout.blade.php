@@ -6,7 +6,7 @@
     <meta name="robots" content="noindex, nofollow">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>@yield('title', 'Admin') · {{ config('store.name') }} Admin</title>
-    <link rel="stylesheet" href="{{ asset('css/admin.css') }}">
+    <link rel="stylesheet" href="{{ asset('css/admin.css') }}?v={{ @filemtime(public_path('css/admin.css')) }}">
 </head>
 <body>
 <div class="adm">
@@ -19,6 +19,7 @@
                     ['admin.orders.index', 'Orders', 'admin/orders*'],
                     ['admin.products.index', 'Products', 'admin/products*'],
                     ['admin.categories.index', 'Categories', 'admin/categories*'],
+                    ['admin.media.index', 'Media', 'admin/media*'],
                     ['admin.reviews.index', 'Reviews', 'admin/reviews*'],
                     ['admin.coupons.index', 'Coupons', 'admin/coupons*'],
                     ['admin.banners.index', 'Banners', 'admin/banners*'],
@@ -50,6 +51,7 @@
         @yield('content')
     </main>
 </div>
-<script src="{{ asset('js/admin.js') }}"></script>
+@include('admin.partials.media-picker')
+<script src="{{ asset('js/admin.js') }}?v={{ @filemtime(public_path('js/admin.js')) }}"></script>
 </body>
 </html>
