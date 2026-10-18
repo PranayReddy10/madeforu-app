@@ -10,6 +10,7 @@ use App\Http\Controllers\FeedController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\PageController;
 use App\Http\Controllers\ProductController;
+use App\Http\Controllers\ReviewRequestController;
 use App\Http\Controllers\SearchController;
 use App\Http\Controllers\SitemapController;
 use App\Http\Controllers\UploadController;
@@ -61,12 +62,18 @@ Route::post('/webhooks/cashfree', [CheckoutController::class, 'cashfreeWebhook']
 Route::get('/checkout/order-received/{number}', [CheckoutController::class, 'thanks'])->name('checkout.thanks');
 Route::get('/track-order', [AccountController::class, 'track'])->name('track');
 Route::get('/invoice/{number}', [AccountController::class, 'invoice'])->name('invoice.download');
+Route::get('/review/{number}', [ReviewRequestController::class, 'show'])->name('review.order');
+Route::post('/review/{number}', [ReviewRequestController::class, 'store'])->name('review.order.store')->middleware('throttle:10,1');
 
 Route::get('/my-account', [AccountController::class, 'index'])->name('account');
 Route::middleware('guest')->group(function () {
     Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
     Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:10,1');
     Route::get('/register', [AuthController::class, 'showRegister'])->name('register');
+    Route::get('/forgot-password', [AuthController::class, 'showForgot'])->name('password.request');
+    Route::post('/forgot-password', [AuthController::class, 'sendReset'])->name('password.email')->middleware('throttle:5,1');
+    Route::get('/reset-password/{token}', [AuthController::class, 'showReset'])->name('password.reset');
+    Route::post('/reset-password', [AuthController::class, 'reset'])->name('password.update')->middleware('throttle:10,1');
     Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:5,1');
 });
 Route::middleware('auth')->group(function () {

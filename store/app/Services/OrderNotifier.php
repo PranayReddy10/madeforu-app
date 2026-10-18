@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Http\Controllers\ReviewRequestController;
 use App\Models\NotificationLog;
 use App\Models\Order;
 use Illuminate\Support\Str;
@@ -39,7 +40,7 @@ class OrderNotifier
     public function delivered(Order $order): void
     {
         $this->toCustomer($order, 'delivered', setting('whatsapp_api.template_delivered'), [
-            self::firstName($order), $order->number, url('/'),
+            self::firstName($order), $order->number, ReviewRequestController::link($order),
         ]);
     }
 

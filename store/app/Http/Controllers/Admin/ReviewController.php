@@ -10,7 +10,7 @@ class ReviewController extends Controller
 {
     public function index()
     {
-        return view('admin.reviews.index', ['reviews' => Review::with('product')->orderBy('is_approved')->latest()->paginate(30)]);
+        return view('admin.reviews.index', ['reviews' => Review::with('product', 'order')->orderBy('is_approved')->latest()->paginate(30)]);
     }
 
     public function update(Request $request, Review $review)

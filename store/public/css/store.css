@@ -371,6 +371,12 @@ html.locked body { position: fixed; left: 0; right: 0; }
 .big-rating b { font: 700 32px var(--display); }
 .review { background: #fff; border-radius: 12px; padding: 14px; margin-bottom: 10px; border: 1px solid var(--line); }
 .review p { margin: 6px 0; }
+.review-photos { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; margin: 4px 0 14px; }
+.review-photos img { width: 96px; height: 96px; object-fit: cover; border-radius: 12px; }
+.review-photos.small img { width: 64px; height: 64px; border-radius: 8px; }
+.review-photos.small { margin: 6px 0; }
+.verified { color: #18694b; font-weight: 700; }
+.hp { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
 .review-form summary { list-style: none; display: inline-flex; }
 .review-form form { display: grid; gap: 10px; margin-top: 12px; max-width: 520px; }
 .review-form input, .review-form textarea { border: 1.5px solid var(--line); border-radius: 12px; padding: 11px 14px; background: #fff; }

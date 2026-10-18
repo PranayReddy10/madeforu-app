@@ -10,7 +10,7 @@ class Order extends Model
 {
     protected $guarded = ['id'];
 
-    protected $casts = ['utm' => 'array', 'shipment_scans' => 'array', 'shipped_at' => 'datetime', 'delivered_at' => 'datetime', 'tracked_at' => 'datetime', 'invoiced_at' => 'datetime'];
+    protected $casts = ['review_requested_at' => 'datetime', 'utm' => 'array', 'shipment_scans' => 'array', 'shipped_at' => 'datetime', 'delivered_at' => 'datetime', 'tracked_at' => 'datetime', 'invoiced_at' => 'datetime'];
 
     public const STATUSES = [
         'pending' => 'Awaiting payment',
