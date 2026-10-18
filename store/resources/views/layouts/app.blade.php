@@ -206,7 +206,8 @@
 </nav>
 
 @if(config('store.whatsapp'))
-    <a class="wa-float" href="https://wa.me/{{ config('store.whatsapp') }}?text={{ rawurlencode('Hi! I have a question about '.(isset($product) ? $product->name : 'an order')) }}" rel="noopener" aria-label="Chat on WhatsApp">
+    {{-- On forms (sign in, checkout…) the floating button sits on top of fields and buttons on phones, so it hides there. --}}
+    <a class="wa-float @if(request()->routeIs('login', 'register', 'password.*', 'checkout', 'track', 'account', 'account.*', 'review.order')) wa-float-desktop @endif" href="https://wa.me/{{ config('store.whatsapp') }}?text={{ rawurlencode('Hi! I have a question about '.(isset($product) ? $product->name : 'an order')) }}" rel="noopener" aria-label="Chat on WhatsApp">
         <svg viewBox="0 0 24 24"><path d="M4 20l1.3-3.9A8 8 0 1 1 8 19z"/><path d="M9 9.5c0 3 2.5 5.5 5.5 5.5l1-1.5-2-1-1 .8a4 4 0 0 1-2-2l.8-1-1-2z" fill="currentColor" stroke="none"/></svg>
     </a>
 @endif
