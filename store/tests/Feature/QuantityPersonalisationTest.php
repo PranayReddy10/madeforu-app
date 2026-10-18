@@ -78,4 +78,23 @@ class QuantityPersonalisationTest extends TestCase
         $this->assertCount(1, $lines);
         $this->assertSame(3, $lines[0]->qty);
     }
+
+    public function test_cart_and_checkout_show_each_items_photos(): void
+    {
+        [$photo, $name] = [$this->mug->customizationFields[0], $this->mug->customizationFields[1]];
+        $this->postJson(route('cart.add', $this->mug), [
+            'qty' => 2, 'custom_each' => 1,
+            'custom' => [$photo->id => [$this->photo()], $name->id => 'Amma'],
+            'items' => [1 => ['custom' => [$photo->id => [$this->photo()], $name->id => 'Nanna']]],
+        ])->assertOk();
+
+        $html = $this->get('/cart')->assertOk()->assertSee('Amma')->assertSee('Nanna')->getContent();
+        preg_match_all('/<img src="([^"]+signature=[^"]+)"/', $html, $m);
+        $this->assertCount(2, $m[1]);                       // one photo per item, as signed links
+        $this->get('/checkout')->assertOk()->assertSee('line-photos compact', false);
+
+        // Logging in changes the session; the photos must still load.
+        $this->actingAs(\App\Models\User::factory()->create());
+        $this->get(html_entity_decode($m[1][0]))->assertOk();
+    }
 }

@@ -405,8 +405,18 @@ html.locked body { position: fixed; left: 0; right: 0; }
 .line-img img { width: 84px; height: 84px; border-radius: 12px; object-fit: cover; }
 .line-title { font-weight: 700; }
 .line-body p { margin: 2px 0; }
-.line-photos { display: flex; gap: 4px; margin: 6px 0; flex-wrap: wrap; }
-.line-photos img { width: 36px; height: 36px; border-radius: 8px; object-fit: cover; }
+.line-photos { display: flex; gap: 8px; margin: 8px 0 6px; flex-wrap: wrap; }
+.line-photos .lp { display: grid; gap: 3px; width: 64px; text-align: center; }
+.line-photos img { width: 64px; height: 64px; border-radius: 12px; object-fit: cover; border: 2px solid #fff; box-shadow: 0 0 0 1.5px var(--rose-l), 0 3px 8px rgba(28,40,68,.10); background: var(--rose-l); }
+.line-photos small { font-size: 11px; line-height: 1.2; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.line-photos.compact { gap: 4px; margin: 4px 0 0; }
+.line-photos.compact .lp { width: 34px; }
+.line-photos.compact img { width: 34px; height: 34px; border-radius: 8px; border-width: 1px; }
+.line-opt { margin: 2px 0; color: var(--ink-2); }
+.photo-view { position: fixed; inset: 0; z-index: 90; background: rgba(20,26,44,.86); display: grid; place-items: center; padding: 20px; }
+.photo-view img { max-width: 100%; max-height: 82vh; border-radius: 14px; box-shadow: 0 20px 50px rgba(0,0,0,.4); }
+.photo-view p { position: absolute; bottom: calc(18px + env(safe-area-inset-bottom)); left: 0; right: 0; text-align: center; color: #fff; font-weight: 600; margin: 0; }
+.photo-view button { position: absolute; top: 14px; right: 14px; width: 44px; height: 44px; border-radius: 50%; border: 0; background: #fff; font-size: 22px; }
 .line-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
 .swatch { display: inline-block; width: 14px; height: 14px; border-radius: 4px; vertical-align: middle; border: 1px solid var(--line); }
 .summary { background: #fff; border-radius: var(--r); padding: 16px; box-shadow: var(--shadow); align-self: start; display: grid; gap: 12px; }

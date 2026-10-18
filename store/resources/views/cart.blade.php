@@ -14,17 +14,7 @@
                     <div class="line-body">
                         <a href="{{ $l->product->url() }}" class="line-title">{{ $l->product->name }}</a>
                         @if($l->variant)<p class="muted small">{{ $l->variant->label() }}</p>@endif
-                        @foreach($l->details as $d)
-                            @if($d->type === 'images')
-                                <div class="line-photos" title="{{ $d->label }}">
-                                    @foreach($d->uploads as $u)<img src="{{ route('upload.show', ['token' => $u->token, 'thumb' => 1]) }}" alt="Your photo" width="40" height="40">@endforeach
-                                </div>
-                            @elseif($d->type === 'color')
-                                <p class="small">{{ $d->label }}: <span class="swatch" style="background: {{ $d->value }}"></span></p>
-                            @else
-                                <p class="small">{{ $d->label }}: <b>{{ \Illuminate\Support\Str::limit($d->value, 80) }}</b></p>
-                            @endif
-                        @endforeach
+                        @include('partials.line-custom', ['l' => $l])
                         <div class="line-foot">
                             <div class="qty small" data-qty>
                                 <button type="button" data-step="-1" aria-label="Decrease">−</button>

@@ -48,7 +48,7 @@
         <aside class="summary">
             <h2 class="h-sm">Order summary</h2>
             @foreach($lines as $l)
-                <div class="mini-line"><img src="{{ $l->image }}" alt="" width="48" height="48"><span>{{ $l->product->name }} <small class="muted">× {{ $l->qty }}@if($l->variant) · {{ implode(' / ', $l->variant->options) }}@endif</small></span><b>{{ money($l->total) }}</b></div>
+                <div class="mini-line"><img src="{{ $l->image }}" alt="" width="48" height="48"><span>{{ $l->product->name }} <small class="muted">× {{ $l->qty }}@if($l->variant) · {{ implode(' / ', $l->variant->options) }}@endif</small>@include('partials.line-custom', ['l' => $l, 'compact' => true])</span><b>{{ money($l->total) }}</b></div>
             @endforeach
             <div data-totals="online" @if($chosen === 'cod') hidden @endif>@include('partials.totals', ['totals' => $totals])</div>
             <div data-totals="cod" @if($chosen !== 'cod') hidden @endif>@include('partials.totals', ['totals' => $codTotals])</div>

@@ -93,6 +93,19 @@
         mark();
     });
 
+    /* Customer photos in the cart and checkout: tap to see them large */
+    document.addEventListener('click', function (e) {
+        var a = e.target.closest && e.target.closest('[data-photo-view]');
+        if (!a) return;
+        e.preventDefault();
+        var box = document.createElement('div');
+        box.className = 'photo-view';
+        box.innerHTML = '<img alt=""><p></p><button type="button" aria-label="Close">×</button>';
+        $('img', box).src = a.href; $('p', box).textContent = a.title || '';
+        box.addEventListener('click', function () { box.remove(); });
+        document.body.appendChild(box);
+    });
+
     /* Top category menu on desktop: one line only; whatever doesn't fit moves into "More". */
     (function () {
         var more = $('[data-nav-more]');
