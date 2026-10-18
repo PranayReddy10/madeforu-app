@@ -417,3 +417,47 @@
     refresh();
   }
 })();
+
+/* Settings: tabs, search across all groups, sticky save bar */
+(function () {
+    var form = document.querySelector('[data-settings]');
+    if (!form) return;
+    var groups = Array.prototype.slice.call(form.querySelectorAll('[data-set-group]'));
+    var tabs = Array.prototype.slice.call(form.querySelectorAll('[data-set-tab]'));
+    var search = form.querySelector('[data-set-search]'), none = form.querySelector('[data-set-none]');
+    function show(id) {
+        if (!groups.some(function (g) { return g.id === id; })) id = groups[0].id;
+        groups.forEach(function (g) { g.hidden = g.id !== id; });
+        tabs.forEach(function (t) { t.classList.toggle('on', t.dataset.setTab === id); });
+        try { localStorage.setItem('settings-tab', id); } catch (e) {}
+    }
+    tabs.forEach(function (t) {
+        t.addEventListener('click', function (e) {
+            e.preventDefault(); search.value = ''; filter('');
+            show(t.dataset.setTab); history.replaceState(null, '', '#' + t.dataset.setTab);
+            window.scrollTo({ top: 0 });
+        });
+    });
+    function filter(q) {
+        q = q.trim().toLowerCase();
+        form.querySelectorAll('[data-set-group] label').forEach(function (l) { l.hidden = false; });
+        if (!q) { var last = location.hash.slice(1); try { last = last || localStorage.getItem('settings-tab'); } catch (e) {} show(last); none.hidden = true; return; }
+        var any = false;
+        groups.forEach(function (g) {
+            var hit = false;
+            g.querySelectorAll('label').forEach(function (l) {
+                var m = l.textContent.toLowerCase().indexOf(q) !== -1 || g.querySelector('h2').textContent.toLowerCase().indexOf(q) !== -1;
+                l.hidden = !m; hit = hit || m;
+            });
+            g.hidden = !hit; any = any || hit;
+        });
+        tabs.forEach(function (t) { t.classList.remove('on'); });
+        none.hidden = any;
+    }
+    search.addEventListener('input', function () { filter(search.value); });
+    var dirty = form.querySelector('[data-set-dirty]');
+    form.addEventListener('input', function (e) { if (e.target !== search) dirty.hidden = false; });
+    form.addEventListener('change', function (e) { if (e.target !== search) dirty.hidden = false; });
+    filter('');
+})();
+

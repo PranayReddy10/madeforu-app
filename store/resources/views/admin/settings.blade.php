@@ -2,10 +2,18 @@
 @section('title', 'Settings')
 @section('content')
 @php use App\Http\Controllers\Admin\SettingController as S; @endphp
-<form method="post" action="{{ url('admin/settings') }}" class="narrow">
+<form method="post" action="{{ url('admin/settings') }}" class="settings" data-settings>
     @csrf @method('PUT')
+    {{-- One group at a time (tabs); the search box looks through every group. All groups save together. --}}
+    <nav class="set-nav">
+        <input type="search" placeholder="Search settings…" data-set-search aria-label="Search settings">
+        @foreach ($groups as $group => $fields)
+            <a href="#{{ \Illuminate\Support\Str::slug($group) }}" data-set-tab="{{ \Illuminate\Support\Str::slug($group) }}">{{ $group }}</a>
+        @endforeach
+    </nav>
+    <div class="set-body">
     @foreach ($groups as $group => $fields)
-        <section class="card">
+        <section class="card set-group" id="{{ \Illuminate\Support\Str::slug($group) }}" data-set-group>
             <h2>{{ $group }}</h2>
             @foreach ($fields as $key => [$label, $type, $help])
                 @php $name = S::inputName($key); $val = old($name, setting($key)); @endphp
@@ -31,7 +39,9 @@
             @endforeach
         </section>
     @endforeach
-    <p class="muted">Mail and database settings live in the <code>.env</code> file on the server. Payment keys can be set here or in <code>.env</code>; the ones saved here win.</p>
-    <button class="btn">Save settings</button>
+    <p class="muted small">Mail and database settings live in the <code>.env</code> file on the server. Payment keys can be set here or in <code>.env</code>; the ones saved here win.</p>
+    <p class="muted set-none" data-set-none hidden>No setting matches that search.</p>
+    </div>
+    <div class="save-bar"><span class="muted small" data-set-dirty hidden>Unsaved changes</span><button class="btn">Save settings</button></div>
 </form>
 @endsection
