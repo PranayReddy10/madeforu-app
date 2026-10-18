@@ -66,6 +66,12 @@ class LiveShippingTest extends TestCase
 
         $mug->update(['height_cm' => 30]);
         $this->assertSame(1728, Parcel::of([[$mug->fresh(), 2]])->chargeableGrams());
+
+        // A flyer is billed on its actual weight: 350 g, 17 × 18 × 9 cm → 350 g, not 551 g (Delhivery's calculator).
+        $mug->update(['weight_kg' => 0.35, 'length_cm' => 17, 'width_cm' => 18, 'height_cm' => 9, 'packaging' => 'flyer']);
+        $flyer = Parcel::of([[$mug->fresh(), 1]]);
+        $this->assertSame(551, $flyer->volumetricGrams());
+        $this->assertSame(350, $flyer->chargeableGrams());
     }
 
     public function test_checkout_quote_uses_delhivery_rate_for_the_pin(): void
@@ -131,7 +137,7 @@ class LiveShippingTest extends TestCase
     public function test_weight_typed_in_grams_and_size_in_mm_are_not_quoted_as_huge_parcels(): void
     {
         $mug = Product::where('slug', 'magic-photo-mug')->first();
-        $mug->update(['weight_kg' => 350, 'length_cm' => 250, 'width_cm' => 200, 'height_cm' => 160]);   // grams and mm by mistake
+        $mug->update(['weight_kg' => 350, 'length_cm' => 250, 'width_cm' => 200, 'height_cm' => 160, 'packaging' => 'box']);   // grams and mm by mistake
         $p = Parcel::of([[$mug, 1]]);
         $this->assertSame(350, $p->grams);
         $this->assertEquals([25, 20, 16], [$p->length, $p->width, $p->height]);

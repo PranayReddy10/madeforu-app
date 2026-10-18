@@ -565,7 +565,7 @@ document.querySelectorAll('[data-rate-test]').forEach(function (box) {
         out.textContent = 'Asking Delhivery…';
         fetch(box.dataset.rateTest + '?pin=' + pin + '&qty=' + qty, { headers: { Accept: 'application/json' } }).then(function (r) { return r.json(); }).then(function (d) {
             const p = d.parcel, lines = [];
-            lines.push('Parcel: actual ' + kg(p.actual_g) + (p.size_cm ? ', size ' + p.size_cm.join(' × ') + ' cm = volumetric ' + kg(p.volumetric_g) : ', no size set') + ' → billed as ' + kg(p.chargeable_g) + ' (' + p.packaging + ')');
+            lines.push('Parcel: actual ' + kg(p.actual_g) + (p.size_cm ? ', size ' + p.size_cm.join(' × ') + ' cm = volumetric ' + kg(p.volumetric_g) : ', no size set') + ' → billed as ' + kg(p.chargeable_g) + (p.packaging === 'box' ? ' (box: higher of actual and volumetric)' : ' (flyer: actual weight)'));
             if (d.prepaid.error) lines.push('Delhivery: ' + d.prepaid.error);
             else lines.push('Delhivery prepaid ' + rupees(d.prepaid.total) + ' · COD ' + rupees(d.cod.total) + ' (HTTP ' + d.prepaid.status + ')');
             if (d.customer_pays) lines.push('Customer pays: shipping ' + rupees(d.customer_pays.shipping) + (d.customer_pays.cod_charge != null ? ', COD charge ' + rupees(d.customer_pays.cod_charge) : ''));

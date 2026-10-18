@@ -7,7 +7,8 @@ use App\Models\Product;
 /**
  * The parcel for a set of items: actual weight, packed size and the weight a courier charges for.
  * Items are stacked: the longest length, the widest width, heights added up. Couriers charge the
- * higher of the actual weight and the volumetric weight (L × W × H in cm ÷ 5000 kg).
+ * higher of the actual weight and the volumetric weight (L × W × H in cm ÷ 5000 kg) for boxes,
+ * and the actual weight for flyers.
  */
 class Parcel
 {
@@ -72,9 +73,12 @@ class Parcel
         return $this->length ? (int) ceil($this->length * $this->width * $this->height / 5) : 0;
     }
 
-    /** What the courier bills: the higher of actual and volumetric weight. */
+    /**
+     * What the courier bills. A box is charged on the higher of actual and volumetric weight; a
+     * flyer (soft poly cover) on its actual weight, as Delhivery's own rate calculator does.
+     */
     public function chargeableGrams(): int
     {
-        return max($this->grams, $this->volumetricGrams());
+        return $this->packaging === 'box' ? max($this->grams, $this->volumetricGrams()) : $this->grams;
     }
 }
