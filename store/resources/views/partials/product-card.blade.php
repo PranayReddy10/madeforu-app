@@ -1,5 +1,5 @@
 @php $off = $p->discountPercent(); $img = $p->images->first(); @endphp
-<article class="card">
+<article class="card {{ ! empty($big) ? 'card-big' : '' }}">
     <a href="{{ $p->url() }}" class="card-img">
         @if($img)
             @include('partials.picture', ['path' => $img->path, 'alt' => $img->alt ?: $p->name, 'sizes' => '(max-width: 640px) 50vw, 260px', 'lazy' => !($eager ?? false)])

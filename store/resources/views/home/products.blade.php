@@ -1,1 +1,1 @@
-@include('partials.home-rail', ['title' => $s['title'], 'sub' => $s['subtitle'], 'list' => $s['data']['products'], 'more' => $s['data']['more'], 'eager' => $loop->index < 3])
+@include('partials.home-rail', ['title' => $s['title'], 'sub' => $s['subtitle'], 'list' => $s['data']['products'], 'more' => $s['data']['more'], 'eager' => $loop->index < 3, 'layout' => $s['layout']])
