@@ -91,7 +91,7 @@ class AdminTest extends TestCase
 
         $this->post(route('admin.coupons.store'), ['code' => 'save10', 'type' => 'percent', 'value' => 10, 'is_active' => 1])->assertSessionHasNoErrors();
         $this->post(route('admin.coupons.store'), ['code' => 'bad', 'type' => 'percent', 'value' => 150])->assertSessionHasErrors('value');
-        $this->post(route('admin.pages.store'), ['title' => 'About us', 'body' => '<p>x</p>', 'is_active' => 1])->assertSessionHasNoErrors();
+        $this->post(route('admin.pages.store'), ['title' => 'Our team', 'body' => '<p>x</p>', 'is_active' => 1])->assertSessionHasNoErrors();
         $this->post(route('admin.pages.store'), ['title' => 'Cart'])->assertSessionHasErrors('slug');
         $this->post(route('admin.redirects.store'), ['from_path' => 'https://madeforu.co.in/Old-Thing/', 'to_path' => '/product/photo-frame-a4/', 'status' => 301])->assertSessionHasNoErrors();
         $this->assertSame('/old-thing', Redirect::first()->from_path);

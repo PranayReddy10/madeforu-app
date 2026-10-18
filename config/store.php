@@ -3,17 +3,21 @@
 return [
     'name' => env('STORE_NAME', 'MadeForU'),
     'tagline' => env('STORE_TAGLINE', 'Made for your moments'),
-    'phone' => env('STORE_PHONE', ''),
-    'whatsapp' => env('STORE_WHATSAPP', ''),
-    'email' => env('STORE_EMAIL', 'hello@madeforu.co.in'),
-    'address' => env('STORE_ADDRESS', 'Hyderabad, Telangana, India'),
+    'phone' => env('STORE_PHONE') ?: '+91 93810 24794',
+    'whatsapp' => env('STORE_WHATSAPP') ?: '919381024794',
+    // The first .env.example had placeholder email/address values; those count as unset.
+    'email' => in_array(env('STORE_EMAIL'), [null, '', 'hello@madeforu.co.in'], true) ? 'support@madeforu.co.in' : env('STORE_EMAIL'),
+    'address' => in_array(env('STORE_ADDRESS'), [null, '', 'Hyderabad, Telangana, India'], true) ? 'Plot No. 93, Laxmi Nagar Colony, Korremula, Hyderabad, Telangana – 500088' : env('STORE_ADDRESS'),
+    'hours' => env('STORE_HOURS') ?: 'Mon–Sat, 10am–7pm IST',
+    // Google Maps link for the Contact page ("Get directions").
+    'map_url' => env('STORE_MAP_URL') ?: 'https://www.google.com/maps/search/?api=1&query=Laxmi+Nagar+Colony+Korremula+Hyderabad+500088',
     'city' => env('STORE_CITY', 'Hyderabad'),
     'region' => env('STORE_REGION', 'Telangana'),
-    'postcode' => env('STORE_POSTCODE', ''),
+    'postcode' => env('STORE_POSTCODE') ?: '500088',
     'currency' => 'INR',
     'logo' => env('STORE_LOGO', 'images/logo-round.png'),
     'social' => array_filter([
-        'instagram' => env('SOCIAL_INSTAGRAM'),
+        'instagram' => env('SOCIAL_INSTAGRAM') ?: 'https://instagram.com/madeforu_gifts',
         'facebook' => env('SOCIAL_FACEBOOK'),
         'youtube' => env('SOCIAL_YOUTUBE'),
         'pinterest' => env('SOCIAL_PINTEREST'),

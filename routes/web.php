@@ -6,6 +6,7 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CartController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\CheckoutController;
+use App\Http\Controllers\ContactController;
 use App\Http\Controllers\FeedController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\PageController;
@@ -61,6 +62,7 @@ Route::post('/webhooks/razorpay', [CheckoutController::class, 'webhook'])->name(
 Route::get('/checkout/cashfree/return', [CheckoutController::class, 'cashfreeReturn'])->name('checkout.cashfree.return');
 Route::post('/webhooks/cashfree', [CheckoutController::class, 'cashfreeWebhook'])->name('webhooks.cashfree');
 Route::get('/checkout/order-received/{number}', [CheckoutController::class, 'thanks'])->name('checkout.thanks');
+Route::post('/contact-message', [ContactController::class, 'store'])->name('contact.send')->middleware('throttle:5,10');
 Route::get('/track-order', [AccountController::class, 'track'])->name('track');
 Route::get('/invoice/{number}', [AccountController::class, 'invoice'])->name('invoice.download');
 Route::get('/review/{number}', [ReviewRequestController::class, 'show'])->name('review.order');
@@ -143,6 +145,8 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'admin'])->group(fun
     Route::get('seo', [Admin\SeoController::class, 'index'])->name('seo');
     Route::get('settings', [Admin\SettingController::class, 'edit'])->name('settings');
     Route::put('settings', [Admin\SettingController::class, 'update']);
+    Route::get('messages', [Admin\MessageController::class, 'index'])->name('messages.index');
+    Route::delete('messages/{message}', [Admin\MessageController::class, 'destroy'])->name('messages.destroy');
     Route::get('import', [Admin\ImportController::class, 'index'])->name('import');
     Route::post('import', [Admin\ImportController::class, 'store'])->name('import.store');
     Route::post('import/run', [Admin\ImportController::class, 'run'])->name('import.run');

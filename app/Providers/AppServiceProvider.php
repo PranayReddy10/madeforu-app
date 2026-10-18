@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Http\Middleware\ShareStoreData;
+use App\Models\Setting;
 use App\Services\Analytics;
 use App\Services\Cart;
 use App\Services\Seo;
@@ -29,6 +30,13 @@ class AppServiceProvider extends ServiceProvider
             URL::forceScheme('https');
         }
         Paginator::defaultView('partials.pagination');
+        // Store details saved in Admin → Settings win over .env everywhere config('store.…') is read.
+        $saved = Setting::all_();
+        foreach (['email', 'phone', 'whatsapp', 'address', 'hours', 'map_url', 'social.instagram', 'social.facebook', 'social.youtube'] as $key) {
+            if (($saved[$key] ?? '') !== '') {
+                config(['store.'.$key => $saved[$key]]);
+            }
+        }
         ResetPassword::toMailUsing(fn ($user, string $token) => (new MailMessage)
             ->subject('Set your '.config('store.name').' password')
             ->greeting('Hi '.Str::before((string) $user->name, ' ').'!')

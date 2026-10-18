@@ -4,7 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Http\Middleware\WordPressUrls;
 use App\Models\Page;
+use App\Models\Product;
+use App\Models\Review;
 use App\Services\Seo;
+use App\Support\DefaultPages;
 use Illuminate\Http\Request;
 
 class PageController extends Controller
@@ -18,9 +21,24 @@ class PageController extends Controller
         $seo->title($page->meta_title ?: $page->title)
             ->description($page->meta_description ?: strip_tags((string) $page->body))
             ->canonical($page->url());
-        $seo->breadcrumbs([['Home', url('/')], [$page->title, $page->url()]]);
+        $crumbs = [['Home', url('/')]];
+        if (str_starts_with($page->slug, 'legal/') && ($index = Page::where('slug', 'legal')->where('is_active', true)->first())) {
+            $crumbs[] = ['Policies', $index->url()];
+        }
+        $crumbs[] = [$page->title, $page->url()];
+        $seo->breadcrumbs($crumbs);
 
-        return view('page', compact('page'));
+        $template = $page->template ?: DefaultPages::templateFor($page->slug);
+        $extra = match ($template) {
+            'legal', 'legal-index' => ['policies' => Page::where('slug', 'like', 'legal/%')->where('is_active', true)->orderBy('title')->get()],
+            'about' => [
+                'showcase' => Product::active()->with('images')->has('images')->orderByDesc('sales_count')->orderByDesc('views')->take(4)->get(),
+                'reviews' => Review::where('is_approved', true)->where('rating', '>=', 4)->whereNotNull('body')->latest()->take(3)->get(),
+            ],
+            default => [],
+        };
+
+        return view('page', compact('page', 'template', 'crumbs') + $extra);
     }
 
     public function manifest()

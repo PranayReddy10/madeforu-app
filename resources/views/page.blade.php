@@ -1,10 +1,5 @@
 @extends('layouts.app')
+@section('body_class', 'page-cms page-'.($template ?: 'default'))
 @section('content')
-<div class="wrap narrow">
-    @include('partials.breadcrumbs', ['crumbs' => [['Home', url('/')], [$page->title, $page->url()]]])
-    <article class="prose page-body">
-        <h1>{{ $page->title }}</h1>
-        {!! $page->body !!}
-    </article>
-</div>
+@include('pages.'.(in_array($template, ['about', 'contact', 'legal', 'legal-index'], true) ? $template : 'default'))
 @endsection

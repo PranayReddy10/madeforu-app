@@ -63,6 +63,6 @@ class DemoSeeder extends Seeder
         Review::create(['product_id' => $frame->id, 'name' => 'Priya', 'rating' => 5, 'body' => 'Beautiful quality and arrived quickly. My parents loved it!', 'is_approved' => true]);
         Review::create(['product_id' => $mug->id, 'name' => 'Rahul', 'rating' => 4, 'body' => 'The magic effect is great, print is sharp.', 'is_approved' => true]);
         Coupon::create(['code' => 'WELCOME10', 'type' => 'percent', 'value' => 10, 'max_discount' => 200]);
-        Page::create(['title' => 'About Us', 'slug' => 'about-us', 'body' => '<p>We make personalised gifts by hand in Hyderabad.</p>']);
+        Page::firstOrCreate(['slug' => 'about-us'], ['title' => 'About Us', 'body' => '<p>We make personalised gifts by hand in Hyderabad.</p>']);
     }
 }

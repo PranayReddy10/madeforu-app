@@ -14,6 +14,7 @@ use App\Models\ProductVariant;
 use App\Models\Redirect;
 use App\Models\Review;
 use App\Models\User;
+use App\Support\DefaultPages;
 use Closure;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Arr;
@@ -137,6 +138,7 @@ class WooImporter
         }
         if ($withPages) {
             $this->importPages();
+            DefaultPages::apply();   // About, Contact and policies get clean, designed versions
         }
 
         return $this->stats;

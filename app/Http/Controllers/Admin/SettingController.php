@@ -10,6 +10,17 @@ class SettingController extends Controller
 {
     /** key => [label, type, help] */
     public const FIELDS = [
+        'Store details' => [
+            'email' => ['Store email', 'text', 'Shown on the site, invoices and the Contact page.'],
+            'phone' => ['Phone', 'text', 'e.g. +91 93810 24794'],
+            'whatsapp' => ['WhatsApp number', 'text', 'With country code, digits only: 919381024794. Powers every “WhatsApp us” button.'],
+            'address' => ['Address', 'textarea', ''],
+            'hours' => ['Opening hours', 'text', 'e.g. Mon–Sat, 10am–7pm IST'],
+            'map_url' => ['Google Maps link', 'text', 'Google Maps → your business → Share → Copy link.'],
+            'social.instagram' => ['Instagram link', 'text', ''],
+            'social.facebook' => ['Facebook link', 'text', ''],
+            'social.youtube' => ['YouTube link', 'text', ''],
+        ],
         'Store' => [
             'announcement' => ['Announcement bar text', 'text', 'Shown at the top of every page. Leave blank to hide.'],
             'home_title' => ['Home page title', 'text', 'The <title> Google shows for the home page (aim for 50–60 characters).'],

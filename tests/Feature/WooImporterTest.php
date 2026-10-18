@@ -50,7 +50,7 @@ class WooImporterTest extends TestCase
             ], 200, ['X-WP-TotalPages' => 1]),
             "$site/wp-json/wp/v2/product*" => Http::response([['id' => 101, 'yoast_head_json' => ['title' => 'Couple Collage Frame | MadeForU', 'description' => 'Yoast desc']]]),
             "$site/wp-json/wp/v2/pages*" => Http::response([
-                ['slug' => 'about-us', 'title' => ['rendered' => 'About Us'], 'content' => ['rendered' => '<p class="x">Hello [vc_row]world</p>'], 'link' => "$site/about-us/"],
+                ['slug' => 'gift-guide', 'title' => ['rendered' => 'Gift Guide'], 'content' => ['rendered' => '<p class="x">Hello [vc_row]world</p>'], 'link' => "$site/gift-guide/"],
                 ['slug' => 'cart', 'title' => ['rendered' => 'Cart'], 'content' => ['rendered' => ''], 'link' => "$site/cart/"],
             ]),
             "$site/wp-content/*" => Http::response('fake-jpeg-bytes', 200, ['Content-Type' => 'image/jpeg']),
@@ -84,7 +84,8 @@ class WooImporterTest extends TestCase
 
         $this->get('/product/couple-collage/')->assertOk();
         $this->get('/product-category/photo-frames/wall-desk/')->assertOk()->assertSee('Wooden Frame');
-        $this->get('/about-us/')->assertOk()->assertSee('Hello world');
+        $this->get('/gift-guide/')->assertOk()->assertSee('Hello world');
+        $this->get('/about-us/')->assertOk()->assertSee('Our story');
         $this->assertDatabaseMissing('pages', ['slug' => 'cart']);
 
         // Running again updates in place, no duplicates

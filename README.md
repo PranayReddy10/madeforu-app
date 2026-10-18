@@ -233,3 +233,9 @@ Emails go out through the mail account in `.env` (`MAIL_*`, e.g. a Hostinger mai
 - Daily summary at 21:00: today's orders and revenue, what to make, parcels to hand over, unpaid orders and shipping problems. Run `php artisan store:daily-summary --force` to see one now.
 
 Turn any of them off, change the admin addresses or the summary time in **Admin → Settings → Email notifications**. Orders imported from WooCommerce never trigger emails. The daily summary needs the scheduler cron from the Hostinger section.
+
+## Pages, contact form and home page
+
+- **About, Contact and policy pages** each have their own layout. Change the text in Admin → Pages (the *Layout* and *Intro* fields set the design and the line under the title). Your phone, WhatsApp, email, address, hours and Instagram come from **Admin → Settings → Store details** and appear on every page.
+- **Contact form** messages are saved in **Admin → Messages** and emailed to the shop (reply to the email to answer the customer).
+- **Home page:** slider, categories, bestsellers, "Gifts for every budget", a row for each of your biggest categories, offers (products with a sale price), how it works, custom-order banner, reviews, new arrivals, FAQs (with Google FAQ markup). Mark products as *Featured* in admin for "Handpicked for you"; add a sale price to show a product under Offers.
