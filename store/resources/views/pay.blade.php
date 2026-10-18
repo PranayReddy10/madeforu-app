@@ -24,7 +24,7 @@
         image: @json(asset('images/icon-192.png')),
         order_id: @json($rp['id']),
         prefill: { name: @json($order->name), email: @json($order->email), contact: @json('+91'.$order->phone) },
-        theme: { color: '#e8445a' },
+        theme: { color: '#f04577' },
         handler: function (r) {
             var f = document.getElementById('rzp-done');
             f.razorpay_order_id.value = r.razorpay_order_id;

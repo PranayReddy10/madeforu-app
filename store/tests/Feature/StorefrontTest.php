@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Banner;
 use App\Models\Category;
 use App\Models\Coupon;
 use App\Models\CustomerUpload;
@@ -180,6 +181,19 @@ class StorefrontTest extends TestCase
         $parent = Category::where('slug', 'photo-frames')->first();
         $parent->update(['slug' => 'frames']);
         $this->assertSame('frames/wall-frames', Category::where('slug', 'wall-frames')->value('path'));
+    }
+
+    public function test_home_slider_uses_banners_with_phone_image(): void
+    {
+        // No banners yet: built-in slides, with the brand headline as the page's h1
+        $this->get('/')->assertOk()->assertSee('data-slider', false)->assertSee('<h1 class="hs-title">', false);
+
+        Banner::create(['title' => 'Diwali gifts', 'image' => 'banners/wide.jpg', 'mobile_image' => 'banners/tall.jpg', 'link' => '/shop/', 'show_text' => false]);
+        $html = $this->get('/')->assertOk()->getContent();
+        $this->assertStringContainsString('media="(max-width: 767px)" srcset="http://localhost/storage/banners/tall.jpg"', $html);
+        $this->assertStringContainsString('alt="Diwali gifts"', $html);
+        $this->assertStringNotContainsString('hs-overlay', $html);
+        $this->assertStringContainsString('<h1 class="sr">', $html);
     }
 
     public function test_admin_requires_admin(): void

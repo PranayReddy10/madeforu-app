@@ -2,33 +2,18 @@
 @section('body_class', 'page-home')
 @section('content')
 
-{{-- Phone: an app-style home — search, round category shortcuts, banners, rails --}}
-<section class="hero">
-    <div class="wrap hero-grid">
-        <div class="hero-copy">
-            <p class="eyebrow">Personalised gifts · Made to order</p>
-            <h1>Your photos, turned into gifts they'll keep forever.</h1>
-            <p class="lead">Pick a gift, upload your favourite pictures, and we hand-craft it for you. Delivered anywhere in India.</p>
-            <div class="hero-cta">
-                <a href="{{ url('shop') }}/" class="btn primary">Start personalising</a>
-                <a href="#how" class="btn ghost">How it works</a>
-            </div>
-            <ul class="trust">
-                <li><b>Free</b> design preview</li>
-                <li><b>Free</b> shipping over {{ money(setting('free_shipping_over')) }}</li>
-                <li><b>COD</b> available</li>
-            </ul>
-        </div>
-        <div class="hero-art" aria-hidden="true">
-            @foreach($featured->take(3) as $i => $p)
-                <a href="{{ $p->url() }}" class="polaroid p{{ $i }}" tabindex="-1">
-                    <img src="{{ $p->mainImageUrl() }}" alt="" @if($i) loading="lazy" @else fetchpriority="high" @endif width="300" height="300">
-                    <span>{{ \Illuminate\Support\Str::limit($p->name, 26) }}</span>
-                </a>
-            @endforeach
-        </div>
+@if($banners->isNotEmpty())<h1 class="sr">{{ config('store.name') }} - personalised photo gifts online in India</h1>@endif
+<div class="wrap hero-wrap">@include('partials.hero-slider')</div>
+
+<div class="usp-bar" aria-label="Why shop with us">
+    <div class="wrap usp-track">
+        <span><b>✓</b> Free design preview</span>
+        <span><b>🚚</b> Free shipping over {{ money(setting('free_shipping_over')) }}</span>
+        @if(setting('cod_enabled'))<span><b>₹</b> Cash on delivery</span>@endif
+        <span><b>♥</b> Hand-made in India</span>
+        <span><b>🔒</b> Secure UPI & cards</span>
     </div>
-</section>
+</div>
 
 @if($categories->isNotEmpty())
 <section class="section">
@@ -41,21 +26,6 @@
                         @if($c->image)<img src="{{ $c->imageUrl() }}" alt="{{ $c->name }}" loading="lazy" width="120" height="120">@else<span class="bubble-letter">{{ mb_substr($c->name, 0, 1) }}</span>@endif
                     </span>
                     <span class="bubble-name">{{ $c->name }}</span>
-                </a>
-            @endforeach
-        </div>
-    </div>
-</section>
-@endif
-
-@if($banners->isNotEmpty())
-<section class="section">
-    <div class="wrap">
-        <div class="banners" data-carousel>
-            @foreach($banners as $b)
-                <a href="{{ $b->link ?: url('shop').'/' }}" class="banner">
-                    <img src="{{ media_url($b->image) }}" alt="{{ $b->title }}" @if(!$loop->first) loading="lazy" @endif width="1200" height="480">
-                    <span class="banner-copy"><b>{{ $b->title }}</b>@if($b->subtitle)<span>{{ $b->subtitle }}</span>@endif @if($b->button)<em>{{ $b->button }} →</em>@endif</span>
                 </a>
             @endforeach
         </div>

@@ -32,8 +32,8 @@ class PageController extends Controller
             'start_url' => '/?source=pwa',
             'scope' => '/',
             'display' => 'standalone',
-            'background_color' => '#fffaf5',
-            'theme_color' => '#e8445a',
+            'background_color' => '#ffffff',
+            'theme_color' => '#ffffff',
             'icons' => [
                 ['src' => asset('images/icon-192.png'), 'sizes' => '192x192', 'type' => 'image/png'],
                 ['src' => asset('images/icon-512.png'), 'sizes' => '512x512', 'type' => 'image/png', 'purpose' => 'any maskable'],

@@ -105,7 +105,7 @@
                                 </select>
                             @elseif($f->type === 'color')
                                 <label for="cf{{ $f->id }}">{{ $f->label }}</label>
-                                <input id="cf{{ $f->id }}" type="color" name="custom[{{ $f->id }}]" value="{{ old('custom.'.$f->id, '#e8445a') }}">
+                                <input id="cf{{ $f->id }}" type="color" name="custom[{{ $f->id }}]" value="{{ old('custom.'.$f->id, '#f04577') }}">
                             @elseif($f->type === 'date')
                                 <label for="cf{{ $f->id }}">{{ $f->label }} @if($f->required)<em>*</em>@endif</label>
                                 <input id="cf{{ $f->id }}" type="date" name="custom[{{ $f->id }}]" value="{{ old('custom.'.$f->id) }}" @required($f->required)>

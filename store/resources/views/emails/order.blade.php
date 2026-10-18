@@ -19,9 +19,9 @@
     </table>
     <p style="font-size:14px">Delivering to: {{ $order->name }}, {{ $order->address_line1 }} {{ $order->address_line2 }}, {{ $order->city }}, {{ $order->state }} {{ $order->pincode }} · {{ $order->phone }}</p>
     @if($forAdmin)
-        <p><a href="{{ route('admin.orders.show', $order) }}" style="background:#e8445a;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none">Open in admin</a></p>
+        <p><a href="{{ route('admin.orders.show', $order) }}" style="background:#f04577;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none">Open in admin</a></p>
     @else
-        <p><a href="{{ route('track', ['number' => $order->number, 'phone' => $order->phone]) }}" style="background:#e8445a;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none">Track your order</a></p>
+        <p><a href="{{ route('track', ['number' => $order->number, 'phone' => $order->phone]) }}" style="background:#f04577;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none">Track your order</a></p>
         <p style="font-size:13px;color:#7a6b7d">We'll start making your gift now. If a photo needs adjusting we'll contact you before printing.</p>
     @endif
 </td></tr></table>
