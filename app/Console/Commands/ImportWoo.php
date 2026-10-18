@@ -13,7 +13,7 @@ class ImportWoo extends Command
         {--key= : WooCommerce REST API consumer key (ck_...). With key + secret, drafts are imported too (hidden)}
         {--secret= : WooCommerce REST API consumer secret (cs_...)}
         {--csv= : Import a WooCommerce product export CSV instead of calling the site}
-        {--customers : Also import customer accounts and past orders (needs --key/--secret)}
+        {--customers : Also import customer accounts, past orders and coupons (needs --key/--secret)}
         {--only-customers : Import only customer accounts and past orders}
         {--no-images : Keep image URLs pointing at the old site instead of downloading them}
         {--no-upload-fields : Do not add the default "upload your photo" field to new products}
@@ -41,6 +41,7 @@ class ImportWoo extends Command
             if ($this->option('customers') || $this->option('only-customers')) {
                 $importer->importCustomers();
                 $importer->importOrders();
+                $importer->importCoupons();
             }
         } catch (\Throwable $e) {
             $this->error($e->getMessage());

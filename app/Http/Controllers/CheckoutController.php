@@ -18,6 +18,7 @@ use App\Services\OrderEmails;
 use App\Services\Razorpay;
 use App\Services\Seo;
 use App\Services\Stock;
+use App\Services\Visits;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -274,6 +275,7 @@ class CheckoutController extends Controller
         // Fire the purchase event once per order, not on every refresh.
         if (! session('tracked.'.$order->number)) {
             $analytics->purchase($order);
+            Visits::record($request, 'order', ['order_id' => $order->id, 'value' => $order->total]);
             session(['tracked.'.$order->number => true]);
         }
 

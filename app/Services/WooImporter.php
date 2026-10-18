@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Category;
+use App\Models\Coupon;
 use App\Models\CustomerUpload;
 use App\Models\CustomizationField;
 use App\Models\Media;
@@ -18,6 +19,7 @@ use App\Support\DefaultPages;
 use Closure;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
@@ -479,6 +481,36 @@ class WooImporter
         'NL' => 'Nagaland', 'OR' => 'Odisha', 'OD' => 'Odisha', 'PY' => 'Puducherry', 'PB' => 'Punjab', 'RJ' => 'Rajasthan', 'SK' => 'Sikkim',
         'TN' => 'Tamil Nadu', 'TS' => 'Telangana', 'TG' => 'Telangana', 'TR' => 'Tripura', 'UP' => 'Uttar Pradesh', 'UK' => 'Uttarakhand',
         'UT' => 'Uttarakhand', 'WB' => 'West Bengal'];
+
+    /**
+     * WooCommerce coupons, matched by code. Percent and fixed-cart coupons map directly; fixed-product
+     * coupons become fixed amounts off the order. Needs REST API keys.
+     */
+    public function importCoupons(): void
+    {
+        if (! $this->usesApiKeys()) {
+            throw new \RuntimeException('Importing coupons needs WooCommerce REST API keys (--key/--secret).');
+        }
+        $this->stats['coupons'] = 0;
+        foreach ($this->all('/wp-json/wc/v3/coupons') as $c) {
+            $code = trim((string) ($c['code'] ?? ''));
+            if ($code === '' || (float) ($c['amount'] ?? 0) <= 0) {
+                continue;
+            }
+            $coupon = Coupon::whereRaw('upper(code) = ?', [strtoupper($code)])->first() ?? new Coupon(['code' => strtoupper($code)]);
+            $coupon->fill([
+                'type' => ($c['discount_type'] ?? '') === 'percent' ? 'percent' : 'fixed',
+                'value' => (float) $c['amount'],
+                'min_subtotal' => (float) ($c['minimum_amount'] ?? 0),
+                'usage_limit' => ($c['usage_limit'] ?? null) ?: null,
+                'used' => max((int) ($c['usage_count'] ?? 0), (int) $coupon->used),
+                'expires_at' => ! empty($c['date_expires']) ? Carbon::parse($c['date_expires']) : null,
+                'is_active' => ($c['status'] ?? 'publish') === 'publish',
+            ])->save();
+            $this->say('  coupon '.$coupon->code);
+            $this->stats['coupons']++;
+        }
+    }
 
     /**
      * Customer accounts. They get no password here: "Forgot password" on the new site lets them set one.

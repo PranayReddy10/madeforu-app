@@ -114,6 +114,7 @@ class ImportQueue
             if ($s['customers'] && $importer->usesApiKeys()) {
                 $importer->importCustomers();
                 $importer->importOrders();
+                $importer->importCoupons();
             }
             Cache::forget('menu.categories');
             Cache::forget('menu.pages');

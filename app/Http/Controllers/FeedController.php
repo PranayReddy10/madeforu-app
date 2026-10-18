@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\Product;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Str;
 
 /**
  * Product feeds for Google Merchant Center (free listings + Shopping ads) and the Meta/Instagram catalogue.
@@ -56,13 +58,23 @@ class FeedController extends Controller
         return $rows;
     }
 
+    /** When Google Merchant Center / Meta last downloaded a feed (shown on the Analytics page). */
+    public static function logFetch(string $feed): void
+    {
+        $ua = (string) request()->userAgent();
+        Cache::forever('feed.fetched.'.$feed, ['at' => now()->toIso8601String(), 'by' => Str::limit($ua, 80), 'items' => null]);
+    }
+
     public function google()
     {
+        self::logFetch('google');
+
         return response()->view('feeds.google', ['rows' => $this->rows()])->header('Content-Type', 'application/xml');
     }
 
     public function facebook()
     {
+        self::logFetch('facebook');
         $out = fopen('php://temp', 'r+');
         fputcsv($out, ['id', 'item_group_id', 'title', 'description', 'availability', 'condition', 'price', 'sale_price', 'link', 'image_link', 'additional_image_link', 'brand', 'product_type', 'google_product_category', 'size', 'color']);
         foreach ($this->rows() as $r) {

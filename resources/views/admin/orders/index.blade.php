@@ -22,7 +22,15 @@
             <td><a href="{{ route('admin.orders.show', $o) }}"><strong>{{ $o->number }}</strong></a></td>
             <td class="nowrap">{{ $o->created_at->format('d M Y, H:i') }}</td>
             <td>{{ $o->name }}<br><small class="muted">{{ $o->phone }} · {{ $o->city }}</small></td>
-            <td>{{ $o->items_count }}</td>
+            <td class="order-items">
+                @foreach ($o->items->take(4) as $it)
+                    <div class="oi-mini">
+                        <span class="oi-thumbs">@foreach ($it->uploads->take(3) as $u)<a href="{{ $u->fullUrl() }}" target="_blank" rel="noopener"><img src="{{ $u->thumb_path ? $u->thumbUrl() : $u->fullUrl() }}" alt="" loading="lazy"></a>@endforeach @if ($it->uploads->count() > 3)<em>+{{ $it->uploads->count() - 3 }}</em>@endif</span>
+                        <small>{{ $it->qty }} × {{ \Illuminate\Support\Str::limit($it->name, 34) }}</small>
+                    </div>
+                @endforeach
+                @if ($o->items_count > 4)<small class="muted">+{{ $o->items_count - 4 }} more</small>@endif
+            </td>
             <td>{{ money($o->total) }}</td>
             <td>{{ strtoupper($o->payment_method) }}<br><span class="badge {{ $o->payment_status === 'paid' ? 'ok' : ($o->payment_status === 'failed' ? 'err' : '') }}">{{ $o->payment_status }}</span></td>
             <td><span class="badge s-{{ $o->status }}">{{ $o->statusLabel() }}</span></td>

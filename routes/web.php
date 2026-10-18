@@ -116,6 +116,10 @@ Route::get('/{key}.txt', [SitemapController::class, 'indexNowKey'])->where('key'
 
 Route::prefix('admin')->name('admin.')->middleware(['auth', 'admin'])->group(function () {
     Route::get('/', [Admin\DashboardController::class, 'index'])->name('dashboard');
+    Route::get('analytics', [Admin\AnalyticsController::class, 'index'])->name('analytics');
+    Route::post('analytics/refresh', [Admin\AnalyticsController::class, 'refresh'])->name('analytics.refresh');
+    Route::post('analytics/sitemap', [Admin\AnalyticsController::class, 'submitSitemap'])->name('analytics.sitemap');
+    Route::post('analytics/index-check', [Admin\AnalyticsController::class, 'checkIndex'])->name('analytics.index-check');
     Route::post('products/personalisation', [Admin\ProductController::class, 'bulkPersonalisation'])->name('products.personalisation');
     Route::resource('products', Admin\ProductController::class)->except('show');
     Route::post('products/{product}/images', [Admin\ProductController::class, 'uploadImages'])->name('products.images');

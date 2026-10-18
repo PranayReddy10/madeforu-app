@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Setting;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 
 class SettingController extends Controller
 {
@@ -107,6 +108,14 @@ class SettingController extends Controller
             'whatsapp_api.template_admin' => ['Template: new order alert to you', 'text', '{{1}} order no., {{2}} customer, {{3}} total, {{4}} payment.'],
             'whatsapp_api.admin_numbers' => ['Your WhatsApp number(s) for new-order alerts', 'text', 'With country code, comma separated: 919876543210'],
         ],
+        'Google Analytics & Search Console reports' => [
+            'google.service_account' => ['Google service account key (JSON)', 'secret', 'Google Cloud → IAM → Service accounts → Keys → Add key → JSON. Paste the whole file. Enable “Google Analytics Data API” and “Google Search Console API”.'],
+            'google.ga4_property' => ['GA4 property ID', 'text', 'Numbers only, e.g. 412345678 (GA4 → Admin → Property details). Add the service account email as a Viewer.'],
+            'google.search_console_site' => ['Search Console property', 'text', 'sc-domain:madeforu.co.in (domain property) or https://madeforu.co.in/. Add the service account email as a user (Full).'],
+        ],
+        'Instagram on the home page' => [
+            'instagram.token' => ['Instagram access token', 'secret', 'Meta developers → your app → Instagram → API setup with Instagram login → Generate token for your professional account. Renewed automatically every week.'],
+        ],
         'Analytics & search engines' => [
             'analytics.ga4' => ['Google Analytics 4 measurement ID', 'text', 'G-XXXXXXXXXX'],
             'analytics.gtm' => ['Google Tag Manager container', 'text', 'GTM-XXXXXXX'],
@@ -175,6 +184,8 @@ class SettingController extends Controller
             }
         }
         Setting::put($values);
+        Cache::forget('instagram.posts');   // new token or account: reload posts
+        Cache::forget('admin.google-report');
 
         return back()->with('status', 'Settings saved.');
     }

@@ -1,9 +1,11 @@
 <?php
 
 use App\Http\Middleware\EnsureAdmin;
+use App\Http\Middleware\RecordVisit;
 use App\Http\Middleware\ShareStoreData;
 use App\Http\Middleware\WordPressUrls;
 use App\Models\Redirect;
+use App\Services\Visits;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -19,7 +21,8 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias(['admin' => EnsureAdmin::class]);
         $middleware->web(prepend: [WordPressUrls::class]);
-        $middleware->web(append: [ShareStoreData::class]);
+        $middleware->web(append: [ShareStoreData::class, RecordVisit::class]);
+        $middleware->encryptCookies(except: [Visits::COOKIE]);
         $middleware->validateCsrfTokens(except: ['webhooks/*']);
         $middleware->trustProxies(at: '*');
     })

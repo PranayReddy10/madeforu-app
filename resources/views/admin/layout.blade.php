@@ -16,6 +16,7 @@
             @php
                 $nav = [
                     ['admin.dashboard', 'Dashboard', 'admin'],
+                    ['admin.analytics', 'Analytics', 'admin/analytics*'],
                     ['admin.orders.index', 'Orders', 'admin/orders*'],
                     ['admin.products.index', 'Products', 'admin/products*'],
                     ['admin.categories.index', 'Categories', 'admin/categories*'],

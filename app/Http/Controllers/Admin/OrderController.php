@@ -21,7 +21,7 @@ class OrderController extends Controller
 {
     public function index(Request $request)
     {
-        $q = Order::withCount('items')->latest();
+        $q = Order::withCount('items')->with('items.uploads')->latest();
         if ($s = $request->query('status')) {
             $q->where('status', $s);
         }

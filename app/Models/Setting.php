@@ -31,7 +31,7 @@ class Setting extends Model
     }
 
     /** Keys stored encrypted (payment secrets). */
-    public const SECRET = ['razorpay.secret', 'razorpay.webhook_secret', 'cashfree.secret', 'delhivery.token', 'whatsapp_api.token'];
+    public const SECRET = ['razorpay.secret', 'razorpay.webhook_secret', 'cashfree.secret', 'delhivery.token', 'whatsapp_api.token', 'google.service_account', 'instagram.token'];
 
     public static function put(array $values): void
     {

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\CustomerUpload;
 use App\Models\User;
 use App\Services\Seo;
 use Illuminate\Auth\Events\PasswordReset;
@@ -15,6 +16,7 @@ class AuthController extends Controller
     public function showLogin(Seo $seo)
     {
         $seo->title('Login')->noindex();
+        $this->rememberNext();
 
         return view('auth.login');
     }
@@ -26,11 +28,13 @@ class AuthController extends Controller
         $value = $field === 'phone' ? substr(preg_replace('/\D/', '', $data['login']), -10) : $data['login'];
         // Keep the guest cart across the session id change on login.
         $cart = session('cart.lines');
+        $oldSession = $request->session()->getId();
         if (Auth::attempt([$field => $value, 'password' => $data['password']], true)) {
             $request->session()->regenerate();
             if ($cart) {
                 session(['cart.lines' => $cart]);
             }
+            $this->keepPhotos($oldSession);
 
             return redirect()->intended(route('account'));
         }
@@ -41,6 +45,7 @@ class AuthController extends Controller
     public function showRegister(Seo $seo)
     {
         $seo->title('Create account')->noindex();
+        $this->rememberNext();
 
         return view('auth.register');
     }
@@ -54,12 +59,14 @@ class AuthController extends Controller
             'password' => 'required|string|min:8|confirmed',
         ]);
         $cart = session('cart.lines');
+        $oldSession = $request->session()->getId();
         $user = User::create($data);
         Auth::login($user, true);
         $request->session()->regenerate();
         if ($cart) {
             session(['cart.lines' => $cart]);
         }
+        $this->keepPhotos($oldSession);
 
         return redirect()->intended(route('account'));
     }
@@ -120,5 +127,20 @@ class AuthController extends Controller
         $request->session()->regenerateToken();
 
         return redirect()->route('home');
+    }
+
+    /** ?next=cart or ?next=checkout: come back there after signing in or up (the cart is kept). */
+    private function rememberNext(): void
+    {
+        $next = ['cart' => route('cart'), 'checkout' => route('checkout')][request()->query('next')] ?? null;
+        if ($next) {
+            session()->put('url.intended', $next);
+        }
+    }
+
+    /** Photos uploaded before signing in belong to the old session id; move them so they can still be added or removed. */
+    private function keepPhotos(string $oldSession): void
+    {
+        CustomerUpload::where('session_id', $oldSession)->whereNull('order_item_id')->update(['session_id' => session()->getId()]);
     }
 }

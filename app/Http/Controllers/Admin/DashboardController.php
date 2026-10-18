@@ -8,6 +8,7 @@ use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\SearchQuery;
 use App\Services\Stock;
+use App\Services\VisitReport;
 use Illuminate\Database\Eloquent\Builder;
 
 class DashboardController extends Controller
@@ -24,8 +25,12 @@ class DashboardController extends Controller
             'Last 30 days' => [(float) $counted()->where('created_at', '>=', today()->subDays(29))->sum('total'), $counted()->where('created_at', '>=', today()->subDays(29))->count()],
         ];
 
+        $week = new VisitReport(7);
+
         return view('admin.dashboard', [
             'revenue' => $revenue,
+            'traffic' => $week->kpis()['now'],
+            'topSource' => $week->sources()->first(),
             'byStatus' => Order::selectRaw('status, count(*) as n')->groupBy('status')->pluck('n', 'status'),
             'recent' => Order::latest()->take(10)->get(),
             'lowStock' => ProductVariant::with('product')->whereNotNull('stock_qty')->where('stock_qty', '<=', Stock::lowThreshold())->get()
