@@ -7,6 +7,7 @@ use App\Models\CustomerUpload;
 use App\Models\NotificationLog;
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Models\Setting;
 use App\Services\Delhivery;
 use App\Services\Invoice;
 use App\Services\OrderNotifier;
@@ -21,8 +22,10 @@ class OrderController extends Controller
 {
     public function index(Request $request)
     {
-        $q = Order::withCount('items')->with('items.uploads')->latest();
-        if ($s = $request->query('status')) {
+        $q = Order::withCount('items')->with('items.uploads', 'items.product')->latest();
+        if ($request->query('status') === 'attention') {
+            $q->where(fn ($w) => $this->needsAttention($w));
+        } elseif ($s = $request->query('status')) {
             $q->where('status', $s);
         }
         if ($p = $request->query('payment_status')) {
@@ -39,7 +42,72 @@ class OrderController extends Controller
             // Booked with Delhivery but not yet picked up: what the next pickup should collect.
             'awaitingPickup' => Order::whereNotNull('tracking_number')->where('courier', 'Delhivery')
                 ->whereIn('status', ['confirmed', 'in_production'])->count(),
+            'counts' => Order::selectRaw('status, count(*) as n')->groupBy('status')->pluck('n', 'status'),
+            'attention' => Order::where(fn ($w) => $this->needsAttention($w))->count(),
+            'lastError' => Order::whereNotNull('shipment_error')->whereNull('tracking_number')->latest('updated_at')->value('shipment_error'),
         ]);
+    }
+
+    /** Confirmed orders that still need a person: Delhivery refused them, or they are not booked yet. */
+    private function needsAttention($w)
+    {
+        $w->whereNull('woo_id')->whereIn('status', ['confirmed', 'in_production'])->whereNull('tracking_number')
+            ->where(fn ($x) => $x->whereNotNull('shipment_error')->orWhere('created_at', '<', now()->subDay()));
+    }
+
+    /** Ticked orders: book them with Delhivery, or move them to the next step together. */
+    public function bulk(Request $request, Shipping $shipping)
+    {
+        $data = $request->validate(['ids' => 'required|array|max:100', 'ids.*' => 'integer', 'action' => 'required|in:book,in_production,shipped,delivered']);
+        $orders = Order::whereIn('id', $data['ids'])->get();
+        if ($data['action'] === 'book') {
+            $ok = $fail = 0;
+            foreach ($orders as $o) {
+                if ($o->tracking_number || in_array($o->status, ['pending', 'cancelled'], true)) {
+                    continue;
+                }
+                $o->update(['shipment_error' => null]);
+                $shipping->ship($o->fresh()) ? $ok++ : $fail++;
+            }
+            $msg = $ok.' booked with Delhivery'.($fail ? ', '.$fail.' failed — see the red notes' : '').'.';
+
+            return back()->with($fail && ! $ok ? 'error' : 'status', $msg);
+        }
+        foreach ($orders as $o) {
+            if (in_array($o->status, ['cancelled', 'returned'], true)) {
+                continue;
+            }
+            $changes = ['status' => $data['action']];
+            if ($data['action'] === 'shipped' && ! $o->shipped_at) {
+                $changes['shipped_at'] = now();
+            }
+            if ($data['action'] === 'delivered') {
+                $changes['delivered_at'] = $o->delivered_at ?? now();
+                if ($o->payment_method === 'cod') {
+                    $changes['payment_status'] = 'paid';   // cash collected on delivery
+                }
+            }
+            $o->update($changes);
+        }
+
+        return back()->with('status', $orders->count().' '.Str::plural('order', $orders->count()).' marked '.strtolower(Order::STATUSES[$data['action']]).'.');
+    }
+
+    /** Register the shop's pickup address with Delhivery and use that name from now on. */
+    public function delhiveryWarehouse(Request $request, Delhivery $delhivery)
+    {
+        $data = $request->validate([
+            'name' => 'required|string|max:60', 'phone' => 'required|string|max:20', 'address' => 'required|string|max:250',
+            'city' => 'required|string|max:60', 'state' => 'required|string|max:60', 'pin' => 'required|digits:6',
+        ]);
+        try {
+            $delhivery->createWarehouse($data);
+        } catch (\Throwable $e) {
+            return back()->with('error', $e->getMessage());
+        }
+        Setting::put(['delhivery.pickup_location' => trim($data['name']), 'delhivery.pickup_pincode' => $data['pin']]);
+
+        return back()->with('status', 'Pickup address “'.$data['name'].'” registered with Delhivery and saved in Settings. Tick the failed orders and press “Book with Delhivery”.');
     }
 
     public function show(Order $order)

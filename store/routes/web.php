@@ -140,6 +140,8 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'admin'])->group(fun
     Route::get('orders/{order}/label', [Admin\OrderController::class, 'label'])->name('orders.label');
     Route::post('orders/{order}/cancel-shipment', [Admin\OrderController::class, 'cancelShipment'])->name('orders.cancel-shipment');
     Route::post('orders/pickup', [Admin\OrderController::class, 'pickup'])->name('orders.pickup');
+    Route::post('orders/bulk', [Admin\OrderController::class, 'bulk'])->name('orders.bulk');
+    Route::post('orders/delhivery-warehouse', [Admin\OrderController::class, 'delhiveryWarehouse'])->name('orders.warehouse');
     Route::resource('coupons', Admin\CouponController::class)->except('show');
     Route::resource('pages', Admin\PageController::class)->except('show');
     Route::resource('banners', Admin\BannerController::class)->except('show');
