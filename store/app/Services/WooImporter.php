@@ -12,6 +12,7 @@ use App\Models\ProductVariant;
 use App\Models\Redirect;
 use App\Models\Review;
 use Closure;
+use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
@@ -39,9 +40,27 @@ class WooImporter
 
     public array $stats = ['categories' => 0, 'products' => 0, 'variants' => 0, 'images' => 0, 'reviews' => 0, 'pages' => 0, 'redirects' => 0];
 
-    public function __construct(?string $base = null)
+    /** Responses fetched ahead of time (WooCommerce REST API mode), keyed by Store API path. */
+    private array $prefetched = [];
+
+    private ?string $key;
+
+    private ?string $secret;
+
+    public function __construct(?string $base = null, ?string $key = null, ?string $secret = null)
     {
         $this->base = rtrim($base ?: config('store.woo.url'), '/');
+        $this->key = $key ?: config('store.woo.consumer_key');
+        $this->secret = $secret ?: config('store.woo.consumer_secret');
+    }
+
+    /**
+     * With WooCommerce REST API keys the importer reads /wc/v3, which also returns draft and private
+     * products (imported hidden). Without keys it reads the public Store API: published products only.
+     */
+    public function usesApiKeys(): bool
+    {
+        return (bool) ($this->key && $this->secret);
     }
 
     private function say(string $msg): void
@@ -56,10 +75,7 @@ class WooImporter
     {
         $out = [];
         for ($page = 1; $page < 200; $page++) {
-            $res = Http::timeout(60)->retry(3, 2000, throw: false)
-                ->withHeaders(['User-Agent' => 'MadeForU-Migrator/1.0'])
-                ->acceptJson()
-                ->get($this->base.$path, $query + ['per_page' => 100, 'page' => $page]);
+            $res = $this->request($path)->get($this->base.$path, $query + ['per_page' => 100, 'page' => $page]);
             if ($res->status() === 400 && $page > 1) {
                 break; // past the last page
             }
@@ -83,9 +99,26 @@ class WooImporter
         return $out;
     }
 
+    private function request(string $path): PendingRequest
+    {
+        $http = Http::timeout(60)->retry(3, 2000, throw: false)
+            ->withHeaders(['User-Agent' => 'MadeForU-Migrator/1.0'])
+            ->acceptJson();
+        if (str_starts_with($path, '/wp-json/wc/v3/') && $this->usesApiKeys()) {
+            // Basic auth over HTTPS; the query-string form also works on servers that drop the Authorization header.
+            $http = $http->withBasicAuth($this->key, $this->secret)
+                ->withQueryParameters(['consumer_key' => $this->key, 'consumer_secret' => $this->secret]);
+        }
+
+        return $http;
+    }
+
     private function one(string $path): ?array
     {
-        $res = Http::timeout(60)->retry(3, 2000, throw: false)->acceptJson()->get($this->base.$path);
+        if (array_key_exists($path, $this->prefetched)) {
+            return $this->prefetched[$path];
+        }
+        $res = $this->request($path)->get($this->base.$path);
 
         return $res->successful() ? $res->json() : null;
     }
@@ -106,7 +139,9 @@ class WooImporter
 
     public function importCategories(): void
     {
-        $cats = $this->all('/wp-json/wc/store/v1/products/categories');
+        $cats = $this->usesApiKeys()
+            ? array_map(fn ($c) => $c + ['permalink' => null], $this->all('/wp-json/wc/v3/products/categories'))
+            : $this->all('/wp-json/wc/store/v1/products/categories');
         $this->say('Categories: '.count($cats));
         // Parents before children so the path can be built from the parent.
         $byId = collect($cats)->keyBy('id');
@@ -141,9 +176,18 @@ class WooImporter
         if (! $this->catMap) {
             $this->catMap = Category::whereNotNull('woo_id')->pluck('id', 'woo_id')->all();
         }
-        $products = $this->all('/wp-json/wc/store/v1/products', ['orderby' => 'id', 'order' => 'asc']);
-        $this->say('Products: '.count($products));
-        $seo = $this->yoastMeta();
+        if ($this->usesApiKeys()) {
+            $v3 = $this->all('/wp-json/wc/v3/products', ['status' => 'any', 'orderby' => 'id', 'order' => 'asc']);
+            $v3 = array_values(array_filter($v3, fn ($p) => ! in_array($p['status'] ?? '', ['trash', 'auto-draft'], true)));
+            $products = array_map(fn ($p) => $this->fromV3($p), $v3);
+            $hidden = count(array_filter($products, fn ($p) => ! $p['_active']));
+            $this->say('Products: '.count($products).($hidden ? " ({$hidden} drafts/private, imported hidden)" : ''));
+            $seo = collect($v3)->mapWithKeys(fn ($p) => [$p['id'] => $this->yoastFromMeta($p['meta_data'] ?? [])])->filter()->all();
+        } else {
+            $products = $this->all('/wp-json/wc/store/v1/products', ['orderby' => 'id', 'order' => 'asc']);
+            $this->say('Products: '.count($products));
+            $seo = $this->yoastMeta();
+        }
 
         foreach ($products as $w) {
             $minor = (int) ($w['prices']['currency_minor_unit'] ?? 2);
@@ -154,9 +198,10 @@ class WooImporter
 
             $p = Product::firstOrNew(['woo_id' => $w['id']]);
             $meta = $seo[$w['id']] ?? [];
+            $name = html_entity_decode($w['name'], ENT_QUOTES);
             $p->fill([
-                'name' => html_entity_decode($w['name'], ENT_QUOTES),
-                'slug' => rawurldecode($w['slug']),
+                'name' => $name,
+                'slug' => $this->uniqueSlug(rawurldecode((string) $w['slug']) ?: Str::slug($name) ?: 'product-'.$w['id'], $p->id),
                 'sku' => $w['sku'] ?: null,
                 'type' => $type,
                 'price' => $regular,
@@ -164,7 +209,7 @@ class WooImporter
                 'short_description' => $w['short_description'] ?? null,
                 'description' => $w['description'] ?? null,
                 'in_stock' => (bool) ($w['is_in_stock'] ?? true),
-                'is_active' => true,
+                'is_active' => $w['_active'] ?? true,
                 'primary_category_id' => isset($w['categories'][0]) ? ($this->catMap[$w['categories'][0]['id']] ?? null) : null,
                 'rating_avg' => (float) ($w['average_rating'] ?? 0),
                 'rating_count' => (int) ($w['review_count'] ?? 0),
@@ -287,7 +332,9 @@ class WooImporter
     {
         $products = Product::whereNotNull('woo_id')->pluck('id', 'woo_id');
         try {
-            $reviews = $this->all('/wp-json/wc/store/v1/products/reviews');
+            $reviews = $this->usesApiKeys()
+                ? $this->all('/wp-json/wc/v3/products/reviews', ['status' => 'approved'])
+                : $this->all('/wp-json/wc/store/v1/products/reviews');
         } catch (\Throwable $e) {
             $this->say('Reviews skipped: '.$e->getMessage());
 
@@ -344,6 +391,76 @@ class WooImporter
             ])->save();
             $this->stats['pages']++;
         }
+    }
+
+    /**
+     * Turn a /wc/v3 product into the Store API shape the rest of the importer reads, and prefetch its
+     * variations so importVariations() finds them without another request each.
+     */
+    private function fromV3(array $p): array
+    {
+        $minor = fn ($v) => $v === '' || $v === null ? null : (string) (int) round(((float) $v) * 100);
+        $variations = [];
+        if (($p['type'] ?? '') === 'variable') {
+            foreach ($this->all('/wp-json/wc/v3/products/'.$p['id'].'/variations') as $v) {
+                $variations[] = ['id' => $v['id'], 'attributes' => array_map(
+                    fn ($a) => ['name' => $a['name'], 'value' => Str::slug((string) $a['option'])], $v['attributes'] ?? [])];
+                $this->prefetched['/wp-json/wc/store/v1/products/'.$v['id']] = [
+                    // A private variation is switched off in WooCommerce; one without a price can't be bought.
+                    'is_purchasable' => ($v['status'] ?? 'publish') !== 'private' && ($v['price'] ?? '') !== '',
+                    'prices' => ['price' => $minor($v['price'] ?? null) ?? '0', 'regular_price' => $minor($v['regular_price'] ?? null),
+                        'sale_price' => $minor($v['sale_price'] ?? null), 'currency_minor_unit' => 2],
+                    'sku' => $v['sku'] ?? null,
+                    'is_in_stock' => ($v['stock_status'] ?? 'instock') !== 'outofstock',
+                    'images' => ! empty($v['image']['src']) ? [['src' => $v['image']['src']]] : [],
+                ];
+            }
+        }
+
+        return [
+            'id' => $p['id'],
+            'name' => $p['name'] ?: 'Untitled product '.$p['id'],
+            'slug' => $p['slug'] ?? '',
+            'type' => $p['type'] ?? 'simple',
+            'sku' => $p['sku'] ?? '',
+            'permalink' => ($p['status'] ?? '') === 'publish' ? ($p['permalink'] ?? null) : null,
+            'short_description' => $p['short_description'] ?? null,
+            'description' => $p['description'] ?? null,
+            'prices' => ['regular_price' => $minor($p['regular_price'] ?? null) ?? $minor($p['price'] ?? null),
+                'sale_price' => $minor($p['sale_price'] ?? null), 'currency_minor_unit' => 2],
+            'is_in_stock' => ($p['stock_status'] ?? 'instock') !== 'outofstock',
+            'average_rating' => $p['average_rating'] ?? 0,
+            'review_count' => $p['rating_count'] ?? 0,
+            'images' => array_map(fn ($i) => ['src' => $i['src'], 'alt' => $i['alt'] ?? ''], $p['images'] ?? []),
+            'categories' => $p['categories'] ?? [],
+            'tags' => $p['tags'] ?? [],
+            'attributes' => array_map(fn ($a) => [
+                'name' => $a['name'], 'has_variations' => (bool) ($a['variation'] ?? false),
+                'terms' => array_map(fn ($o) => ['name' => $o, 'slug' => Str::slug((string) $o)], $a['options'] ?? []),
+            ], $p['attributes'] ?? []),
+            'variations' => $variations,
+            '_active' => ($p['status'] ?? 'publish') === 'publish',
+        ];
+    }
+
+    /** Yoast's own fields, skipping titles that still hold template variables like %%sitename%%. */
+    private function yoastFromMeta(array $meta): array
+    {
+        $get = fn ($k) => collect($meta)->firstWhere('key', $k)['value'] ?? null;
+        $clean = fn ($v) => is_string($v) && $v !== '' && ! str_contains($v, '%%') ? $v : null;
+
+        return array_filter(['title' => $clean($get('_yoast_wpseo_title')), 'description' => $clean($get('_yoast_wpseo_metadesc'))]);
+    }
+
+    /** Drafts often share a name (and so a slug) with the published product they were copied from. */
+    private function uniqueSlug(string $slug, ?int $ignoreId): string
+    {
+        $base = $slug;
+        for ($n = 2; Product::where('slug', $slug)->when($ignoreId, fn ($q) => $q->whereKeyNot($ignoreId))->exists(); $n++) {
+            $slug = $base.'-'.$n;
+        }
+
+        return $slug;
     }
 
     /** SEO titles/descriptions written in Yoast, when the site runs it. */
@@ -452,9 +569,6 @@ class WooImporter
             if (str_contains($type, 'variation')) {
                 continue;
             }
-            if (($r['Published'] ?? '1') === '-1') {
-                continue;
-            }
             $catIds = [];
             foreach (array_filter(array_map('trim', explode(',', $r['Categories'] ?? ''))) as $chain) {
                 $parent = null;
@@ -472,7 +586,8 @@ class WooImporter
             $regular = (float) ($r['Regular price'] ?? 0);
             $sale = (float) ($r['Sale price'] ?? 0);
             $p = Product::updateOrCreate(['woo_id' => (int) $r['ID']], [
-                'name' => $r['Name'], 'slug' => $slug, 'sku' => $r['SKU'] ?: null,
+                'name' => $r['Name'], 'slug' => $this->uniqueSlug($slug ?: 'product-'.$r['ID'], Product::where('woo_id', (int) $r['ID'])->value('id')), 'sku' => $r['SKU'] ?: null,
+                'is_active' => ($r['Published'] ?? '1') === '1',   // WooCommerce export: 1 published, 0 private, -1 draft
                 'type' => str_contains($type, 'variable') ? 'variable' : 'simple',
                 'price' => $regular, 'sale_price' => $sale > 0 && $sale < $regular ? $sale : null,
                 'short_description' => $r['Short description'] ?? null, 'description' => $r['Description'] ?? null,
