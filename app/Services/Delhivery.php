@@ -32,7 +32,7 @@ class Delhivery
         $name = self::pickupName();
         if (stripos($why, 'ClientWarehouse') !== false || (stripos($why, 'warehouse') !== false && stripos($why, 'does not exist') !== false)) {
             return 'the pickup location “'.($name ?: 'not set').'” is not a warehouse in your Delhivery account. '
-                .'The name must match exactly (capital letters and spaces too): copy it from Delhivery One → Settings → Pickup locations into '
+                .'The name must match exactly — capital and small letters too (“madeforu” and “MADEFORU” are different names to Delhivery): copy it from Delhivery One → Settings → Pickup locations into '
                 .'Admin → Settings → Delhivery shipping, or register your address from Admin → Orders → Delhivery. (Delhivery said: '.$why.')';
         }
         if (stripos($why, 'Unauthorized') !== false || stripos($why, 'token') !== false && stripos($why, 'invalid') !== false) {
