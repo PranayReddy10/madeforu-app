@@ -52,6 +52,15 @@ class CartController extends Controller
             return response()->json([
                 'count' => $this->cart->count(),
                 'message' => $product->name.' added to your cart.',
+                'added' => [
+                    'name' => $product->name,
+                    'image' => $line?->image ?? $product->mainImageUrl(),
+                    'qty' => $qty,
+                    'price' => money(($line?->unit ?? $product->currentPrice()) * $qty),
+                    'subtotal' => money($this->cart->subtotal($this->cart->lines())),
+                    'cart' => route('cart'),
+                    'checkout' => route('checkout'),
+                ],
                 'event' => ['event' => 'add_to_cart', 'ecommerce' => [
                     'currency' => 'INR', 'value' => $line?->total,
                     'items' => [app(Analytics::class)->item($product, $line?->unit, (int) ($data['qty'] ?? 1), $line?->variant?->label())],
