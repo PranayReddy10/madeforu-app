@@ -45,6 +45,7 @@
 
             <div class="pdp-price" data-price-box>
                 <b data-price>{{ money($product->currentPrice()) }}</b>
+                <span class="each" data-each hidden></span>
                 <s data-regular @if(!$off) hidden @endif>{{ money($product->regularPrice()) }}</s>
                 <span class="save" data-save @if(!$off) hidden @endif>You save {{ money($product->regularPrice() - $product->currentPrice()) }} ({{ $off }}% off)</span>
                 <small class="muted">Inclusive of all taxes @if((float) setting('free_shipping_over') > 0)· Free delivery over {{ money(setting('free_shipping_over')) }}@endif</small>
@@ -73,52 +74,22 @@
                 @endif
 
                 @if($product->customizationFields->isNotEmpty())
-                <div class="personalise">
-                    <h2 class="h-sm">Personalise it</h2>
-                    @foreach($product->customizationFields as $f)
-                        <div class="field" data-field="{{ $f->id }}">
-                            @if($f->type === 'images')
-                                <div class="upload" data-upload data-min="{{ $f->min_files }}" data-max="{{ $f->max_files }}" data-name="custom[{{ $f->id }}][]" data-required="{{ $f->required ? 1 : 0 }}">
-                                    <div class="upload-head">
-                                        <label>{{ $f->label }} @if($f->required)<em>*</em>@endif</label>
-                                        <span class="upload-count"><b data-count>0</b> / {{ $f->max_files }}</span>
-                                    </div>
-                                    @if($f->help)<p class="help">{{ $f->help }}</p>@endif
-                                    <div class="upload-slots">
-                                        @for($i = 0; $i < $f->max_files; $i++)
-                                            <label class="slot" data-slot>
-                                                <input type="file" accept="image/*,.heic,.heif" @if($f->max_files > 1) multiple @endif hidden>
-                                                <span class="slot-empty"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><small>{{ $f->options[$i]['label'] ?? ($f->max_files > 1 ? 'Photo '.($i + 1) : 'Add photo') }}</small></span>
-                                            </label>
-                                        @endfor
-                                    </div>
-                                </div>
-                            @elseif($f->type === 'text')
-                                <label for="cf{{ $f->id }}">{{ $f->label }} @if($f->required)<em>*</em>@endif</label>
-                                <input id="cf{{ $f->id }}" type="text" name="custom[{{ $f->id }}]" value="{{ old('custom.'.$f->id) }}" @if($f->max_length) maxlength="{{ $f->max_length }}" @endif @required($f->required) data-count-chars>
-                            @elseif($f->type === 'textarea')
-                                <label for="cf{{ $f->id }}">{{ $f->label }} @if($f->required)<em>*</em>@endif</label>
-                                <textarea id="cf{{ $f->id }}" name="custom[{{ $f->id }}]" rows="3" @if($f->max_length) maxlength="{{ $f->max_length }}" @endif @required($f->required) data-count-chars>{{ old('custom.'.$f->id) }}</textarea>
-                            @elseif($f->type === 'select')
-                                <label for="cf{{ $f->id }}">{{ $f->label }} @if($f->required)<em>*</em>@endif</label>
-                                <select id="cf{{ $f->id }}" name="custom[{{ $f->id }}]" @required($f->required) data-extra-select>
-                                    <option value="">Choose…</option>
-                                    @foreach($f->options ?? [] as $o)
-                                        <option value="{{ $o['label'] }}" data-price="{{ (float) ($o['price'] ?? 0) }}">{{ $o['label'] }}@if(!empty($o['price']) && $o['price'] > 0) (+{{ money($o['price']) }})@endif</option>
-                                    @endforeach
-                                </select>
-                            @elseif($f->type === 'color')
-                                <label for="cf{{ $f->id }}">{{ $f->label }}</label>
-                                <input id="cf{{ $f->id }}" type="color" name="custom[{{ $f->id }}]" value="{{ old('custom.'.$f->id, '#f04577') }}">
-                            @elseif($f->type === 'date')
-                                <label for="cf{{ $f->id }}">{{ $f->label }} @if($f->required)<em>*</em>@endif</label>
-                                <input id="cf{{ $f->id }}" type="date" name="custom[{{ $f->id }}]" value="{{ old('custom.'.$f->id) }}" @required($f->required)>
-                            @endif
-                            @if($f->extra_price > 0)<p class="help">+{{ money($f->extra_price) }}</p>@endif
-                            @error('custom.'.$f->id)<p class="err">{{ $message }}</p>@enderror
-                        </div>
-                    @endforeach
+                <div class="personalise" data-item-block="0">
+                    <h2 class="h-sm">Personalise it <span class="item-tag" data-item-tag hidden>Item 1</span></h2>
+                    @include('partials.personalise-fields', ['prefix' => 'custom', 'suffix' => ''])
                 </div>
+                {{-- Ordering more than one: same personalisation for all, or a box per item. --}}
+                <div class="each-choice" data-each-choice hidden>
+                    <label><input type="radio" name="custom_each" value="0" checked> <span><b>Same for all <span data-qty-label></span></b><small>One design, repeated</small></span></label>
+                    <label><input type="radio" name="custom_each" value="1"> <span><b>Different for each</b><small>Own photos &amp; text per item</small></span></label>
+                </div>
+                <div data-item-blocks></div>
+                <template data-item-template>
+                    <div class="personalise extra" data-item-block="__N__">
+                        <h2 class="h-sm">Personalise it <span class="item-tag">Item __NUM__</span></h2>
+                        @include('partials.personalise-fields', ['prefix' => 'items[__N__][custom]', 'suffix' => '-__N__'])
+                    </div>
+                </template>
                 @endif
 
                 <div class="buy-row">

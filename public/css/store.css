@@ -768,3 +768,21 @@ a.contact-card:hover { transform: translateY(-2px); box-shadow: var(--shadow); }
     .hscroll.scrollable .hs-arrow { opacity: 1; pointer-events: auto; }
     .hscroll.scrollable .hs-arrow:disabled { opacity: 0; pointer-events: none; }
 }
+
+/* Quantity > 1: same personalisation for all, or one box per item */
+.pdp-price .each { font-size: 14px; font-weight: 600; color: var(--ink-2); }
+.pdp-price .each[hidden] { display: none; }
+.each-choice { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: -4px 0 14px; }
+.each-choice[hidden] { display: none; }
+.each-choice label { position: relative; cursor: pointer; }
+.each-choice input { position: absolute; opacity: 0; pointer-events: none; }
+.each-choice label > span { display: grid; gap: 2px; height: 100%; padding: 10px 12px; border: 1.5px solid var(--line); border-radius: 14px; background: #fff; transition: all .15s; }
+.each-choice b { font-size: 14px; }
+.each-choice small { font-size: 12px; color: var(--muted); }
+.each-choice input:checked + span { border-color: var(--rose); background: var(--rose-l); box-shadow: 0 0 0 3px var(--rose-l); }
+.each-choice input:focus-visible + span { outline: 2px solid var(--rose); }
+.item-tag { display: inline-block; margin-left: 6px; padding: 2px 10px; border-radius: 999px; background: var(--ink); color: #fff; font-size: 12px; vertical-align: middle; }
+.item-tag[hidden] { display: none; }
+.personalise.extra { border-color: #f7b9c9; animation: pop-in .25s ease-out; }
+.personalise.extra[hidden] { display: none; }
+@keyframes pop-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }

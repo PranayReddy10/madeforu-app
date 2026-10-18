@@ -29,8 +29,21 @@ class CartController extends Controller
             'variant_id' => 'nullable|integer',
             'qty' => 'nullable|integer|min:1|max:99',
             'custom' => 'nullable|array',
+            'custom_each' => 'nullable|boolean',
+            'items' => 'nullable|array|max:98',
+            'items.*.custom' => 'nullable|array',
         ]);
-        $this->cart->add($product, $data['variant_id'] ?? null, (int) ($data['qty'] ?? 1), $data['custom'] ?? []);
+        $qty = (int) ($data['qty'] ?? 1);
+        if ($qty > 1 && $request->boolean('custom_each')) {
+            // "Different for each": item 1 uses custom[], items 2…N use items[1..N-1][custom].
+            $customs = [$data['custom'] ?? []];
+            for ($i = 1; $i < $qty; $i++) {
+                $customs[] = $data['items'][$i]['custom'] ?? [];
+            }
+            $this->cart->addEach($product, $data['variant_id'] ?? null, $customs);
+        } else {
+            $this->cart->add($product, $data['variant_id'] ?? null, $qty, $data['custom'] ?? []);
+        }
 
         $line = $this->cart->lines()->last();
         if ($request->expectsJson()) {

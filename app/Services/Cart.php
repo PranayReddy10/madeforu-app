@@ -66,6 +66,42 @@ class Cart
         return $id;
     }
 
+    /**
+     * Several of one product, each personalised differently ("Different for each" on the product page).
+     * Every item is checked first, so nothing is added unless all of them are complete.
+     *
+     * @param  array<int, array<int|string, mixed>>  $customs  one entry per item
+     */
+    public function addEach(Product $product, ?int $variantId, array $customs): void
+    {
+        $product->loadMissing('variants', 'customizationFields');
+        $errors = [];
+        foreach ($customs as $i => $custom) {
+            try {
+                $this->validateCustomization($product, $custom);
+            } catch (ValidationException $e) {
+                foreach ($e->errors() as $key => $messages) {
+                    $errors[$i ? 'items.'.$i.'.'.$key : $key] = array_map(fn ($m) => 'Item '.($i + 1).': '.$m, $messages);
+                }
+            }
+        }
+        if ($errors) {
+            throw ValidationException::withMessages($errors);
+        }
+        // Stock for the whole set, so a shortage shows before any item goes in.
+        $variant = $product->type === 'variable' ? $product->variants->firstWhere('id', $variantId) : null;
+        $available = $variant || $product->type !== 'variable' ? Stock::available($product, $variant) : null;
+        if ($available !== null) {
+            $inCart = collect($this->raw())->filter(fn ($l) => $l['product_id'] === $product->id && $l['variant_id'] === $variant?->id)->sum('qty');
+            if ($inCart + count($customs) > $available) {
+                throw ValidationException::withMessages(['qty' => max(0, $available - $inCart) > 0 ? 'Only '.($available - $inCart).' more available.' : 'Sorry, there are no more of these in stock.']);
+            }
+        }
+        foreach ($customs as $custom) {
+            $this->add($product, $variantId, 1, $custom);
+        }
+    }
+
     /** @return array<int, mixed> */
     public function validateCustomization(Product $product, array $custom): array
     {
