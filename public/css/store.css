@@ -1085,3 +1085,17 @@ body > .site-header, body > .site-footer, body > .announce { flex: none; }
     .header-actions > .hdr-link:hover, .header-actions .icon-btn:hover { background: var(--rose-l); color: var(--rose-d); }
     .header-actions .icon-btn svg { display: block; }
 }
+
+/* Floating WhatsApp button: kept off form pages on phones (it covered buttons there) */
+@media (max-width: 959px) { .wa-float.wa-float-desktop { display: none; } }
+/* Sideways-scrolling rows (policy tabs, chips): a soft fade on the right says "there's more" */
+.policy-tabs, .pol-tabs { -webkit-mask-image: linear-gradient(90deg, #000 85%, transparent); mask-image: linear-gradient(90deg, #000 85%, transparent); }
+/* No form field or media can be wider than the screen */
+input, select, textarea, img, video, iframe, table { max-width: 100%; }
+.review-form form { grid-template-columns: minmax(0, 1fr); }
+.review-form input:not([type=radio]):not([type=checkbox]), .review-form textarea { width: 100%; min-width: 0; }
+/* Cart & checkout on small phones: one column that can shrink to the screen */
+@media (max-width: 959px) { .cart-layout, .checkout-layout { grid-template-columns: minmax(0, 1fr); } }
+.cart-layout > *, .checkout-layout > * { min-width: 0; }
+.an-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.an-actions .btn { flex: 1 1 120px; }
