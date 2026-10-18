@@ -1,30 +1,100 @@
 @extends('admin.layout')
 @section('title', 'Order '.$order->number)
-@section('actions')
-    <a class="btn ghost" href="{{ route('admin.orders.production', $order) }}" target="_blank" rel="noopener">🖨 Production sheet</a>
-    @if ($order->items->sum(fn ($i) => $i->uploads->count()))
-        <a class="btn" href="{{ route('admin.orders.uploads', $order) }}">⬇ Download all photos (ZIP)</a>
-    @endif
-@endsection
 @section('content')
-@php $wa = '91'.preg_replace('/\D/', '', $order->phone); @endphp
+@php
+    $wa = \App\Services\WhatsApp::number($order->phone) ?: '91'.preg_replace('/\D/', '', $order->phone);
+    $flow = ['pending' => 'Placed', 'confirmed' => 'Confirmed', 'in_production' => 'Being made', 'shipped' => 'Shipped', 'delivered' => 'Delivered'];
+    $keys = array_keys($flow);
+    $at = array_search($order->status, $keys, true);
+    $stopped = in_array($order->status, ['cancelled', 'returned'], true);
+    $next = ['pending' => 'confirmed', 'confirmed' => 'in_production', 'in_production' => 'shipped', 'shipped' => 'delivered'][$order->status] ?? null;
+    $photos = $order->items->sum(fn ($i) => $i->uploads->count());
+    $orderCount = \App\Models\Order::where('phone', $order->phone)->count();
+    $paid = $order->payment_status === 'paid';
+@endphp
+
+<section class="card od-head">
+    <div class="od-top">
+        <div>
+            <div class="od-no">{{ $order->number }} <button type="button" class="link" data-copy="{{ $order->number }}" title="Copy">⧉</button></div>
+            <div class="muted small">Placed {{ $order->created_at->format('D, d M Y \a\t H:i') }} · {{ $order->created_at->diffForHumans() }}@if ($order->woo_id) · imported from WordPress @endif</div>
+            <div class="od-badges">
+                <span class="badge s-{{ $order->status }}">{{ $order->statusLabel() }}</span>
+                <span class="badge {{ $paid ? 'ok' : ($order->payment_status === 'failed' ? 'err' : 'warn') }}">{{ $order->payment_method === 'cod' ? 'COD' : ucfirst($order->payment_method) }} · {{ $order->payment_status }}</span>
+                @if ($photos)<span class="badge">📷 {{ $photos }} {{ \Illuminate\Support\Str::plural('photo', $photos) }}</span>@endif
+                @if ($order->tracking_number)<span class="badge">🚚 {{ $order->courier ?: 'Courier' }} {{ $order->tracking_number }}</span>@endif
+            </div>
+        </div>
+        <div class="od-total"><span class="muted small">Total</span><b>{{ money($order->total) }}</b><span class="muted small">{{ $order->items->sum('qty') }} {{ \Illuminate\Support\Str::plural('item', $order->items->sum('qty')) }}</span></div>
+    </div>
+
+    @if ($stopped)
+        <p class="od-stopped">This order is <b>{{ strtolower($order->statusLabel()) }}</b>.</p>
+    @else
+        <ol class="od-steps">
+            @foreach ($flow as $k => $label)
+                @php $i = array_search($k, $keys, true); @endphp
+                <li class="{{ $i < $at ? 'done' : ($i === $at ? 'now' : '') }}"><span>{{ $i < $at ? '✓' : $i + 1 }}</span>{{ $label }}</li>
+            @endforeach
+        </ol>
+    @endif
+
+    <div class="od-actions">
+        @if ($next && ! $stopped)
+            <form method="post" action="{{ route('admin.orders.update', $order) }}">
+                @csrf @method('PUT')
+                <input type="hidden" name="status" value="{{ $next }}">
+                <input type="hidden" name="payment_status" value="{{ $next === 'delivered' && $order->payment_method === 'cod' ? 'paid' : $order->payment_status }}">
+                <input type="hidden" name="courier" value="{{ $order->courier }}"><input type="hidden" name="tracking_number" value="{{ $order->tracking_number }}">
+                <input type="hidden" name="notes" value="{{ $order->notes }}">
+                <button class="btn">Mark as {{ \App\Models\Order::STATUSES[$next] }}{{ $next === 'delivered' && $order->payment_method === 'cod' && ! $paid ? ' (COD collected)' : '' }} →</button>
+            </form>
+        @endif
+        <a class="btn ghost" href="{{ route('admin.orders.production', $order) }}" target="_blank" rel="noopener">🖨 Production sheet</a>
+        @if ($photos)<a class="btn ghost" href="{{ route('admin.orders.uploads', $order) }}">⬇ Photos (ZIP)</a>@endif
+        @if ($order->invoice_number)<a class="btn ghost" href="{{ route('admin.orders.invoice', $order) }}" target="_blank" rel="noopener">🧾 Invoice</a>@endif
+        @if ($order->tracking_number)<a class="btn ghost" href="{{ route('admin.orders.label', $order) }}" target="_blank" rel="noopener">🏷 Shipping label</a>@endif
+        <a class="btn ghost" href="tel:{{ $order->phone }}">📞 Call</a>
+        <a class="btn ghost wa-btn" href="https://wa.me/{{ $wa }}" target="_blank" rel="noopener">💬 WhatsApp</a>
+    </div>
+</section>
+
 <div class="grid-main">
 <div>
+    <div class="od-people">
+        <section class="card">
+            <h2>Customer</h2>
+            <p class="od-name">{{ $order->name }} @if ($orderCount > 1)<span class="badge ok">{{ $orderCount }} orders</span>@else<span class="badge">First order</span>@endif</p>
+            <p class="od-lines">
+                <a href="tel:{{ $order->phone }}">📞 {{ $order->phone }}</a>
+                @if ($order->email)<a href="mailto:{{ $order->email }}">✉ {{ $order->email }}</a>@endif
+                @if ($order->user)<span class="muted small">Has an account</span>@else<span class="muted small">Guest checkout</span>@endif
+            </p>
+        </section>
+        <section class="card">
+            <h2>Ship to <button type="button" class="link small" data-copy="{{ $order->name }}, {{ $order->address_line1 }}{{ $order->address_line2 ? ', '.$order->address_line2 : '' }}, {{ $order->city }}, {{ $order->state }} {{ $order->pincode }}, {{ $order->phone }}">Copy</button></h2>
+            <p class="od-addr">{{ $order->address_line1 }}@if ($order->address_line2)<br>{{ $order->address_line2 }}@endif<br>{{ $order->city }}, {{ $order->state }} <b>{{ $order->pincode }}</b></p>
+            <a class="link small" href="https://www.google.com/maps/search/?api=1&query={{ rawurlencode($order->address_line1.' '.$order->city.' '.$order->pincode) }}" target="_blank" rel="noopener">Open in Maps ↗</a>
+        </section>
+    </div>
+
     <section class="card">
-        <h2>Items</h2>
+        <h2>Items to make</h2>
         @foreach ($order->items as $idx => $item)
             <div class="order-item">
                 <div class="oi-head">
-                    <div>
-                        <strong>{{ $idx + 1 }}. {{ $item->name }}</strong>
+                    <img class="oi-thumb" src="{{ $item->product?->mainImageUrl() ?? asset('images/placeholder.svg') }}" alt="" loading="lazy">
+                    <div class="oi-title">
+                        <strong>{{ $item->name }}</strong>
                         @if ($item->options)<br><small class="muted">{{ collect($item->options)->map(fn ($v, $k) => "$k: $v")->implode(', ') }}</small>@endif
                         @if ($item->sku)<br><small class="muted">SKU {{ $item->sku }}</small>@endif
                     </div>
-                    <div class="right">{{ $item->qty }} × {{ money($item->unit_price) }}<br><strong>{{ money($item->line_total) }}</strong></div>
+                    <div class="right oi-price"><span class="qty-pill">× {{ $item->qty }}</span><small class="muted">{{ money($item->unit_price) }} each</small><strong>{{ money($item->line_total) }}</strong></div>
                 </div>
                 @php $row = $sheet[$idx]; @endphp
+                <div class="oi-parts">
                 @forelse ($row['parts'] as $part)
-                    <div class="oi-custom">
+                    <div class="oi-custom {{ $part['type'] === 'images' ? 'is-photos' : 'is-text' }}">
                         <span class="muted">{{ $part['label'] }}</span>
                         @if ($part['type'] === 'images')
                             <div class="uploads big">
@@ -58,6 +128,7 @@
                 @empty
                     <p class="muted small">No personalisation on this item.</p>
                 @endforelse
+                </div>
             </div>
         @endforeach
         <table class="tbl totals">
@@ -71,7 +142,7 @@
 </div>
 <aside>
     <section class="card">
-        <h2>Update</h2>
+        <h2>Status &amp; notes</h2>
         <form method="post" action="{{ route('admin.orders.update', $order) }}">
             @csrf @method('PUT')
             <label>Status
@@ -85,41 +156,6 @@
             <label>Notes <textarea name="notes" rows="3">{{ $order->notes }}</textarea></label>
             <button class="btn full">Save</button>
         </form>
-    </section>
-    <section class="card">
-        <h2>Invoice</h2>
-        @if ($order->invoice_number)
-            <p><strong>{{ $order->invoice_number }}</strong> <span class="muted small">{{ $order->invoiced_at?->format('d M Y') }}</span></p>
-            <div class="row-actions"><a class="btn small" href="{{ route('admin.orders.invoice', $order) }}" target="_blank" rel="noopener">Open invoice PDF</a></div>
-        @else
-            <p class="muted small">The invoice number is given when the order is confirmed (COD placed or payment received).</p>
-        @endif
-    </section>
-    <section class="card">
-        <h2>WhatsApp</h2>
-        @php $waTo = \App\Services\WhatsApp::number($order->phone); @endphp
-        <p class="muted small">Opens WhatsApp with the message written — check it and press send.</p>
-        <div class="wa-list">
-            @foreach (\App\Services\OrderNotifier::manualMessages($order) as $label => $text)
-                <a class="btn small ghost" href="https://wa.me/{{ $waTo }}?text={{ rawurlencode($text) }}" target="_blank" rel="noopener">{{ $label }}</a>
-            @endforeach
-        </div>
-        @if (\App\Services\WhatsApp::enabled())
-            <form method="post" action="{{ route('admin.orders.whatsapp', $order) }}" class="row-actions">
-                @csrf
-                <select name="event"><option value="confirmed">Order confirmed</option>@if ($order->tracking_number)<option value="shipped">Shipped</option>@endif<option value="delivered">Delivered</option></select>
-                <button class="btn small">Send automatic message</button>
-            </form>
-        @endif
-        @php $logs = \App\Models\NotificationLog::where('order_id', $order->id)->latest('id')->take(20)->get(); @endphp
-        @if ($logs->isNotEmpty())<h3 class="small muted" style="margin:12px 0 0">Messages sent (email &amp; WhatsApp)</h3>@endif
-        @if ($logs->isNotEmpty())
-            <ul class="wa-log">
-                @foreach ($logs as $log)
-                    <li><span class="badge {{ $log->status === 'sent' ? 'ok' : '' }}">{{ $log->status }}</span> {{ $log->channel === 'email' ? '✉' : '💬' }} {{ str_replace('_', ' ', $log->event) }} → {{ $log->to }} <span class="muted small">{{ $log->created_at->format('d M, H:i') }}</span>@if ($log->error)<br><span class="err small">{{ $log->error }}</span>@endif</li>
-                @endforeach
-            </ul>
-        @endif
     </section>
     <section class="card">
         <h2>Delhivery</h2>
@@ -154,19 +190,49 @@
         @endif
     </section>
     <section class="card">
-        <h2>Customer</h2>
-        <p><strong>{{ $order->name }}</strong><br>
-            <a href="tel:{{ $order->phone }}">{{ $order->phone }}</a> · <a href="https://wa.me/{{ $wa }}" target="_blank" rel="noopener">WhatsApp</a><br>
-            <a href="mailto:{{ $order->email }}">{{ $order->email }}</a></p>
-        <p>{{ $order->address_line1 }}@if ($order->address_line2)<br>{{ $order->address_line2 }}@endif<br>{{ $order->city }}, {{ $order->state }} {{ $order->pincode }}</p>
-        @if ($order->user)<p class="muted">Account: {{ $order->user->email }}</p>@endif
+        <h2>Invoice</h2>
+        @if ($order->invoice_number)
+            <p><strong>{{ $order->invoice_number }}</strong> <span class="muted small">{{ $order->invoiced_at?->format('d M Y') }}</span></p>
+            <div class="row-actions"><a class="btn small" href="{{ route('admin.orders.invoice', $order) }}" target="_blank" rel="noopener">Open invoice PDF</a></div>
+        @else
+            <p class="muted small">The invoice number is given when the order is confirmed (COD placed or payment received).</p>
+        @endif
     </section>
     <section class="card">
+        <h2>Messages</h2>
+        @php $waTo = \App\Services\WhatsApp::number($order->phone); @endphp
+        <p class="muted small">Opens WhatsApp with the message written — check it and press send.</p>
+        <div class="wa-list">
+            @foreach (\App\Services\OrderNotifier::manualMessages($order) as $label => $text)
+                <a class="btn small ghost" href="https://wa.me/{{ $waTo }}?text={{ rawurlencode($text) }}" target="_blank" rel="noopener">{{ $label }}</a>
+            @endforeach
+        </div>
+        @if (\App\Services\WhatsApp::enabled())
+            <form method="post" action="{{ route('admin.orders.whatsapp', $order) }}" class="row-actions">
+                @csrf
+                <select name="event"><option value="confirmed">Order confirmed</option>@if ($order->tracking_number)<option value="shipped">Shipped</option>@endif<option value="delivered">Delivered</option></select>
+                <button class="btn small">Send automatic message</button>
+            </form>
+        @endif
+        @php $logs = \App\Models\NotificationLog::where('order_id', $order->id)->latest('id')->take(20)->get(); @endphp
+        @if ($logs->isNotEmpty())<h3 class="small muted" style="margin:12px 0 0">Messages sent (email &amp; WhatsApp)</h3>@endif
+        @if ($logs->isNotEmpty())
+            <ul class="wa-log">
+                @foreach ($logs as $log)
+                    <li><span class="badge {{ $log->status === 'sent' ? 'ok' : '' }}">{{ $log->status }}</span> {{ $log->channel === 'email' ? '✉' : '💬' }} {{ str_replace('_', ' ', $log->event) }} → {{ $log->to }} <span class="muted small">{{ $log->created_at->format('d M, H:i') }}</span>@if ($log->error)<br><span class="err small">{{ $log->error }}</span>@endif</li>
+                @endforeach
+            </ul>
+        @endif
+    </section>
+
+    <section class="card">
         <h2>Payment</h2>
-        <p>{{ $order->payment_method === 'cod' ? 'Cash on delivery' : ucfirst($order->payment_method) }} · <span class="badge {{ $order->payment_status === 'paid' ? 'ok' : '' }}">{{ $order->payment_status }}</span></p>
-        @if ($order->razorpay_order_id)<p class="muted small">Razorpay order {{ $order->razorpay_order_id }}@if ($order->razorpay_payment_id)<br>Payment {{ $order->razorpay_payment_id }}@endif</p>@endif
-        @if ($order->cashfree_order_id)<p class="muted small">Cashfree order {{ $order->cashfree_order_id }}@if ($order->cashfree_payment_id)<br>Payment {{ $order->cashfree_payment_id }}@endif</p>@endif
-        <p class="muted small">Placed {{ $order->created_at->format('d M Y, H:i') }}</p>
+        <table class="tbl compact">
+            <tr><td>Method</td><td>{{ $order->payment_method === 'cod' ? 'Cash on delivery' : ucfirst($order->payment_method) }}</td></tr>
+            <tr><td>Status</td><td><span class="badge {{ $paid ? 'ok' : '' }}">{{ $order->payment_status }}</span></td></tr>
+            @if ($order->razorpay_payment_id)<tr><td>Razorpay</td><td class="small">{{ $order->razorpay_payment_id }}</td></tr>@endif
+            @if ($order->cashfree_payment_id)<tr><td>Cashfree</td><td class="small">{{ $order->cashfree_payment_id }}</td></tr>@endif
+        </table>
     </section>
     @if ($order->utm)
         <section class="card">
