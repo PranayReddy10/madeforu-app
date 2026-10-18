@@ -154,6 +154,7 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'admin'])->group(fun
     Route::put('reviews/{review}', [Admin\ReviewController::class, 'update'])->name('reviews.update');
     Route::delete('reviews/{review}', [Admin\ReviewController::class, 'destroy'])->name('reviews.destroy');
     Route::get('seo', [Admin\SeoController::class, 'index'])->name('seo');
+    Route::post('seo/fill', [Admin\SeoController::class, 'fill'])->name('seo.fill');
     Route::get('settings', [Admin\SettingController::class, 'edit'])->name('settings');
     Route::put('settings', [Admin\SettingController::class, 'update']);
     Route::get('messages', [Admin\MessageController::class, 'index'])->name('messages.index');

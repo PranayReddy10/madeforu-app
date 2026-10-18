@@ -580,3 +580,18 @@ document.querySelectorAll('[data-rate-test]').forEach(function (box) {
         }).catch(function () { out.textContent = 'Could not reach the store. Try again.'; });
     });
 });
+
+/* Admin on phones: the sidebar becomes a top bar with a Menu button that opens all pages */
+(function () {
+    var side = document.querySelector('[data-adm-side]'), btn = document.querySelector('[data-adm-menu]');
+    if (!side || !btn) return;
+    function set(open) {
+        side.classList.toggle('open', open);
+        btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+        document.documentElement.classList.toggle('adm-menu-open', open);
+    }
+    btn.addEventListener('click', function () { set(!side.classList.contains('open')); });
+    side.addEventListener('click', function (e) { if (e.target.closest('.adm-nav a')) set(false); });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') set(false); });
+    window.matchMedia('(min-width: 901px)').addEventListener('change', function (m) { if (m.matches) set(false); });
+})();
