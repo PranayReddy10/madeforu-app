@@ -39,7 +39,9 @@ class ProductController extends Controller
             'sku' => $v->sku,
         ])->values();
 
-        return view('product', compact('product', 'related', 'variants'));
+        $ratingBars = $product->reviews->countBy('rating')->all();
+
+        return view('product', compact('product', 'related', 'variants', 'ratingBars'));
     }
 
     /** "Check delivery" box on the product page and the PIN field at checkout. */
