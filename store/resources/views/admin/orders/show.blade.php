@@ -80,6 +80,7 @@
         <h2>Payment</h2>
         <p>{{ strtoupper($order->payment_method) }} · <span class="badge {{ $order->payment_status === 'paid' ? 'ok' : '' }}">{{ $order->payment_status }}</span></p>
         @if ($order->razorpay_order_id)<p class="muted small">Razorpay order {{ $order->razorpay_order_id }}@if ($order->razorpay_payment_id)<br>Payment {{ $order->razorpay_payment_id }}@endif</p>@endif
+        @if ($order->cashfree_order_id)<p class="muted small">Cashfree order {{ $order->cashfree_order_id }}@if ($order->cashfree_payment_id)<br>Payment {{ $order->cashfree_payment_id }}@endif</p>@endif
         <p class="muted small">Placed {{ $order->created_at->format('d M Y, H:i') }}</p>
     </section>
     @if ($order->utm)

@@ -22,6 +22,17 @@ class SettingController extends Controller
             'cod_fee' => ['COD fee (₹)', 'number', ''],
             'cod_max' => ['COD allowed up to (₹)', 'number', 'Orders above this must pay online.'],
         ],
+        'Payment gateways' => [
+            'payments.default' => ['Pre-selected online gateway at checkout', 'select:razorpay=Razorpay,cashfree=Cashfree', 'When both are on, customers see both; this one is ticked first.'],
+            'razorpay.enabled' => ['Razorpay enabled', 'bool', ''],
+            'razorpay.key' => ['Razorpay Key ID', 'text', 'Razorpay Dashboard → Account & Settings → API Keys (rzp_live_…).'],
+            'razorpay.secret' => ['Razorpay Key Secret', 'secret', ''],
+            'razorpay.webhook_secret' => ['Razorpay webhook secret', 'secret', 'Webhook URL: /webhooks/razorpay — events payment.captured and order.paid.'],
+            'cashfree.enabled' => ['Cashfree enabled', 'bool', ''],
+            'cashfree.mode' => ['Cashfree mode', 'select:production=Live (production),sandbox=Test (sandbox)', 'Use Test with sandbox keys to try it first.'],
+            'cashfree.app_id' => ['Cashfree App ID', 'text', 'Cashfree Merchant Dashboard → Developers → API Keys.'],
+            'cashfree.secret' => ['Cashfree Secret Key', 'secret', 'Also used to check webhooks. Webhook URL: /webhooks/cashfree (Payment success).'],
+        ],
         'Analytics & search engines' => [
             'analytics.ga4' => ['Google Analytics 4 measurement ID', 'text', 'G-XXXXXXXXXX'],
             'analytics.gtm' => ['Google Tag Manager container', 'text', 'GTM-XXXXXXX'],
@@ -41,6 +52,16 @@ class SettingController extends Controller
         return str_replace('.', '__', $key);
     }
 
+    /** 'select:a=Label A,b=Label B' -> ['a' => 'Label A', 'b' => 'Label B'] */
+    public static function options(string $type): array
+    {
+        return collect(explode(',', substr($type, 7)))->mapWithKeys(function ($pair) {
+            [$k, $v] = array_pad(explode('=', $pair, 2), 2, null);
+
+            return [$k => $v ?? $k];
+        })->all();
+    }
+
     public function edit()
     {
         return view('admin.settings', ['groups' => self::FIELDS]);
@@ -51,10 +72,11 @@ class SettingController extends Controller
         $rules = [];
         foreach (self::FIELDS as $fields) {
             foreach ($fields as $key => [$label, $type]) {
-                $rules[self::inputName($key)] = match ($type) {
-                    'number' => 'nullable|numeric|min:0',
-                    'bool' => 'nullable',
-                    'textarea' => 'nullable|string|max:500',
+                $rules[self::inputName($key)] = match (true) {
+                    str_starts_with($type, 'select:') => 'nullable|in:'.implode(',', array_keys(self::options($type))),
+                    $type === 'number' => 'nullable|numeric|min:0',
+                    $type === 'bool' => 'nullable',
+                    $type === 'textarea' => 'nullable|string|max:500',
                     default => 'nullable|string|max:255',
                 };
             }
@@ -65,6 +87,16 @@ class SettingController extends Controller
         foreach (self::FIELDS as $fields) {
             foreach ($fields as $key => [$label, $type]) {
                 $name = self::inputName($key);
+                // Secrets are never shown again; an empty box keeps the saved one.
+                if ($type === 'secret') {
+                    if ($request->boolean($name.'_clear')) {
+                        $values[$key] = '';
+                    } elseif (trim((string) $request->input($name, '')) !== '') {
+                        $values[$key] = trim((string) $request->input($name));
+                    }
+
+                    continue;
+                }
                 $values[$key] = $type === 'bool' ? ($request->boolean($name) ? '1' : '0') : trim((string) $request->input($name, ''));
             }
         }

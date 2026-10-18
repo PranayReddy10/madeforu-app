@@ -52,6 +52,8 @@ Route::get('/checkout', [CheckoutController::class, 'index'])->name('checkout');
 Route::post('/checkout', [CheckoutController::class, 'place'])->name('checkout.place')->middleware('throttle:10,1');
 Route::post('/checkout/razorpay/verify', [CheckoutController::class, 'verify'])->name('checkout.verify');
 Route::post('/webhooks/razorpay', [CheckoutController::class, 'webhook'])->name('webhooks.razorpay');
+Route::get('/checkout/cashfree/return', [CheckoutController::class, 'cashfreeReturn'])->name('checkout.cashfree.return');
+Route::post('/webhooks/cashfree', [CheckoutController::class, 'cashfreeWebhook'])->name('webhooks.cashfree');
 Route::get('/checkout/order-received/{number}', [CheckoutController::class, 'thanks'])->name('checkout.thanks');
 Route::get('/track-order', [AccountController::class, 'track'])->name('track');
 
@@ -110,5 +112,5 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'admin'])->group(fun
     Route::put('settings', [Admin\SettingController::class, 'update']);
 });
 
-// CMS pages last: /about-us/, /contact-us/, /privacy-policy/ ... same slugs as the WordPress pages.
-Route::get('/{slug}', [PageController::class, 'show'])->where('slug', '[a-z0-9\-]+')->name('page');
+// CMS pages last, at their WordPress paths: /about-us/, /legal/privacy-policy-2/ ...
+Route::get('/{slug}', [PageController::class, 'show'])->where('slug', '[a-z0-9\-]+(?:/[a-z0-9\-]+)*')->name('page');

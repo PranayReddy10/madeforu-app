@@ -38,6 +38,7 @@ class ImportWoo extends Command
             return self::FAILURE;
         }
         Cache::forget('menu.categories');
+        Cache::forget('menu.pages');
         $this->table(['What', 'Count'], collect($importer->stats)->map(fn ($v, $k) => [$k, $v])->values());
         $this->info('Done. Open /admin/products to set how many photos each product takes.');
 

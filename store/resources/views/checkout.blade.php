@@ -33,13 +33,15 @@
             <section class="panel">
                 <h2 class="h-sm">Payment</h2>
                 <div class="pay-options">
-                    @if($razorpay)
-                        <label class="pay-opt"><input type="radio" name="payment_method" value="razorpay" @checked(old('payment_method', 'razorpay') === 'razorpay') data-total="{{ money($totals['total']) }}"><span><b>Pay online</b><small>UPI, GPay, PhonePe, cards, netbanking</small></span></label>
-                    @endif
+                    @php $names = ['razorpay' => 'Razorpay', 'cashfree' => 'Cashfree']; $chosen = old('payment_method', $gateways[0] ?? 'cod'); @endphp
+                    @foreach($gateways as $g)
+                        <label class="pay-opt"><input type="radio" name="payment_method" value="{{ $g }}" @checked($chosen === $g) data-total="{{ money($totals['total']) }}"><span><b>Pay online{{ count($gateways) > 1 ? ' · '.$names[$g] : '' }}</b><small>UPI, GPay, PhonePe, Paytm, cards, netbanking{{ count($gateways) > 1 ? '' : ' · secured by '.$names[$g] }}</small></span></label>
+                    @endforeach
                     @if($codAllowed)
-                        <label class="pay-opt"><input type="radio" name="payment_method" value="cod" @checked(old('payment_method') === 'cod' || !$razorpay) data-total="{{ money($codTotals['total']) }}"><span><b>Cash on delivery</b><small>@if($codTotals['cod_fee'] > 0)+{{ money($codTotals['cod_fee']) }} handling fee @else Pay when it arrives @endif</small></span></label>
+                        <label class="pay-opt"><input type="radio" name="payment_method" value="cod" @checked($chosen === 'cod') data-total="{{ money($codTotals['total']) }}"><span><b>Cash on delivery</b><small>@if($codTotals['cod_fee'] > 0)+{{ money($codTotals['cod_fee']) }} handling fee @else Pay when it arrives @endif</small></span></label>
                     @endif
                 </div>
+                @if(!$gateways && !$codAllowed)<p class="err">Payments are being set up — please contact us on WhatsApp to order.</p>@endif
                 @error('payment_method')<p class="err">{{ $message }}</p>@enderror
             </section>
         </div>
@@ -49,8 +51,8 @@
                 <div class="mini-line"><img src="{{ $l->image }}" alt="" width="48" height="48"><span>{{ $l->product->name }} <small class="muted">× {{ $l->qty }}@if($l->variant) · {{ implode(' / ', $l->variant->options) }}@endif</small></span><b>{{ money($l->total) }}</b></div>
             @endforeach
             @include('partials.totals', ['totals' => $totals])
-            <button class="btn primary block" data-place>Place order · <span data-place-total>{{ money(old('payment_method') === 'cod' || !$razorpay ? $codTotals['total'] : $totals['total']) }}</span></button>
-            <p class="small muted center">By placing your order you agree to our <a href="{{ url('terms-and-conditions') }}/">terms</a>. Personalised items are made just for you.</p>
+            <button class="btn primary block" data-place>Place order · <span data-place-total>{{ money($chosen === 'cod' ? $codTotals['total'] : $totals['total']) }}</span></button>
+            <p class="small muted center">By placing your order you agree to our <a href="{{ collect($footerPages)->first(fn ($p) => str_contains($p['url'], 'term'))['url'] ?? url('/') }}">terms</a>. Personalised items are made just for you.</p>
         </aside>
     </form>
 </div>

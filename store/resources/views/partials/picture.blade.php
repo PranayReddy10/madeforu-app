@@ -2,7 +2,8 @@
 @php
     $isRemote = preg_match('#^https?://#', $path);
     $webp = !$isRemote ? preg_replace('/\.(jpe?g|png)$/i', '.webp', $path) : null;
-    $hasWebp = $webp && $webp !== $path && \Illuminate\Support\Facades\Storage::disk('public')->exists($webp);
+    // WebP copies are only made for images on this server; checking a remote disk per image would be slow.
+    $hasWebp = $webp && $webp !== $path && config('store.media_disk') === 'public' && \Illuminate\Support\Facades\Storage::disk('public')->exists($webp);
 @endphp
 <picture>
     @if($hasWebp)<source srcset="{{ media_url($webp) }}" type="image/webp">@endif

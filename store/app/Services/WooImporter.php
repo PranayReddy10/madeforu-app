@@ -178,7 +178,9 @@ class WooImporter
             // Images: replace the set if WooCommerce's list changed.
             $srcs = collect($w['images'] ?? [])->values();
             $have = $p->images()->pluck('source_url')->all();
-            if ($srcs->pluck('src')->all() !== $have) {
+            // Re-fetch when the list changed, or when an earlier run could only keep remote URLs.
+            $remote = $p->images()->where('path', 'like', 'http%')->pluck('path')->contains(fn ($u) => ! $this->keepRemote($u));
+            if ($srcs->pluck('src')->all() !== $have || ($remote && $this->downloadImages)) {
                 $p->images()->delete();
                 foreach ($srcs as $i => $img) {
                     ProductImage::create([
@@ -222,6 +224,9 @@ class WooImporter
         $keep = [];
         foreach (array_values($w['variations'] ?? []) as $i => $v) {
             $detail = $this->one('/wp-json/wc/store/v1/products/'.$v['id']);
+            if ($detail && (($detail['is_purchasable'] ?? true) === false || (int) ($detail['prices']['price'] ?? 0) === 0)) {
+                continue; // WooCommerce does not sell it either (e.g. a stray empty variation)
+            }
             $options = [];
             foreach ($v['attributes'] ?? [] as $a) {
                 $name = html_entity_decode($a['name'], ENT_QUOTES);
@@ -243,7 +248,7 @@ class WooImporter
             $keep[] = $variant->id;
             $this->stats['variants']++;
         }
-        $p->variants()->whereNotIn('id', $keep)->delete();
+        $keep ? $p->variants()->whereNotIn('id', $keep)->delete() : $p->variants()->delete();
         // The parent's own price on a variable product is the cheapest variation.
         if ($keep) {
             $cheapest = $p->variants()->get()->sortBy(fn ($v) => $v->currentPrice())->first();
@@ -305,12 +310,26 @@ class WooImporter
 
             return;
         }
-        $skip = ['cart', 'checkout', 'my-account', 'shop', 'wishlist', 'home', 'sample-page'];
+        // WooCommerce/theme template pages: this store has its own version, so send the old URL there instead.
+        $replaced = [
+            'cart' => '/cart', 'shop-cart' => '/cart', 'checkout' => '/checkout', 'shop-checkout' => '/checkout',
+            'my-account' => '/my-account', 'shop' => '/shop/', 'wishlist' => '/wishlist', 'tracking-order' => '/track-order',
+            'order-tracking' => '/track-order', 'categories' => '/categories', 'compare' => '/shop/', 'deals' => '/shop/?sale=1',
+            'flash-deals' => '/shop/?sale=1', 'product-deals-of-the-day' => '/shop/?sale=1', 'products-recently-viewed' => '/shop/',
+            'home' => '/', 'sample-page' => '/',
+        ];
         foreach ($pages as $wp) {
-            if (in_array($wp['slug'], $skip, true)) {
+            // Keep the WordPress path, nested pages included: /legal/shipping-delivery-policy/
+            $path = trim(rawurldecode((string) parse_url($wp['link'] ?? '', PHP_URL_PATH)), '/') ?: $wp['slug'];
+            if (isset($replaced[$wp['slug']])) {
+                if ('/'.$path !== $replaced[$wp['slug']] && '/'.$path.'/' !== $replaced[$wp['slug']]) {
+                    Redirect::updateOrCreate(['from_path' => Redirect::normalise('/'.$path)], ['to_path' => $replaced[$wp['slug']], 'status' => 301]);
+                    $this->stats['redirects']++;
+                }
+
                 continue;
             }
-            $page = Page::firstOrNew(['slug' => $wp['slug']]);
+            $page = Page::firstOrNew(['slug' => $path]);
             $page->fill([
                 'title' => html_entity_decode(strip_tags($wp['title']['rendered'] ?? $wp['slug']), ENT_QUOTES),
                 'body' => $page->exists && $page->body ? $page->body : $this->cleanHtml($wp['content']['rendered'] ?? ''),
@@ -318,7 +337,6 @@ class WooImporter
                 'meta_description' => $wp['yoast_head_json']['description'] ?? $page->meta_description,
                 'is_active' => true,
             ])->save();
-            $this->keepOldUrl($wp['link'] ?? null, $page->url());
             $this->stats['pages']++;
         }
     }
@@ -341,6 +359,8 @@ class WooImporter
     /** Page-builder shortcodes mean nothing outside WordPress. */
     private function cleanHtml(string $html): string
     {
+        // Page-builder <style>/<script> blocks would otherwise show up as text.
+        $html = preg_replace('#<(style|script|noscript)\b[^>]*>.*?</\1>#is', '', $html);
         $html = preg_replace('/\[\/?[a-z_\-]+[^\]]*\]/i', '', $html);
         $html = preg_replace('/<!--.*?-->/s', '', $html);
 
@@ -350,29 +370,46 @@ class WooImporter
     /** Download an image to the public disk (once). Returns the local path, or the source URL if it cannot be fetched. */
     public function image(string $src, string $dir): string
     {
-        if (! $this->downloadImages) {
+        if (! $this->downloadImages || $this->keepRemote($src)) {
             return $src;
         }
         $name = Str::slug(pathinfo(parse_url($src, PHP_URL_PATH), PATHINFO_FILENAME)) ?: md5($src);
         $ext = strtolower(pathinfo(parse_url($src, PHP_URL_PATH), PATHINFO_EXTENSION)) ?: 'jpg';
         $path = trim($dir, '/').'/'.$name.'.'.$ext;
-        $disk = Storage::disk('public');
+        $disk = media_disk();
         if ($disk->exists($path)) {
             return $path;
         }
-        $res = Http::timeout(60)->retry(2, 1000, throw: false)->get($src);
-        if (! $res->successful() || ! str_starts_with((string) $res->header('Content-Type'), 'image/')) {
+        try {
+            $res = Http::timeout(60)->retry(2, 1000, throw: false)->get($src);
+        } catch (\Throwable) {
+            $res = null; // host unreachable: keep the remote URL, a later run downloads it
+        }
+        if (! $res || ! $res->successful() || ! str_starts_with((string) $res->header('Content-Type'), 'image/')) {
             $this->say('    ! image not downloaded, keeping remote URL: '.$src);
 
             return $src;
         }
         $disk->put($path, $res->body());
-        // A WebP copy alongside, served by <picture> when the browser supports it.
-        if (in_array($ext, ['jpg', 'jpeg', 'png'], true)) {
+        // A WebP copy alongside (on this server only), served by <picture> when the browser supports it.
+        if (config('store.media_disk') === 'public' && in_array($ext, ['jpg', 'jpeg', 'png'], true)) {
             ImageTools::toWebp($disk->path($path), $disk->path(preg_replace('/\.\w+$/', '.webp', $path)));
         }
 
         return $path;
+    }
+
+    /** Images on the DigitalOcean Spaces CDN (or another host in MEDIA_KEEP_HOSTS) stay where they are. */
+    private function keepRemote(string $src): bool
+    {
+        $host = strtolower((string) parse_url($src, PHP_URL_HOST));
+        foreach (config('store.media_keep_hosts', []) as $keep) {
+            if ($host === $keep || str_ends_with($host, '.'.$keep)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /** If WooCommerce printed a URL that differs from ours (custom permalink base, non-ASCII slug), keep it working. */

@@ -14,7 +14,15 @@ if (! function_exists('media_url')) {
             return $path;
         }
 
-        return Storage::disk('public')->url($path);
+        return Storage::disk(config('store.media_disk', 'public'))->url($path);
+    }
+}
+
+if (! function_exists('media_disk')) {
+    /** The disk product, category and banner images live on (public or DigitalOcean Spaces). */
+    function media_disk(): \Illuminate\Contracts\Filesystem\Filesystem
+    {
+        return Storage::disk(config('store.media_disk', 'public'));
     }
 }
 
@@ -44,7 +52,7 @@ if (! function_exists('setting')) {
     {
         $all = Setting::all_();
         if (array_key_exists($key, $all) && $all[$key] !== null && $all[$key] !== '') {
-            return $all[$key];
+            return Setting::decode($all[$key]);
         }
 
         return config('store.'.$key, $default);

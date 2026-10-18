@@ -12,6 +12,17 @@
                 @if ($type === 'bool')
                     <input type="hidden" name="{{ $name }}" value="0">
                     <label class="check"><input type="checkbox" name="{{ $name }}" value="1" @checked((bool) $val)> {{ $label }}</label>
+                @elseif (str_starts_with($type, 'select:'))
+                    <label>{{ $label }} @if ($help)<small class="muted">{{ $help }}</small>@endif
+                        <select name="{{ $name }}">@foreach (S::options($type) as $ov => $ol)<option value="{{ $ov }}" @selected($val === $ov)>{{ $ol }}</option>@endforeach</select>
+                    </label>
+                @elseif ($type === 'secret')
+                    @php $saved = (bool) \App\Models\Setting::where('key', $key)->whereNotNull('value')->where('value', '!=', '')->exists(); $fromEnv = !$saved && setting($key); @endphp
+                    <label>{{ $label }}
+                        <small class="muted">{{ $saved ? 'Saved ✓ — leave blank to keep it.' : ($fromEnv ? 'Set in .env ✓ — type here to override.' : 'Not set.') }} {{ $help }}</small>
+                        <input type="password" name="{{ $name }}" value="" autocomplete="new-password" placeholder="{{ $saved || $fromEnv ? '••••••••••••' : '' }}">
+                    </label>
+                    @if ($saved)<label class="check"><input type="checkbox" name="{{ $name }}_clear" value="1"> Remove saved {{ strtolower($label) }}</label>@endif
                 @elseif ($type === 'textarea')
                     <label>{{ $label }} @if ($help)<small class="muted">{{ $help }}</small>@endif<textarea name="{{ $name }}" rows="3">{{ $val }}</textarea></label>
                 @else
@@ -20,7 +31,7 @@
             @endforeach
         </section>
     @endforeach
-    <p class="muted">Payment keys (Razorpay), mail and database settings live in the <code>.env</code> file on the server, not here.</p>
+    <p class="muted">Mail and database settings live in the <code>.env</code> file on the server. Payment keys can be set here or in <code>.env</code>; the ones saved here win.</p>
     <button class="btn">Save settings</button>
 </form>
 @endsection
