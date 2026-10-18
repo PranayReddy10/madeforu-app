@@ -23,13 +23,27 @@ return [
     'free_shipping_over' => (float) env('FREE_SHIPPING_OVER', 499),
     'shipping_fee' => (float) env('SHIPPING_FEE', 60),
     'cod_enabled' => (bool) env('COD_ENABLED', true),
-    'cod_fee' => (float) env('COD_FEE', 50),
+    'cod_fee' => (float) env('COD_FEE', 50),                    // fixed part of the COD charge
+    'cod_fee_percent' => (float) env('COD_FEE_PERCENT', 0),     // % of the order; the higher of the two is charged
     'cod_max' => (float) env('COD_MAX', 5000),
 
     // Where product, category and banner images are stored: 'public' (this server) or 'spaces' (DigitalOcean Spaces).
     'media_disk' => env('MEDIA_DISK', 'public'),
     // Images already on these hosts are used where they are; the importer does not copy them.
     'media_keep_hosts' => array_filter(array_map('trim', explode(',', env('MEDIA_KEEP_HOSTS', 'digitaloceanspaces.com')))),
+
+    // Delhivery (B2C). Also editable in Admin → Settings → Delhivery shipping.
+    'delhivery' => [
+        'enabled' => (bool) env('DELHIVERY_ENABLED', false),
+        'auto' => (bool) env('DELHIVERY_AUTO', true),             // create the shipment as soon as an order is confirmed
+        'mode' => env('DELHIVERY_MODE', 'production'),            // production | staging
+        'token' => env('DELHIVERY_TOKEN'),
+        'pickup_location' => env('DELHIVERY_PICKUP_LOCATION'),    // warehouse name exactly as registered with Delhivery
+        'pickup_pincode' => env('DELHIVERY_PICKUP_PINCODE'),
+        'shipping_mode' => env('DELHIVERY_SHIPPING_MODE', 'Surface'), // Surface | Express
+        'default_weight' => (int) env('DELHIVERY_DEFAULT_WEIGHT', 300), // grams per item when a product has no weight
+        'check_pincodes' => (bool) env('DELHIVERY_CHECK_PINCODES', true),
+    ],
 
     // Customer photo uploads
     'upload_max_kb' => (int) env('UPLOAD_MAX_KB', 15360),

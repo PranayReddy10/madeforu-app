@@ -233,6 +233,15 @@ class Cart
         return round((float) $lines->sum('total'), 2);
     }
 
+    /** Cash-on-delivery charge: a fixed fee, a % of the order, or the higher of the two (e.g. 2%, at least ₹40). */
+    public static function codCharge(float $orderValue): float
+    {
+        $fixed = (float) setting('cod_fee');
+        $pct = (float) setting('cod_fee_percent');
+
+        return round(max($fixed, $pct > 0 ? $orderValue * $pct / 100 : 0), 2);
+    }
+
     /** @return array{subtotal: float, discount: float, coupon: ?string, shipping: float, cod_fee: float, total: float, free_shipping_gap: float} */
     public function totals(?Collection $lines = null, string $paymentMethod = 'razorpay'): array
     {
@@ -254,7 +263,7 @@ class Cart
         $after = $subtotal - $discount;
         $freeOver = (float) setting('free_shipping_over');
         $shipping = $lines->isEmpty() || $after >= $freeOver ? 0.0 : (float) setting('shipping_fee');
-        $cod = $paymentMethod === 'cod' ? (float) setting('cod_fee') : 0.0;
+        $cod = $paymentMethod === 'cod' ? self::codCharge($after + $shipping) : 0.0;
 
         return [
             'subtotal' => $subtotal,

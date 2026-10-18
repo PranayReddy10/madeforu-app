@@ -46,7 +46,7 @@
             <tr><td>Subtotal</td><td class="right">{{ money($order->subtotal) }}</td></tr>
             @if ((float) $order->discount)<tr><td>Discount {{ $order->coupon_code ? '('.$order->coupon_code.')' : '' }}</td><td class="right">−{{ money($order->discount) }}</td></tr>@endif
             <tr><td>Shipping</td><td class="right">{{ money($order->shipping) }}</td></tr>
-            @if ((float) $order->cod_fee)<tr><td>COD fee</td><td class="right">{{ money($order->cod_fee) }}</td></tr>@endif
+            @if ((float) $order->cod_fee)<tr><td>Cash on delivery charges</td><td class="right">{{ money($order->cod_fee) }}</td></tr>@endif
             <tr><th>Total</th><th class="right">{{ money($order->total) }}</th></tr>
         </table>
     </section>
@@ -69,6 +69,38 @@
         </form>
     </section>
     <section class="card">
+        <h2>Delhivery</h2>
+        @if ($order->tracking_number)
+            <p>AWB <strong>{{ $order->tracking_number }}</strong> · <a href="{{ $order->trackingUrl() }}" target="_blank" rel="noopener">track ↗</a></p>
+            @if ($order->shipment_status)<p><span class="badge">{{ $order->shipment_status }}</span>@if ($order->tracked_at) <span class="muted small">checked {{ $order->tracked_at->diffForHumans() }}</span>@endif</p>@endif
+            <div class="row-actions">
+                <a class="btn small" href="{{ route('admin.orders.label', $order) }}" target="_blank" rel="noopener">Print label</a>
+                <form method="post" action="{{ route('admin.orders.track', $order) }}">@csrf<button class="btn small ghost">Refresh tracking</button></form>
+                @unless (in_array($order->status, ['shipped', 'delivered', 'returned'], true))
+                    <form method="post" action="{{ route('admin.orders.cancel-shipment', $order) }}">@csrf<button class="btn small danger" data-confirm="Cancel this Delhivery shipment?">Cancel shipment</button></form>
+                @endunless
+            </div>
+            @if ($order->shipment_scans)
+                <details class="scans"><summary>Scan history ({{ count($order->shipment_scans) }})</summary>
+                    <ol>@foreach (array_reverse($order->shipment_scans) as $sc)<li><strong>{{ $sc['status'] }}</strong> · {{ $sc['location'] }}<br><span class="muted small">{{ $sc['at'] ? \Illuminate\Support\Carbon::parse($sc['at'])->format('d M, H:i') : '' }} {{ $sc['note'] }}</span></li>@endforeach</ol>
+                </details>
+            @endif
+        @elseif (\App\Services\Delhivery::enabled())
+            @if ($order->shipment_error)<p class="err small">Last attempt failed: {{ $order->shipment_error }}</p>@endif
+            @if (in_array($order->status, ['pending', 'cancelled'], true))
+                <p class="muted small">Shipments are created once the order is confirmed (COD placed or payment received).</p>
+            @else
+                <form method="post" action="{{ route('admin.orders.ship', $order) }}">
+                    @csrf
+                    <label>Weight (grams) <input type="number" name="weight_grams" min="50" value="{{ $order->shippingWeight() }}"></label>
+                    <button class="btn full">{{ $order->shipment_error ? 'Retry' : 'Create' }} Delhivery shipment</button>
+                </form>
+            @endif
+        @else
+            <p class="muted small">Add your Delhivery API token in <a href="{{ route('admin.settings') }}">Settings → Delhivery shipping</a> to book shipments from here.</p>
+        @endif
+    </section>
+    <section class="card">
         <h2>Customer</h2>
         <p><strong>{{ $order->name }}</strong><br>
             <a href="tel:{{ $order->phone }}">{{ $order->phone }}</a> · <a href="https://wa.me/{{ $wa }}" target="_blank" rel="noopener">WhatsApp</a><br>
@@ -78,7 +110,7 @@
     </section>
     <section class="card">
         <h2>Payment</h2>
-        <p>{{ strtoupper($order->payment_method) }} · <span class="badge {{ $order->payment_status === 'paid' ? 'ok' : '' }}">{{ $order->payment_status }}</span></p>
+        <p>{{ $order->payment_method === 'cod' ? 'Cash on delivery' : ucfirst($order->payment_method) }} · <span class="badge {{ $order->payment_status === 'paid' ? 'ok' : '' }}">{{ $order->payment_status }}</span></p>
         @if ($order->razorpay_order_id)<p class="muted small">Razorpay order {{ $order->razorpay_order_id }}@if ($order->razorpay_payment_id)<br>Payment {{ $order->razorpay_payment_id }}@endif</p>@endif
         @if ($order->cashfree_order_id)<p class="muted small">Cashfree order {{ $order->cashfree_order_id }}@if ($order->cashfree_payment_id)<br>Payment {{ $order->cashfree_payment_id }}@endif</p>@endif
         <p class="muted small">Placed {{ $order->created_at->format('d M Y, H:i') }}</p>

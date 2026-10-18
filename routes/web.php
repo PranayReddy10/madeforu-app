@@ -35,6 +35,7 @@ Route::post('/product/{product}/review', [ProductController::class, 'review'])->
 Route::get('/product-tag/{tag}', [SearchController::class, 'tag']);
 
 Route::get('/search', [SearchController::class, 'index'])->name('search');
+Route::get('/delivery-check', [ProductController::class, 'deliveryCheck'])->name('delivery.check')->middleware('throttle:30,1');
 Route::get('/search/suggest', [SearchController::class, 'suggest'])->name('search.suggest')->middleware('throttle:60,1');
 
 Route::post('/uploads', [UploadController::class, 'store'])->name('upload.store')->middleware('throttle:60,1');
@@ -100,6 +101,11 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'admin'])->group(fun
     Route::get('orders/{order}', [Admin\OrderController::class, 'show'])->name('orders.show');
     Route::put('orders/{order}', [Admin\OrderController::class, 'update'])->name('orders.update');
     Route::get('orders/{order}/uploads.zip', [Admin\OrderController::class, 'downloadUploads'])->name('orders.uploads');
+    Route::post('orders/{order}/ship', [Admin\OrderController::class, 'ship'])->name('orders.ship');
+    Route::post('orders/{order}/track', [Admin\OrderController::class, 'track'])->name('orders.track');
+    Route::get('orders/{order}/label', [Admin\OrderController::class, 'label'])->name('orders.label');
+    Route::post('orders/{order}/cancel-shipment', [Admin\OrderController::class, 'cancelShipment'])->name('orders.cancel-shipment');
+    Route::post('orders/pickup', [Admin\OrderController::class, 'pickup'])->name('orders.pickup');
     Route::resource('coupons', Admin\CouponController::class)->except('show');
     Route::resource('pages', Admin\PageController::class)->except('show');
     Route::resource('banners', Admin\BannerController::class)->except('show');

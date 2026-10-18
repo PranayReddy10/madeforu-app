@@ -261,3 +261,10 @@ html.mp-open { overflow: hidden; }
 #slug-preview { word-break: break-all; }
 @media (max-width: 640px) { .mp { width: 100vw; height: 100dvh; } }
 input[type=file][hidden] { display: none; }
+
+/* Delhivery panel */
+.row-actions { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.row-actions form { margin: 0; }
+.scans ol { margin: 8px 0 0; padding-left: 18px; font-size: 13px; }
+.scans li { margin-bottom: 6px; }
+.err.small { font-size: 13px; }

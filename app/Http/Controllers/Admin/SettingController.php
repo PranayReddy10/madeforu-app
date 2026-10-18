@@ -19,7 +19,8 @@ class SettingController extends Controller
             'free_shipping_over' => ['Free shipping over (₹)', 'number', ''],
             'shipping_fee' => ['Shipping fee (₹)', 'number', ''],
             'cod_enabled' => ['Cash on delivery enabled', 'bool', ''],
-            'cod_fee' => ['COD fee (₹)', 'number', ''],
+            'cod_fee' => ['Cash on delivery charges, fixed (₹)', 'number', 'Shown as its own line, “Cash on delivery charges”.'],
+            'cod_fee_percent' => ['Cash on delivery charges, % of order', 'number', 'Optional. The higher of the fixed amount and this % is charged — e.g. ₹40 and 2%.'],
             'cod_max' => ['COD allowed up to (₹)', 'number', 'Orders above this must pay online.'],
         ],
         'Payment gateways' => [
@@ -32,6 +33,17 @@ class SettingController extends Controller
             'cashfree.mode' => ['Cashfree mode', 'select:production=Live (production),sandbox=Test (sandbox)', 'Use Test with sandbox keys to try it first.'],
             'cashfree.app_id' => ['Cashfree App ID', 'text', 'Cashfree Merchant Dashboard → Developers → API Keys.'],
             'cashfree.secret' => ['Cashfree Secret Key', 'secret', 'Also used to check webhooks. Webhook URL: /webhooks/cashfree (Payment success).'],
+        ],
+        'Delhivery shipping' => [
+            'delhivery.enabled' => ['Delhivery enabled', 'bool', ''],
+            'delhivery.auto' => ['Create the Delhivery shipment automatically when an order is confirmed', 'bool', 'COD orders when placed, online orders once paid. Untick to create shipments by hand from each order.'],
+            'delhivery.mode' => ['Delhivery account', 'select:production=Live,staging=Test (staging)', ''],
+            'delhivery.token' => ['Delhivery API token', 'secret', 'Delhivery One → Settings → API setup.'],
+            'delhivery.pickup_location' => ['Pickup location (warehouse) name', 'text', 'Exactly as registered with Delhivery, e.g. MADEFORU HYD.'],
+            'delhivery.pickup_pincode' => ['Pickup PIN code', 'text', ''],
+            'delhivery.shipping_mode' => ['Shipping mode', 'select:Surface=Surface,Express=Express (air)', ''],
+            'delhivery.default_weight' => ['Default weight per item (grams)', 'number', 'Used when a product has no weight set.'],
+            'delhivery.check_pincodes' => ['Check PIN codes with Delhivery at checkout', 'bool', 'Stops orders to places Delhivery can’t reach, and COD where it can’t collect cash.'],
         ],
         'Analytics & search engines' => [
             'analytics.ga4' => ['Google Analytics 4 measurement ID', 'text', 'G-XXXXXXXXXX'],

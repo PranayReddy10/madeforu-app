@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\CreateShipment;
 use App\Mail\OrderPlaced;
 use App\Models\Coupon;
 use App\Models\CustomerUpload;
@@ -10,6 +11,7 @@ use App\Models\Product;
 use App\Services\Analytics;
 use App\Services\Cart;
 use App\Services\Cashfree;
+use App\Services\Delhivery;
 use App\Services\Razorpay;
 use App\Services\Seo;
 use Illuminate\Http\Request;
@@ -95,6 +97,16 @@ class CheckoutController extends Controller
         $totals = $this->cart->totals($lines, $method);
         if ($method === 'cod' && ! $this->codAllowed($totals['total'])) {
             return back()->withInput()->withErrors(['payment_method' => 'Cash on delivery is not available for this order. Please pay online.']);
+        }
+        // Delhivery must reach the PIN (and collect cash there for COD). If the check itself fails, let the order through.
+        if (Delhivery::enabled() && setting('delhivery.check_pincodes')) {
+            $pin = app(Delhivery::class)->pincode($data['pincode']);
+            if ($pin && ! $pin['serviceable']) {
+                return back()->withInput()->withErrors(['pincode' => 'Sorry, our courier does not deliver to '.$data['pincode'].' yet. Please use another address or contact us on WhatsApp.']);
+            }
+            if ($pin && $method === 'cod' && ! $pin['cod']) {
+                return back()->withInput()->withErrors(['payment_method' => 'Cash on delivery is not available at '.$data['pincode'].'. Please pay online.']);
+            }
         }
 
         $order = DB::transaction(function () use ($data, $lines, $totals, $method) {
@@ -282,6 +294,10 @@ class CheckoutController extends Controller
         }
         foreach ($order->items as $i) {
             Product::whereKey($i->product_id)->increment('sales_count', $i->qty);
+        }
+        // Book the Delhivery shipment right away (after the customer's page has gone out).
+        if (Delhivery::enabled() && setting('delhivery.auto')) {
+            CreateShipment::dispatchAfterResponse($order->id);
         }
         try {
             Mail::to($order->email)->send(new OrderPlaced($order));

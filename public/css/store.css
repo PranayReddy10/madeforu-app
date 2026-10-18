@@ -380,6 +380,17 @@ html.locked body { position: fixed; left: 0; right: 0; }
 .sticky-buy.show { transform: none; }
 .sticky-buy b { display: block; font-size: 18px; }
 
+/* Delivery PIN check */
+.pin-check { margin: 14px 0 0; background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; }
+.pin-check label { display: block; font-weight: 600; font-size: 14px; margin-bottom: 6px; }
+.pin-check div { display: flex; gap: 8px; }
+.pin-check input { flex: 1; min-width: 0; height: 40px; border: 1.5px solid var(--line); border-radius: 999px; padding: 0 14px; font-size: 16px; outline: none; }
+.pin-check input:focus { border-color: var(--rose); }
+.pin-check p { margin: 8px 0 0; }
+.pin-ok { color: #18694b; font-weight: 600; }
+.pin-no { color: var(--rose-d); font-weight: 600; }
+.pin-msg { display: block; font-weight: 600; font-size: 13px; min-height: 1em; }
+
 /* Cart & checkout */
 .cart-layout, .checkout-layout { display: grid; gap: 16px; padding-bottom: 24px; }
 .line { display: grid; grid-template-columns: 84px 1fr; gap: 12px; background: #fff; border-radius: var(--r); padding: 12px; margin-bottom: 10px; box-shadow: var(--shadow); }
@@ -436,6 +447,11 @@ html.locked body { position: fixed; left: 0; right: 0; }
 .menu-list a:last-child { border: 0; }
 .order-row { display: grid; grid-template-columns: 1fr auto auto; gap: 12px; align-items: center; background: #fff; border-radius: 12px; padding: 12px 14px; margin-bottom: 8px; box-shadow: var(--shadow); }
 .order-row small { display: block; }
+
+.scans { list-style: none; padding: 0 0 0 14px; margin: 8px 0 12px; border-left: 2px solid var(--line); font-size: 13px; }
+.scans li { margin: 0 0 8px; position: relative; }
+.scans li::before { content: ''; position: absolute; left: -20px; top: 5px; width: 10px; height: 10px; border-radius: 50%; background: var(--line); }
+.scans li:first-child::before { background: var(--mint); }
 
 /* Footer */
 .footer-logo { display: inline-block; background: #fff; border-radius: 16px; padding: 10px 14px; margin-bottom: 14px; }
