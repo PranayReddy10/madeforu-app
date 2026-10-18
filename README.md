@@ -15,8 +15,14 @@ Two new things this adds beyond what the website does:
   most people do not want to give a phone number, and the website's save
   path refuses to store an order without one.
 
+> **New:** [`store/`](store/README.md) is the Laravel online shop that replaces the
+> WordPress/WooCommerce site at madeforu.co.in, with personalised photo-upload products,
+> Razorpay + COD checkout, full SEO and analytics, and an app-style mobile design. It keeps
+> every WooCommerce product and category URL.
+
 ```
 madeforu-app/
+├── store/         Laravel storefront for madeforu.co.in (Hostinger)
 ├── api/           PHP JSON API — upload beside config.php on the server
 ├── android/       Kotlin + Jetpack Compose app — open in Android Studio
 ├── pwa/           the same system as a web app — for iPhones, and any browser
