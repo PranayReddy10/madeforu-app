@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Mail;
 /** Keeps an order and its Delhivery shipment in step. */
 class Shipping
 {
-    public function __construct(private Delhivery $delhivery) {}
+    public function __construct(private Delhivery $delhivery, private OrderNotifier $notifier) {}
 
     /** Create the Delhivery shipment once. Errors are kept on the order for admin to see and retry. */
     public function ship(Order $order): bool
@@ -58,6 +58,9 @@ class Shipping
         if (! $wasShipped && in_array($order->status, ['shipped', 'delivered'], true)) {
             $this->notifyShipped($order);
         }
+        if ($order->status === 'delivered' && ($changes['status'] ?? null) === 'delivered') {
+            $this->notifier->delivered($order);
+        }
     }
 
     public function notifyShipped(Order $order): void
@@ -67,5 +70,6 @@ class Shipping
         } catch (\Throwable $e) {
             Log::warning('Shipped mail failed: '.$e->getMessage());
         }
+        $this->notifier->shipped($order);
     }
 }

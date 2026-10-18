@@ -3,8 +3,10 @@
 namespace App\Mail;
 
 use App\Models\Order;
+use App\Services\Invoice;
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
+use Illuminate\Mail\Mailables\Attachment;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 
@@ -24,5 +26,16 @@ class OrderPlaced extends Mailable
     public function content(): Content
     {
         return new Content(view: 'emails.order');
+    }
+
+    /** The invoice PDF goes with the confirmation. */
+    public function attachments(): array
+    {
+        if (! $this->order->invoice_number) {
+            return [];
+        }
+
+        return [Attachment::fromData(fn () => Invoice::pdf($this->order)->output(), Invoice::filename($this->order))
+            ->withMime('application/pdf')];
     }
 }

@@ -8,6 +8,7 @@
         <p class="muted">We'll start crafting it now. If a photo needs adjusting we'll message you on WhatsApp before printing.</p>
     </div>
     @include('account.order-detail', ['order' => $order])
-    <div class="center"><a href="{{ url('shop') }}/" class="btn primary">Continue shopping</a> <a href="{{ route('track', ['number' => $order->number, 'phone' => $order->phone]) }}" class="btn ghost">Track order</a></div>
+    <div class="center"><a href="{{ url('shop') }}/" class="btn primary">Continue shopping</a> <a href="{{ route('track', ['number' => $order->number, 'phone' => $order->phone]) }}" class="btn ghost">Track order</a>
+        @if($order->invoice_number) <a href="{{ route('invoice.download', $order->number) }}" class="btn ghost">Download invoice</a>@endif</div>
 </div>
 @endsection

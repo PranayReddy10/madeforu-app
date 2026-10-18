@@ -188,6 +188,8 @@
             <h2>Google Shopping</h2>
             <label>Brand <input name="brand" value="{{ old('brand', $product->brand) }}"></label>
             <label>GTIN / barcode <input name="gtin" value="{{ old('gtin', $product->gtin) }}"></label>
+            <label>HSN code <small class="muted">for the GST invoice</small><input name="hsn_code" value="{{ old('hsn_code', $product->hsn_code) }}" maxlength="12"></label>
+            <label>GST rate % <small class="muted">blank = store default ({{ setting('invoice.gst_rate') }}%)</small><input type="number" step="0.01" min="0" max="28" name="gst_rate" value="{{ old('gst_rate', $product->gst_rate) }}"></label>
             <label>Google product category <input name="google_category" value="{{ old('google_category', $product->google_category) }}" placeholder="e.g. Home & Garden > Decor > Picture Frames"></label>
         </section>
     </aside>
