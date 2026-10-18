@@ -59,6 +59,8 @@ class PageController extends Controller
             'slug' => ['required', 'string', 'max:255', Rule::unique('pages', 'slug')->ignore($page->id),
                 fn ($attr, $value, $fail) => in_array(explode('/', $value)[0], $reserved, true) ? $fail('That address is used by the store itself.') : null],
             'body' => 'nullable|string',
+            'template' => 'nullable|in:about,contact,legal,legal-index',
+            'intro' => 'nullable|string|max:600',
             'meta_title' => 'nullable|string|max:255',
             'meta_description' => 'nullable|string|max:320',
         ]);

@@ -22,6 +22,7 @@
                     ['admin.media.index', 'Media', 'admin/media*'],
                     ['admin.abandoned.index', 'Abandoned carts', 'admin/abandoned-carts*'],
                     ['admin.reviews.index', 'Reviews', 'admin/reviews*'],
+                    ['admin.messages.index', 'Messages', 'admin/messages*'],
                     ['admin.coupons.index', 'Coupons', 'admin/coupons*'],
                     ['admin.banners.index', 'Banners', 'admin/banners*'],
                     ['admin.pages.index', 'Pages', 'admin/pages*'],
