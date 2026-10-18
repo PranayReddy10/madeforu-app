@@ -165,10 +165,14 @@ class Product extends Model
      */
     public function photoFieldId(): ?int
     {
-        $fields = $this->customizationFields;
-        $driven = $fields->contains(fn ($f) => in_array($f->type, ['select', 'choice'], true) && collect($f->options ?? [])->contains(fn ($o) => ! empty($o['photos'])));
+        return $this->photoDriver() ? $this->customizationFields->firstWhere('type', 'images')?->id : null;
+    }
 
-        return $driven ? $fields->firstWhere('type', 'images')?->id : null;
+    /** The option field (e.g. "Print side") whose choices set the photo count. */
+    public function photoDriver(): ?CustomizationField
+    {
+        return $this->customizationFields->first(fn ($f) => in_array($f->type, ['select', 'choice'], true)
+            && collect($f->options ?? [])->contains(fn ($o) => ! empty($o['photos'])));
     }
 
     /** The most photo boxes the field can need: its own max, or the largest option count. */

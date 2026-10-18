@@ -450,9 +450,14 @@
         }
         u.reset = function () { slots.forEach(clear); };
         // An option such as "Two sides" sets how many photos this field takes: show that many boxes, drop extra photos.
+        var lbl = $('[data-upload-label]', u), lblText = lbl ? lbl.firstChild.textContent : '';
         u.limit = function (n) {
             var fromOption = n > 0;
+            // Until the customer picks e.g. a print side, we don't know how many photos: show a hint instead of boxes.
+            var waiting = !fromOption && u.hasAttribute('data-photo-wait');
+            u.classList.toggle('waiting', waiting);
             n = fromOption ? n : +u.dataset.baseMax;
+            if (lbl) lbl.firstChild.textContent = n === 1 ? lblText.replace(/\bphotos\b/i, 'photo') : lblText;
             u.dataset.max = n; u.dataset.min = fromOption ? n : u.dataset.baseMin;
             slots.forEach(function (s, i) { if (i >= n && (s.classList.contains('filled') || s.classList.contains('busy'))) clear(s); s.hidden = i >= n; });
             var ml = $('[data-max-label]', u); if (ml) ml.textContent = n;

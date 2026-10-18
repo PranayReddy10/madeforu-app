@@ -1,12 +1,16 @@
 {{-- Personalisation fields for one item. $prefix: input name (custom, or items[N][custom]); $suffix: makes ids unique. --}}
 @php($photoField = $product->photoFieldId())
+@php($photoDriver = $product->photoDriver())
 @foreach($product->customizationFields as $f)
     <div class="field" data-field="{{ $f->id }}">
         @if($f->type === 'images')
             @php($slots = $product->photoSlots($f))
-            <div class="upload" data-upload data-min="{{ $f->min_files }}" data-max="{{ $f->max_files }}" data-base-min="{{ $f->min_files }}" data-base-max="{{ $f->max_files }}" data-name="{{ $prefix }}[{{ $f->id }}][]" data-required="{{ $f->required ? 1 : 0 }}" @if($f->id === $photoField) data-photo-target @endif>
+            <div class="upload" data-upload data-min="{{ $f->min_files }}" data-max="{{ $f->max_files }}" data-base-min="{{ $f->min_files }}" data-base-max="{{ $f->max_files }}" data-name="{{ $prefix }}[{{ $f->id }}][]" data-required="{{ $f->required ? 1 : 0 }}" @if($f->id === $photoField) data-photo-target @if($photoDriver->required) data-photo-wait @endif @endif>
+                @if($f->id === $photoField && $photoDriver->required)
+                    <p class="upload-wait" data-wait-note>Choose “{{ $photoDriver->label }}” above first, then add your {{ \Illuminate\Support\Str::plural('photo', $product->photoSlots($f)) }} here.</p>
+                @endif
                 <div class="upload-head">
-                    <label>{{ $f->label }} @if($f->required)<em>*</em>@endif</label>
+                    <label data-upload-label>{{ $f->label }} @if($f->required)<em>*</em>@endif</label>
                     <span class="upload-count"><b data-count>0</b> / <span data-max-label>{{ $f->max_files }}</span></span>
                 </div>
                 @if($f->help)<p class="help">{{ $f->help }}</p>@endif

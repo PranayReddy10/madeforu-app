@@ -51,7 +51,8 @@ class PrintSideTest extends TestCase
         $this->assertSame(2, $this->p->photoSlots($photo));
 
         $html = $this->get($this->p->url())->assertOk()->assertSee('data-photo-target', false)->assertSee('data-photos="2"', false)
-            ->assertSee('Two sides (+₹30)', false)->assertSee('Back side')->getContent();
+            ->assertSee('Two sides (+₹30)', false)->assertSee('Back side')
+            ->assertSee('data-photo-wait', false)->assertSee('Choose “Print side” above first')->getContent();
         $this->assertSame(2, substr_count($html, 'data-slot') / 2);   // main box + item template, 2 boxes each
 
         $this->actingAs(User::where('is_admin', true)->first())->get(route('admin.products.edit', $this->p))->assertSee("Two sides|30|2");
