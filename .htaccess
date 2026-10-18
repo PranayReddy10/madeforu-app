@@ -1,8 +1,9 @@
 # Only used if the whole project is uploaded INTO public_html (see README, "Option B").
 # Sends every request to the public/ folder so .env, vendor/ and storage/ are never reachable.
+# (/storage/... URLs are the public uploads: they go to public/storage or the app's fallback route.)
 <IfModule mod_rewrite.c>
     RewriteEngine On
-    RewriteRule ^(\.env|\.git|composer\.(json|lock)|artisan|vendor/|storage/|database/|bootstrap/|config/|routes/|resources/|tests/|app/) - [F,L,NC]
+    RewriteRule ^(\.env|\.git|composer\.(json|lock)|artisan|vendor/|database/|bootstrap/|config/|routes/|resources/|tests/|app/) - [F,L,NC]
     RewriteCond %{REQUEST_URI} !^/public/
     RewriteRule ^(.*)$ public/$1 [L]
 </IfModule>
