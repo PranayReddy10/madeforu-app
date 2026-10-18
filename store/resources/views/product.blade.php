@@ -15,26 +15,33 @@
     @include('partials.breadcrumbs', ['crumbs' => $crumbs])
 
     <div class="pdp">
-        <div class="gallery" data-gallery>
-            <div class="gallery-main" data-gallery-track>
-                @forelse($product->images as $img)
-                    <figure class="slide">
-                        @include('partials.picture', ['path' => $img->path, 'alt' => $img->alt ?: $product->name, 'lazy' => !$loop->first, 'w' => 900, 'h' => 900, 'sizes' => '(max-width: 900px) 100vw, 560px'])
-                    </figure>
-                @empty
-                    <figure class="slide"><img src="{{ asset('images/placeholder.svg') }}" alt="{{ $product->name }}" width="900" height="900"></figure>
-                @endforelse
+        @php $many = $product->images->count() > 1; @endphp
+        <div class="gallery @if($many) has-thumbs @endif" data-gallery>
+            <div class="gallery-stage">
+                <div class="gallery-main" data-gallery-track>
+                    @forelse($product->images as $img)
+                        <figure class="slide" data-full="{{ $img->url() }}" data-zoom>
+                            @include('partials.picture', ['path' => $img->path, 'alt' => $img->alt ?: $product->name, 'lazy' => !$loop->first, 'w' => 900, 'h' => 900, 'sizes' => '(max-width: 900px) 100vw, 560px'])
+                        </figure>
+                    @empty
+                        <figure class="slide"><img src="{{ asset('images/placeholder.svg') }}" alt="{{ $product->name }}" width="900" height="900"></figure>
+                    @endforelse
+                </div>
+                @if($many)
+                    <button type="button" class="gal-arrow prev" data-gal-step="-1" aria-label="Previous image"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button>
+                    <button type="button" class="gal-arrow next" data-gal-step="1" aria-label="Next image"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></button>
+                    <span class="gallery-count" data-gallery-count>1 / {{ $product->images->count() }}</span>
+                @endif
+                @if($product->images->isNotEmpty())<button type="button" class="gal-zoom" data-gal-open aria-label="View full screen"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4M11 8v6M8 11h6"/></svg><span class="hide-mobile">Click to zoom</span></button>@endif
+                @if($off)<span class="tag sale big">{{ $off }}% off</span>@endif
             </div>
-            @if($product->images->count() > 1)
-                <div class="gallery-dots only-mobile">@foreach($product->images as $img)<span></span>@endforeach</div>
-                <div class="gallery-thumbs hide-mobile">
+            @if($many)
+                <div class="gallery-thumbs" role="tablist" aria-label="Product images">
                     @foreach($product->images as $img)
                         <button type="button" data-goto="{{ $loop->index }}" aria-label="Show image {{ $loop->iteration }}"><img src="{{ $img->url() }}" alt="" loading="lazy" width="80" height="80"></button>
                     @endforeach
                 </div>
             @endif
-            @if($off)<span class="tag sale big">{{ $off }}% off</span>@endif
-            @if($product->images->count() > 1)<span class="gallery-count only-mobile" data-gallery-count>1 / {{ $product->images->count() }}</span>@endif
         </div>
 
         <div class="pdp-info">
