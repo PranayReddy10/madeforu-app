@@ -461,3 +461,55 @@
     filter('');
 })();
 
+
+/* Home page editor: move, switch on/off, add and delete sections, FAQ rows */
+(function () {
+    var form = document.querySelector('[data-hb]');
+    if (!form) return;
+    var list = form.querySelector('[data-hb-list]'), dirty = form.querySelector('[data-hb-dirty]');
+    function changed() { dirty.hidden = false; }
+    form.addEventListener('input', changed);
+    form.addEventListener('change', function (e) {
+        changed();
+        if (e.target.matches('[data-hb-on]')) e.target.closest('[data-hb-card]').classList.toggle('off', !e.target.checked);
+        if (e.target.matches('[data-hb-source]')) {
+            var card = e.target.closest('[data-hb-card]');
+            card.querySelectorAll('[data-hb-when]').forEach(function (el) { el.hidden = el.dataset.hbWhen !== e.target.value; });
+        }
+        if (e.target.matches('[data-hb-title]')) {
+            var small = e.target.closest('[data-hb-card]').querySelector('.hb-name small');
+            if (small) small.textContent = e.target.value ? '“' + e.target.value.slice(0, 50) + '”' : '';
+        }
+    });
+    form.addEventListener('click', function (e) {
+        var b = e.target.closest('button');
+        if (!b) return;
+        var card = b.closest('[data-hb-card]');
+        if (b.matches('[data-hb-up]') || b.matches('[data-hb-down]')) {
+            e.preventDefault();
+            var sib = b.matches('[data-hb-up]') ? card.previousElementSibling : card.nextElementSibling;
+            if (sib) { b.matches('[data-hb-up]') ? list.insertBefore(card, sib) : list.insertBefore(sib, card); card.classList.add('moved'); setTimeout(function () { card.classList.remove('moved'); }, 500); changed(); }
+        } else if (b.matches('[data-hb-delete]')) {
+            if (confirm('Delete this section?')) { card.remove(); changed(); }
+        } else if (b.matches('[data-hb-add]')) {
+            var type = form.querySelector('[data-hb-type]').value;
+            var tpl = form.querySelector('[data-hb-template="' + type + '"]');
+            var id = Math.random().toString(36).slice(2, 10).replace(/[^a-z0-9]/g, 'x');
+            var div = document.createElement('div');
+            div.innerHTML = tpl.innerHTML.replace(/xxidxx/g, id);
+            var added = div.firstElementChild;
+            list.appendChild(added); added.open = true;
+            added.scrollIntoView({ behavior: 'smooth', block: 'center' }); changed();
+        } else if (b.matches('[data-hb-faq-add]')) {
+            var box = card.querySelector('[data-hb-faq]'), name = box.dataset.name, i = Date.now() % 100000;
+            var row = document.createElement('div');
+            row.className = 'hb-qa';
+            row.innerHTML = '<input placeholder="Question"><textarea rows="2" placeholder="Answer"></textarea><button type="button" class="link danger" data-hb-faq-remove>Remove</button>';
+            row.querySelector('input').name = name + '[' + i + '][q]';
+            row.querySelector('textarea').name = name + '[' + i + '][a]';
+            box.appendChild(row); row.querySelector('input').focus(); changed();
+        } else if (b.matches('[data-hb-faq-remove]')) {
+            b.closest('.hb-qa').remove(); changed();
+        }
+    });
+})();
