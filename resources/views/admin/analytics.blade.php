@@ -2,7 +2,7 @@
 @section('title', 'Analytics')
 @section('actions')
     <form method="get" class="range">
-        @foreach ([7 => '7 days', 30 => '30 days', 90 => '90 days'] as $d => $l)
+        @foreach ([1 => 'Today', 7 => '7 days', 30 => '30 days', 90 => '90 days'] as $d => $l)
             <button name="days" value="{{ $d }}" class="btn small {{ $days === $d ? '' : 'ghost' }}">{{ $l }}</button>
         @endforeach
     </form>
@@ -24,10 +24,10 @@
     <div class="card stat"><span>Conversion rate</span><strong>{{ number_format($k['conversion'], 1) }}%</strong><small class="muted">orders ÷ visitors</small></div>
     <div class="card stat"><span>Average order</span><strong>{{ money($k['aov']) }}</strong>{!! $delta('aov') !!}</div>
 </div>
-<p class="muted small" style="margin-top:-8px">Compared with the {{ $days }} days before. Counted by the shop itself (bots, and you while logged in as admin, are left out).</p>
+<p class="muted small" style="margin-top:-8px">Compared with {{ $days === 1 ? 'yesterday' : 'the '.$days.' days before' }}. Counted by the shop itself (bots, and you while logged in as admin, are left out).</p>
 
 <div class="card">
-    <h2>Visitors &amp; orders per day</h2>
+    <h2>Visitors &amp; orders {{ $days === 1 ? 'per hour today' : 'per day' }}</h2>
     @php
         $maxV = max(1, $daily->max('visitors')); $maxO = max(1, $daily->max('orders'));
         $n = $daily->count(); $w = 1000; $h = 220; $bw = $w / max(1, $n);
@@ -36,8 +36,8 @@
     <svg class="chart" viewBox="0 0 {{ $w }} {{ $h + 24 }}" preserveAspectRatio="none" role="img" aria-label="Visitors and orders per day">
         @foreach ($daily->values() as $i => $d)
             @php $bh = ($d['visitors'] / $maxV) * ($h - 40); @endphp
-            <rect x="{{ $i * $bw + $bw * .15 }}" y="{{ $h - 10 - $bh }}" width="{{ $bw * .7 }}" height="{{ max(1, $bh) }}" rx="3" class="bar"><title>{{ \Illuminate\Support\Carbon::parse($d['day'])->format('D j M') }}: {{ $d['visitors'] }} visitors, {{ $d['orders'] }} orders, {{ money($d['revenue']) }}</title></rect>
-            @if ($n <= 31 || $i % 7 === 0)<text x="{{ $i * $bw + $bw / 2 }}" y="{{ $h + 16 }}" class="lbl">{{ \Illuminate\Support\Carbon::parse($d['day'])->format($n <= 7 ? 'D' : 'j') }}</text>@endif
+            <rect x="{{ $i * $bw + $bw * .15 }}" y="{{ $h - 10 - $bh }}" width="{{ $bw * .7 }}" height="{{ max(1, $bh) }}" rx="3" class="bar"><title>{{ \Illuminate\Support\Carbon::parse($d['day'])->format($days === 1 ? 'g A' : 'D j M') }}: {{ $d['visitors'] }} visitors, {{ $d['orders'] }} orders, {{ money($d['revenue']) }}</title></rect>
+            @if ($days === 1 ? $i % 3 === 0 : ($n <= 31 || $i % 7 === 0))<text x="{{ $i * $bw + $bw / 2 }}" y="{{ $h + 16 }}" class="lbl">{{ \Illuminate\Support\Carbon::parse($d['day'])->format($days === 1 ? 'ga' : ($n <= 7 ? 'D' : 'j')) }}</text>@endif
         @endforeach
         <polyline points="{{ $pts }}" class="line"/>
     </svg>
@@ -164,6 +164,7 @@
     </div>
     <div class="card">
         <h2>Google Search (Search Console)</h2>
+        @if ($days === 1)<p class="muted small">Google shares search data about 2 days late, so this shows {{ now()->subDays(2)->format('D j M') }}.</p>@endif
         @if ($google['gsc_error'])<p class="flash err">Search Console: {{ $google['gsc_error'] }}</p>
         @elseif (! $gsc)<p class="muted">Not connected yet. Shows the searches people use to find you, clicks, and your position on Google.</p>
         @else

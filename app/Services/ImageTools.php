@@ -39,6 +39,41 @@ class ImageTools
         return $ok;
     }
 
+    /** Width of the small copy used in product cards and rails (about 10× lighter than the full photo). */
+    public const THUMB = 480;
+
+    public static function webpPath(string $path): string
+    {
+        return preg_replace('/\.\w+$/', '.webp', $path);
+    }
+
+    public static function thumbPath(string $path): string
+    {
+        return preg_replace('/\.\w+$/', '-'.self::THUMB.'.webp', $path);
+    }
+
+    /**
+     * WebP copies of a catalogue photo next to the original: full size (max 1600 px) and a small one for cards.
+     * Skips copies that already exist. Returns how many were made.
+     */
+    public static function variants(string $absPath): int
+    {
+        if (! is_file($absPath) || ! preg_match('/\.(jpe?g|png|webp)$/i', $absPath) || preg_match('/-'.self::THUMB.'\.webp$/', $absPath)) {
+            return 0;
+        }
+        $made = 0;
+        $webp = self::webpPath($absPath);
+        if ($webp !== $absPath && ! is_file($webp)) {
+            $made += (int) self::toWebp($absPath, $webp);
+        }
+        $thumb = self::thumbPath($absPath);
+        if (! is_file($thumb)) {
+            $made += (int) self::toWebp($absPath, $thumb, self::THUMB);
+        }
+
+        return $made;
+    }
+
     /** Convert an image to WebP next to the original (for imported catalogue photos). */
     public static function toWebp(string $src, string $dest, int $max = 1600): bool
     {

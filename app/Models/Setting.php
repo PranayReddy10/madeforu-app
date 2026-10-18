@@ -19,9 +19,18 @@ class Setting extends Model
 
     protected $guarded = [];
 
+    /** Settings already read in this request (keyed by app instance, so tests and queue workers stay fresh). */
+    private static array $memo = [];
+
     public static function all_(): array
     {
-        return Cache::rememberForever('settings', function () {
+        $id = spl_object_id(app());
+        if (isset(self::$memo[$id])) {
+            return self::$memo[$id];
+        }
+        self::$memo = [];
+
+        return self::$memo[$id] = Cache::rememberForever('settings', function () {
             try {
                 return Schema::hasTable('settings') ? static::pluck('value', 'key')->all() : [];
             } catch (\Throwable) {
@@ -42,6 +51,7 @@ class Setting extends Model
             static::updateOrCreate(['key' => $k], ['value' => $v]);
         }
         Cache::forget('settings');
+        self::$memo = [];
     }
 
     public static function decode(?string $value): ?string

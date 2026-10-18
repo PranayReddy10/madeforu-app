@@ -1,4 +1,4 @@
-@php $c = $s->category; $cover = $c->image ? $c->imageUrl() : $s->products->first()?->mainImageUrl(); @endphp
+@php $c = $s->category; $cover = $c->image ? $c->imageUrl() : $s->products->first()?->thumbUrl(); @endphp
 <section class="section spotlight sp{{ $n }} spot-{{ $layout ?? 'rail' }}">
     <div class="wrap">
         <a href="{{ $c->url() }}" class="spot-head">

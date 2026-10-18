@@ -499,3 +499,6 @@ table th { color: var(--muted); }
 .rate-test .row-inline { display: flex; gap: 8px; align-items: center; margin: 8px 0; flex-wrap: wrap; }
 .rate-test .row-inline input { width: 150px !important; margin: 0 !important; }
 .rate-test .row-inline input[data-rate-qty] { width: 70px !important; }
+
+.speed-card { display: flex; align-items: center; justify-content: space-between; gap: 16px; background: linear-gradient(90deg, #fff, var(--rose-l)); }
+.speed-card p { margin: 4px 0 0; }

@@ -117,6 +117,7 @@ Route::get('/{key}.txt', [SitemapController::class, 'indexNowKey'])->where('key'
 
 Route::prefix('admin')->name('admin.')->middleware(['auth', 'admin'])->group(function () {
     Route::get('/', [Admin\DashboardController::class, 'index'])->name('dashboard');
+    Route::post('speed', [Admin\DashboardController::class, 'speed'])->name('speed');
     Route::get('analytics', [Admin\AnalyticsController::class, 'index'])->name('analytics');
     Route::get('home-page', [Admin\HomePageController::class, 'edit'])->name('home.edit');
     Route::put('home-page', [Admin\HomePageController::class, 'update'])->name('home.update');

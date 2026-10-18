@@ -219,6 +219,17 @@ Hi {{1}}, you left {{2}} in your MadeForU cart 💝 Your photos are saved — fi
 - **Review requests:** a couple of days after an order is delivered, the customer gets "How was your gift?" by email (and WhatsApp when set up) with a link to review every item on one page. Settings → Reviews: days to wait, and whether verified 4★/5★ reviews publish straight away (otherwise approve them in Admin → Reviews).
 - Optional WhatsApp template **review_request** (Utility): `Hi {{1}}, how was your MadeForU order {{2}}? 💝 We'd love a quick review — photos of your gift are extra special: {{3}}`
 
+## Website speed
+
+**Admin → Dashboard → Speed up now** appears while there's something to fix. Press it after deploying and after importing products. It's safe to press again. The same thing from SSH is `php artisan store:speed`.
+
+- **Photos served directly.** Hostinger allows no `storage:link`, so the uploads move into `public/storage`. The web server then sends photos itself, instead of starting PHP for every image. New uploads go there automatically.
+  - **When you upload new files, keep the `public/storage` folder** (it holds your photos). It's not in git, so a normal upload never touches it. Just don't delete the whole `public` folder.
+- **Light copies of every catalogue photo.** Each photo gets a full WebP (max 1600 px) and a 480 px WebP. Product cards, rails, the hero and thumbnails use the small one, about a tenth of the size. New uploads and imports get both automatically.
+- **Templates pre-compiled.** Changed templates are recompiled on their own.
+
+Config and route caching are deliberately left off: deploys are file uploads, and a stale cache breaks the site ("View not found"). Settings are read once per page instead of once per use.
+
 ## Options that change the number of photos
 
 Use this for choices like **Print side: One side / Two sides**. Each option can say how many photos it needs:

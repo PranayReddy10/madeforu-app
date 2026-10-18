@@ -777,7 +777,7 @@ class WooImporter
         $disk->put($path, $res->body());
         // A WebP copy alongside (on this server only), served by <picture> when the browser supports it.
         if (config('store.media_disk') === 'public' && in_array($ext, ['jpg', 'jpeg', 'png'], true)) {
-            ImageTools::toWebp($disk->path($path), $disk->path(preg_replace('/\.\w+$/', '.webp', $path)));
+            ImageTools::variants($disk->path($path));
         }
 
         return $path;

@@ -89,7 +89,7 @@ class MediaController extends Controller
         [$w, $h] = @getimagesize($file->getRealPath()) ?: [null, null];
         $path = $disk->putFileAs($dir, $file, $name);
         if (config('store.media_disk') === 'public' && in_array($ext, ['jpg', 'jpeg', 'png'], true)) {
-            ImageTools::toWebp($disk->path($path), $disk->path(preg_replace('/\.\w+$/', '.webp', $path)));
+            ImageTools::variants($disk->path($path));
         }
 
         return Media::create([

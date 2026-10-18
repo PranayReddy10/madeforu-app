@@ -7,6 +7,21 @@
     @endforeach
 </div>
 
+@if (! $speed['direct'] || $speed['missing'])
+<form method="post" action="{{ route('admin.speed') }}" class="card speed-card">
+    @csrf
+    <div>
+        <b>Make the website faster</b>
+        <p class="muted small">
+            @unless ($speed['direct'])Photos are sent through the app one by one (slow on shared hosting). @endunless
+            @if ($speed['missing']){{ $speed['missing'] }} product {{ \Illuminate\Support\Str::plural('photo', $speed['missing']) }} still {{ $speed['missing'] === 1 ? 'needs' : 'need' }} a small, light copy for product cards. @endif
+            One click fixes it — safe to press again.
+        </p>
+    </div>
+    <button class="btn primary">Speed up now</button>
+</form>
+@endif
+
 <a class="card traffic-strip" href="{{ route('admin.analytics') }}">
     <span><b>{{ number_format($traffic['visitors']) }}</b> visitors this week</span>
     <span><b>{{ number_format($traffic['product_viewers']) }}</b> looked at products</span>

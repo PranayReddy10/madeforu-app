@@ -258,7 +258,7 @@
 
 {{-- Phone: price + add-to-cart stays reachable above the tab bar --}}
 <div class="sticky-buy only-mobile" data-sticky-buy>
-    <img src="{{ $product->mainImageUrl() }}" alt="" width="44" height="44" class="sb-thumb">
+    <img src="{{ $product->thumbUrl() }}" alt="" width="44" height="44" class="sb-thumb">
     <div class="sb-text"><small class="muted">{{ \Illuminate\Support\Str::limit($product->name, 28) }}</small><b data-price>{{ money($product->currentPrice()) }}</b></div>
     <button class="btn primary" data-scroll-buy>{{ $product->customizationFields->isNotEmpty() ? 'Personalise' : 'Add to cart' }}</button>
 </div>

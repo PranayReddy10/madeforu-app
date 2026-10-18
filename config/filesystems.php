@@ -41,7 +41,9 @@ return [
 
         'public' => [
             'driver' => 'local',
-            'root' => storage_path('app/public'),
+            // Where `php artisan store:speed` (Admin → Dashboard → Speed up) moved the files on hosts without symlinks,
+            // so the web server sends photos itself instead of starting PHP for each one.
+            'root' => is_dir(public_path('storage')) && ! is_link(public_path('storage')) ? public_path('storage') : storage_path('app/public'),
             'url' => rtrim(env('APP_URL', 'http://localhost'), '/').'/storage',
             'visibility' => 'public',
             'throw' => false,

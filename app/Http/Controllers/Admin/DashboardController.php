@@ -7,12 +7,22 @@ use App\Models\Order;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\SearchQuery;
+use App\Console\Commands\SpeedUp;
 use App\Services\Stock;
 use App\Services\VisitReport;
 use Illuminate\Database\Eloquent\Builder;
 
 class DashboardController extends Controller
 {
+    /** "Speed up the website": photos served directly, small WebP copies, views pre-compiled. */
+    public function speed()
+    {
+        @set_time_limit(300);
+        \Illuminate\Support\Facades\Artisan::call('store:speed', ['--limit' => 300]);
+
+        return back()->with('status', trim(\Illuminate\Support\Facades\Artisan::output()));
+    }
+
     public function index()
     {
         // Money that counts: paid online, or cash on delivery that is not cancelled.
@@ -26,9 +36,11 @@ class DashboardController extends Controller
         ];
 
         $week = new VisitReport(7);
+        $speed = SpeedUp::status();
 
         return view('admin.dashboard', [
             'revenue' => $revenue,
+            'speed' => $speed,
             'traffic' => $week->kpis()['now'],
             'topSource' => $week->sources()->first(),
             'byStatus' => Order::selectRaw('status, count(*) as n')->groupBy('status')->pluck('n', 'status'),
