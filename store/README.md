@@ -219,6 +219,23 @@ Hi {{1}}, you left {{2}} in your MadeForU cart 💝 Your photos are saved — fi
 - **Review requests:** a couple of days after an order is delivered, the customer gets "How was your gift?" by email (and WhatsApp when set up) with a link to review every item on one page. Settings → Reviews: days to wait, and whether verified 4★/5★ reviews publish straight away (otherwise approve them in Admin → Reviews).
 - Optional WhatsApp template **review_request** (Utility): `Hi {{1}}, how was your MadeForU order {{2}}? 💝 We'd love a quick review — photos of your gift are extra special: {{3}}`
 
+## Delivery charges and parcel sizes
+
+Each product has a weight, a packed size (length × width × height in cm) and how it ships (flyer or carton box) under **Products → Edit → Basics**. These go to Delhivery with every shipment and show on the product page under Specifications.
+
+**Settings → Shipping & payment → How delivery charges are worked out**:
+
+- **Flat fee**: the same shipping fee on every order, as before.
+- **Live Delhivery rate**: the cart asks Delhivery what it charges for the parcel from your pickup PIN (**Settings → Delhivery shipping → Pickup PIN code**) to the customer's PIN. The parcel is all items stacked together. Delhivery bills the higher of the actual weight and the volumetric weight (L × W × H ÷ 5000 kg).
+  - Checkout re-prices as soon as the customer types their PIN.
+  - The product page PIN check shows the charge for one item.
+  - Optional: a packing/handling amount added to each rate, and rounding up (e.g. to ₹5).
+  - COD charge: either your own COD charge, or Delhivery's (their COD price minus their prepaid price).
+  - If Delhivery doesn't answer, the flat fee is used. Rates are cached for 12 hours.
+  - Free shipping over the threshold still applies.
+
+With **Create the Delhivery shipment automatically** on, COD orders are booked the moment they're placed, and online orders the moment payment succeeds. Each one gets an AWB straight away and appears in Delhivery One (Shipments → Ready to ship / pending pickup), where you can manage it, print labels or request pickup. Orders whose payment was never completed are never booked.
+
 ## Email notifications
 
 Emails go out through the mail account in `.env` (`MAIL_*`, e.g. a Hostinger mailbox `orders@madeforu.co.in`). Every email is logged on the order page under **Messages sent**, and each one goes only once per order.

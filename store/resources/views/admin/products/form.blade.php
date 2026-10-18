@@ -57,6 +57,19 @@
                 <label>Sale price (₹) <input type="number" step="0.01" min="0" name="sale_price" value="{{ old('sale_price', $product->sale_price) }}"></label>
                 <label>Weight (kg) <input type="number" step="0.001" min="0" name="weight_kg" value="{{ old('weight_kg', $product->weight_kg) }}"></label>
             </div>
+            <h3>Packed size <small class="muted">— used for live Delhivery delivery charges and sent with every shipment</small></h3>
+            <div class="row4">
+                <label>Length (cm) <input type="number" step="0.1" min="0" name="length_cm" value="{{ old('length_cm', $product->length_cm) }}"></label>
+                <label>Width (cm) <input type="number" step="0.1" min="0" name="width_cm" value="{{ old('width_cm', $product->width_cm) }}"></label>
+                <label>Height (cm) <input type="number" step="0.1" min="0" name="height_cm" value="{{ old('height_cm', $product->height_cm) }}"></label>
+                <label>Ships in
+                    <select name="packaging">
+                        <option value="">—</option>
+                        <option value="flyer" @selected(old('packaging', $product->packaging) === 'flyer')>Flyer (poly bag)</option>
+                        <option value="box" @selected(old('packaging', $product->packaging) === 'box')>Carton box</option>
+                    </select>
+                </label>
+            </div>
             <label>Short description <textarea name="short_description" rows="3">{{ old('short_description', $product->short_description) }}</textarea></label>
             <label>Description (HTML allowed) <textarea name="description" id="f-description" rows="10">{{ old('description', $product->description) }}</textarea></label>
         </section>

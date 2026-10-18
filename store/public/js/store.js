@@ -477,7 +477,7 @@
 
     /* Delivery PIN check (product page) — remembers the PIN for next time */
     function checkPin(url, pin, days) {
-        return fetch(url + '?pin=' + encodeURIComponent(pin) + (days ? '&days=' + days : ''), { headers: { Accept: 'application/json' } })
+        return fetch(url + (url.indexOf('?') < 0 ? '?' : '&') + 'pin=' + encodeURIComponent(pin) + (days ? '&days=' + days : ''), { headers: { Accept: 'application/json' } })
             .then(function (r) { return r.json(); });
     }
     $$('[data-pin-check]').forEach(function (f) {
@@ -518,6 +518,25 @@
             }).catch(function () {});
         }
         pinIn.addEventListener('input', pinCheck);
+        // Live delivery charges: re-price both payment options for the PIN.
+        var lastQuote = '';
+        function quote() {
+            var pin = pinIn.value.replace(/\D/g, '');
+            if (!co.dataset.quote || !/^[1-9]\d{5}$/.test(pin) || pin === lastQuote) return;
+            lastQuote = pin;
+            fetch(co.dataset.quote + '?pin=' + pin, { headers: { Accept: 'application/json' } }).then(function (r) { return r.json(); }).then(function (d) {
+                ['online', 'cod'].forEach(function (k) {
+                    var box = $('[data-totals=' + k + ']', co);
+                    if (box && d[k]) box.innerHTML = d[k].html;
+                    $$('input[name=payment_method]', co).forEach(function (r) { if ((r.value === 'cod') === (k === 'cod') && d[k]) r.dataset.total = d[k].total_text; });
+                });
+                var note = $('[data-cod-note]', co);
+                if (note && d.cod) note.textContent = d.cod.note;
+                var sel = $('input[name=payment_method]:checked', co);
+                if (sel) tot.textContent = sel.dataset.total;
+            }).catch(function () {});
+        }
+        pinIn.addEventListener('input', quote);
         // Remember the cart once we know how to reach the shopper (for a reminder if they don't finish).
         var capT, lastSent = '';
         function capture() {
@@ -528,7 +547,7 @@
         }
         ['name', 'email', 'phone'].forEach(function (n) { if (co[n]) co[n].addEventListener('input', function () { clearTimeout(capT); capT = setTimeout(capture, 1200); }); });
         if (co.email.value || co.phone.value) capture();
-        if (pinIn.value) pinCheck();
+        if (pinIn.value) { pinCheck(); quote(); }
         var pin = $('[data-pincode]', co);
         pin.addEventListener('input', function () {
             if (!/^[1-9]\d{5}$/.test(pin.value)) return;

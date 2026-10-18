@@ -56,6 +56,7 @@ Route::get('/cart/recover/{token}', [CartController::class, 'recover'])->name('c
 Route::get('/cart/unsubscribe/{token}', [CartController::class, 'unsubscribe'])->name('cart.unsubscribe');
 
 Route::get('/checkout', [CheckoutController::class, 'index'])->name('checkout');
+Route::get('/checkout/quote', [CheckoutController::class, 'quote'])->name('checkout.quote')->middleware('throttle:60,1');
 Route::post('/checkout', [CheckoutController::class, 'place'])->name('checkout.place')->middleware('throttle:10,1');
 Route::post('/checkout/razorpay/verify', [CheckoutController::class, 'verify'])->name('checkout.verify');
 Route::post('/webhooks/razorpay', [CheckoutController::class, 'webhook'])->name('webhooks.razorpay');

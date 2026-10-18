@@ -39,19 +39,20 @@ class CheckoutController extends Controller
             return redirect()->route('cart');
         }
         $seo->title('Checkout')->noindex();
-        $totals = $this->cart->totals($lines);
+        $user = auth()->user();
+        $last = $user?->orders()->first();
+        $pin = old('pincode', $last?->pincode);
+        $totals = $this->cart->totals($lines, 'razorpay', $pin);
         $analytics->push('begin_checkout', [
             'currency' => 'INR', 'value' => $totals['total'], 'coupon' => $totals['coupon'],
             'items' => $lines->map(fn ($l) => $analytics->item($l->product, $l->unit, $l->qty, $l->variant?->label()))->all(),
         ]);
-        $user = auth()->user();
-        $last = $user?->orders()->first();
         $saved = session('checkout.prefill', []);
 
         return view('checkout', [
             'lines' => $lines,
             'totals' => $totals,
-            'codTotals' => $this->cart->totals($lines, 'cod'),
+            'codTotals' => $this->cart->totals($lines, 'cod', $pin),
             'states' => self::STATES,
             'prefill' => [
                 'name' => $last->name ?? $user?->name ?? $saved['name'] ?? null, 'email' => $last->email ?? $user?->email ?? $saved['email'] ?? null,
@@ -62,6 +63,20 @@ class CheckoutController extends Controller
             'gateways' => self::gateways(),
             'codAllowed' => $this->codAllowed($totals['total']),
         ]);
+    }
+
+    /** Totals for both payment options once the customer types a PIN (live delivery charges). */
+    public function quote(Request $request)
+    {
+        $lines = $this->cart->lines();
+        $pin = preg_replace('/\D/', '', (string) $request->query('pin'));
+        $out = [];
+        foreach (['online' => 'razorpay', 'cod' => 'cod'] as $key => $method) {
+            $t = $this->cart->totals($lines, $method, $pin);
+            $out[$key] = ['total' => $t['total'], 'total_text' => money($t['total']), 'live' => $t['shipping_live'], 'note' => $t['cod_fee'] > 0 ? '+'.money($t['cod_fee']).' cash on delivery charges' : 'Pay when it arrives', 'html' => view('partials.totals', ['totals' => $t])->render()];
+        }
+
+        return response()->json($out);
     }
 
     /** Online gateways that are switched on and configured, default first. */
@@ -104,7 +119,7 @@ class CheckoutController extends Controller
         if ($method !== 'cod' && ! in_array($method, self::gateways(), true)) {
             return back()->withInput()->withErrors(['payment_method' => 'That payment option is not available right now. Please choose another.']);
         }
-        $totals = $this->cart->totals($lines, $method);
+        $totals = $this->cart->totals($lines, $method, $data['pincode']);
         if ($method === 'cod' && ! $this->codAllowed($totals['total'])) {
             return back()->withInput()->withErrors(['payment_method' => 'Cash on delivery is not available for this order. Please pay online.']);
         }
