@@ -219,6 +219,17 @@ Hi {{1}}, you left {{2}} in your MadeForU cart 💝 Your photos are saved — fi
 - **Review requests:** a couple of days after an order is delivered, the customer gets "How was your gift?" by email (and WhatsApp when set up) with a link to review every item on one page. Settings → Reviews: days to wait, and whether verified 4★/5★ reviews publish straight away (otherwise approve them in Admin → Reviews).
 - Optional WhatsApp template **review_request** (Utility): `Hi {{1}}, how was your MadeForU order {{2}}? 💝 We'd love a quick review — photos of your gift are extra special: {{3}}`
 
+## SEO auto-fill
+
+**Admin → SEO → Auto-fill SEO**, or `php artisan store:seo-fill` from SSH, fills in, for every product:
+- focus keyword (chosen so it's also in the existing URL)
+- meta title (30–60 characters)
+- meta description (70–160, built around a line from the product's own text, so no two are the same)
+- search keywords
+- photo alt text
+
+It also writes a title and description for every category. It only writes fields that are missing or fail the SEO check. Titles and descriptions you wrote yourself that pass are kept. Press it again after importing or adding products. What it can't do for you is shown in the list below it: add a 3rd photo, or a longer description.
+
 ## Website speed
 
 **Admin → Dashboard → Speed up now** appears while there's something to fix. Press it after deploying and after importing products. It's safe to press again. The same thing from SSH is `php artisan store:speed`.

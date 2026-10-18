@@ -7,6 +7,15 @@
     <div class="card stat"><span>Categories without a meta description</span><strong>{{ $categories->count() }}</strong><small>&nbsp;</small></div>
 </div>
 
+<form method="post" action="{{ route('admin.seo.fill') }}" class="card speed-card">
+    @csrf
+    <div>
+        <b>Fill in SEO for every product and category</b>
+        <p class="muted small">Writes a focus keyword, meta title (30–60 characters), meta description (70–160), search keywords and photo alt text from each product's name, categories and description — only where they're missing or too short/long. Titles and descriptions you wrote yourself that pass the check are kept.</p>
+    </div>
+    <button class="btn primary">Auto-fill SEO</button>
+</form>
+
 <div class="card">
     <h2>Search engine links</h2>
     <ul class="links">

@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Category;
 use App\Models\Product;
+use App\Console\Commands\SeoFillCommand;
+use App\Services\SeoFill;
 use Illuminate\Support\Str;
 
 class SeoController extends Controller
@@ -54,6 +56,15 @@ class SeoController extends Controller
         $score = (int) round(100 * max(0, $checks - count($issues)) / $checks);
 
         return ['score' => $score, 'issues' => $issues];
+    }
+
+    /** One click: fill every missing or weak SEO field; good hand-written ones are kept. */
+    public function fill(SeoFill $fill)
+    {
+        @set_time_limit(300);
+        [$p, $c] = SeoFillCommand::fillAll($fill);
+
+        return back()->with('status', "SEO filled in: {$p} products and {$c} categories updated. Fields that were already good were left as they were.");
     }
 
     public function index()

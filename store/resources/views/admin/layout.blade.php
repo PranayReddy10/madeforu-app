@@ -12,9 +12,12 @@
 </head>
 <body>
 <div class="adm">
-    <aside class="adm-side">
-        <a class="adm-brand" href="{{ route('admin.dashboard') }}">{{ config('store.name') }} <small>admin</small></a>
-        <nav class="adm-nav">
+    <aside class="adm-side" data-adm-side>
+        <div class="adm-bar">
+            <a class="adm-brand" href="{{ route('admin.dashboard') }}">{{ config('store.name') }} <small>admin</small></a>
+            <button type="button" class="adm-menu-btn" data-adm-menu aria-expanded="false" aria-controls="adm-nav"><span class="adm-menu-ico" aria-hidden="true"><i></i><i></i><i></i></span> Menu</button>
+        </div>
+        <nav class="adm-nav" id="adm-nav">
             @php
                 $nav = [
                     ['admin.dashboard', 'Dashboard', 'admin'],

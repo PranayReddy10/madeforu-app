@@ -143,18 +143,52 @@ form.inline { display: inline; }
 .uploads .badge { position: absolute; left: 4px; bottom: 4px; }
 .swatch { display: inline-block; width: 16px; height: 16px; border-radius: 4px; vertical-align: middle; border: 1px solid var(--line); }
 
+.adm-bar { display: contents; }
+.adm-menu-btn { display: none; }
+.grid2 > *, .grid-main > *, .cards > * { min-width: 0; }
+
 @media (max-width: 900px) {
   .adm { flex-direction: column; }
-  .adm-side { width: 100%; height: auto; position: sticky; top: 0; z-index: 10; flex-direction: row; align-items: center; padding: 8px; gap: 6px; overflow-x: auto; }
-  .adm-brand { padding: 0 8px; white-space: nowrap; font-size: 15px; }
-  .adm-nav { flex-direction: row; flex: none; }
-  .adm-nav a { white-space: nowrap; padding: 6px 10px; }
-  .adm-logout { padding: 0 6px; white-space: nowrap; }
-  .adm-main { padding: 16px 12px 60px; }
+  /* Top bar: brand + Menu; the menu opens as a panel with every page */
+  .adm-side { width: 100%; height: auto; position: sticky; top: 0; z-index: 50; padding: 0; overflow: visible; display: block; }
+  .adm-bar { display: flex; align-items: center; justify-content: space-between; height: 56px; padding: 0 12px 0 4px; }
+  .adm-brand { padding: 0 8px; white-space: nowrap; font-size: 16px; }
+  .adm-menu-btn { display: inline-flex; align-items: center; gap: 8px; height: 38px; padding: 0 14px; border: 1px solid rgba(255,255,255,.18); border-radius: 10px; background: rgba(255,255,255,.08); color: #fff; font: 600 14px inherit; cursor: pointer; }
+  .adm-menu-ico { display: grid; gap: 3px; width: 16px; }
+  .adm-menu-ico i { display: block; height: 2px; border-radius: 2px; background: currentColor; transition: transform .2s, opacity .2s; }
+  .adm-side.open .adm-menu-ico i:nth-child(1) { transform: translateY(5px) rotate(45deg); }
+  .adm-side.open .adm-menu-ico i:nth-child(2) { opacity: 0; }
+  .adm-side.open .adm-menu-ico i:nth-child(3) { transform: translateY(-5px) rotate(-45deg); }
+  .adm-nav, .adm-logout { display: none; }
+  .adm-side.open { position: fixed; inset: 0; overflow-y: auto; background: linear-gradient(180deg, #1c2844, #151e36); }
+  .adm-side.open .adm-nav { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 8px 12px; }
+  .adm-side.open .adm-nav a { padding: 12px 14px; border-radius: 12px; background: rgba(255,255,255,.06); white-space: normal; }
+  .adm-side.open .adm-nav a.active { background: linear-gradient(90deg, #f04577, #ff6f95); }
+  .adm-side.open .adm-logout { display: block; padding: 8px 24px 24px; }
+  .adm-menu-open, .adm-menu-open body { overflow: hidden; }
+
+  .adm-main { padding: 14px 12px 60px; }
+  .adm-head { margin-bottom: 12px; }
+  .adm-head h1 { font-size: 20px; }
   .grid2, .grid-main { grid-template-columns: 1fr; }
   .sticky { position: static; }
   .row3, .row4 { grid-template-columns: 1fr 1fr; }
-  .tbl { display: block; overflow-x: auto; }
+  .tbl { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .card { padding: 14px; margin-bottom: 12px; }
+  /* Number cards two per row instead of one long column */
+  .cards { grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+  .stat strong { font-size: 20px; }
+  /* Filters and search boxes use the full width */
+  .adm-main .filters { display: grid; grid-template-columns: 1fr 1fr; }
+  .adm-main .filters > :first-child { grid-column: 1 / -1; }
+  .adm-main .filters input, .adm-main .filters select { width: 100% !important; min-width: 0 !important; }
+  .adm-main .ol-search { flex-wrap: wrap; }
+  .adm-main .ol-search input[type=search] { flex: 1 1 100%; }
+  .adm-main .ol-search select { flex: 1; }
+  a.card, a.card:hover { text-decoration: none; }
+  .speed-card { flex-direction: column; align-items: stretch; }
+  .speed-card .btn { width: 100%; }
+  .adm-actions { width: 100%; }
 }
 @media (max-width: 520px) {
   .row2, .row3, .row4 { grid-template-columns: 1fr; }
