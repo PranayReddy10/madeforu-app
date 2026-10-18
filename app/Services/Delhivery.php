@@ -174,7 +174,7 @@ class Delhivery
 
         return [
             'md' => setting('delhivery.shipping_mode') === 'Express' ? 'E' : 'S', 'ss' => 'Delivered', 'o_pin' => $from, 'd_pin' => $pin,
-            'cgm' => (int) (ceil(max(1, $chargeableGrams) / 50) * 50),   // grams; 50 g steps keep the cache useful
+            'cgm' => max(1, $chargeableGrams),   // grams; Delhivery applies its own 500 g slabs
             'pt' => $cod ? 'COD' : 'Pre-paid', 'cod' => $cod ? round($codAmount, 2) : 0,
         ];
     }
