@@ -28,6 +28,14 @@ class CheckServer extends Command
         $this->ok((bool) config('app.key'), 'APP_KEY set', 'run: php artisan key:generate');
         $this->ok(! (bool) config('app.debug') || config('app.env') !== 'production', 'APP_DEBUG off in production', 'set APP_DEBUG=false once the site works (true shows errors to everyone).');
         $this->line('  APP_URL = '.config('app.url'));
+        // After moving the site to another folder, cached settings still point at the old one.
+        $stale = collect((array) config('view.paths'))->push(config('view.compiled'))->filter()
+            ->first(fn ($p) => ! str_starts_with((string) $p, base_path()) || ! is_dir((string) $p));
+        $this->ok(! $stale, 'Cached paths match this folder', "they point to {$stale} — run: rm -f bootstrap/cache/*.php && php artisan optimize");
+        $link = public_path('storage');
+        if (is_link($link)) {
+            $this->ok(is_dir($link), 'public/storage link', 'it points to a folder that no longer exists — run: rm public/storage && ln -s ../storage/app/public public/storage');
+        }
         if (File::exists(base_path('bootstrap/cache/config.php'))) {
             $this->warn('  Settings are cached: after every .env change run  php artisan optimize:clear && php artisan optimize');
         }
