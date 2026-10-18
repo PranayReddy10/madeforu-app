@@ -82,7 +82,15 @@ Run this while the WordPress site is still online:
 php artisan store:import-woo https://madeforu.co.in
 ```
 
-The importer reads WooCommerce's public Store API, so it needs no keys. If a security plugin or Cloudflare blocks it, use the CSV export instead: WooCommerce → Products → Export (all columns), then run:
+Without keys the importer reads WooCommerce's public Store API, which only shows published products. With a read-only REST API key (WooCommerce → Settings → Advanced → REST API → Add key, permission **Read**) it also brings in draft products (hidden), and with `--customers` your customer accounts and past orders, including the customers' uploaded photos:
+
+```bash
+php artisan store:import-woo https://madeforu.co.in --key=ck_… --secret=cs_… --customers
+```
+
+Imported customers have no password on the new site: they use **Forgot password** on the login page (by email or mobile) to set one, and find their past orders in My account. Old orders keep their WooCommerce number as `WC-1234`, and importing them sends no emails, WhatsApp or review requests and doesn't touch stock. Delete the API key afterwards.
+
+If a security plugin or Cloudflare blocks the API, use the CSV export instead. If a security plugin or Cloudflare blocks it, use the CSV export instead: WooCommerce → Products → Export (all columns), then run:
 
 ```bash
 php artisan store:import-woo --csv=wc-product-export.csv
@@ -102,30 +110,32 @@ You need a Business plan or higher, for SSH. Set the PHP version to **8.3** unde
 
    ```bash
    cd ~/domains/madeforu.co.in
-   git clone -b claude/cool-edison-l9ok82 https://github.com/PranayReddy10/madeforu-app.git app
-   cd app/store
+   git clone -b store-website https://github.com/PranayReddy10/madeforu-app.git store
+   cd store
    composer install --no-dev --optimize-autoloader
    cp .env.example .env && nano .env      # database, mail, Razorpay, analytics
    php artisan key:generate
    php artisan migrate --force
    php artisan storage:link
    php artisan store:admin you@madeforu.co.in
-   php artisan store:import-woo https://madeforu.co.in   # while WP is still live
+   php artisan store:import-woo https://madeforu.co.in --key=ck_… --secret=cs_… --customers   # while WP is still live
    php artisan optimize
    ```
+
+   The `store-website` branch holds only this website, with the Laravel app at the top level. Later updates: `cd ~/domains/madeforu.co.in/store && git pull && composer install --no-dev -o && php artisan migrate --force && php artisan optimize`.
 
 3. **Point the domain at `store/public`.**
    - **Option A (recommended):** replace public_html with a link:
 
      ```bash
-     cd ~/domains/madeforu.co.in && mv public_html public_html.old && ln -s app/store/public public_html
+     cd ~/domains/madeforu.co.in && mv public_html public_html.old && ln -s store/public public_html
      ```
 
-   - **Option B:** upload the whole `store` folder into public_html. The `.htaccess` in `store/` sends every request to `public/` and blocks `.env`, `vendor/` and the other private folders.
+   - **Option B:** clone or upload the branch straight into public_html. The top-level `.htaccess` sends every request to `public/` and blocks `.env`, `vendor/` and the other private folders.
 4. **Cron job.** hPanel → Advanced → Cron Jobs, every minute:
 
    ```
-   cd ~/domains/madeforu.co.in/app/store && php artisan schedule:run
+   cd ~/domains/madeforu.co.in/store && php artisan schedule:run
    ```
 
    This deletes abandoned photo uploads and pings IndexNow.
@@ -195,3 +205,10 @@ For WhatsApp reminders (needs the WhatsApp API above), add a **Marketing** templ
 ```
 Hi {{1}}, you left {{2}} in your MadeForU cart 💝 Your photos are saved — finish your order here: {{3}}
 ```
+
+## Accounts and reviews
+
+- **Forgot password:** "Forgot password?" on the login page emails a reset link, found by email or mobile number. Mail must be set up in `.env`.
+- **Reviews with photos:** customers can add up to 3 photos to a review (resized, location data removed). Reviews from people who bought the product show **Verified buyer**. Customer photos appear in a strip above the reviews.
+- **Review requests:** a couple of days after an order is delivered, the customer gets "How was your gift?" by email (and WhatsApp when set up) with a link to review every item on one page. Settings → Reviews: days to wait, and whether verified 4★/5★ reviews publish straight away (otherwise approve them in Admin → Reviews).
+- Optional WhatsApp template **review_request** (Utility): `Hi {{1}}, how was your MadeForU order {{2}}? 💝 We'd love a quick review — photos of your gift are extra special: {{3}}`

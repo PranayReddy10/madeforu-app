@@ -46,6 +46,12 @@ class SettingController extends Controller
             'delhivery.default_weight' => ['Default weight per item (grams)', 'number', 'Used when a product has no weight set.'],
             'delhivery.check_pincodes' => ['Check PIN codes with Delhivery at checkout', 'bool', 'Stops orders to places Delhivery can’t reach, and COD where it can’t collect cash.'],
         ],
+        'Reviews' => [
+            'reviews.request_enabled' => ['Ask for a review after delivery', 'bool', 'Email (and WhatsApp when set up) with a link to review each item, with photos.'],
+            'reviews.request_days' => ['Days after delivery', 'number', ''],
+            'reviews.auto_approve' => ['Publish verified 4★ and 5★ reviews straight away', 'bool', 'Otherwise every review waits for you in Admin → Reviews.'],
+            'reviews.whatsapp_template' => ['WhatsApp template for review requests', 'text', 'Optional. {{1}} name, {{2}} order no., {{3}} review link.'],
+        ],
         'Abandoned cart reminders' => [
             'abandoned.enabled' => ['Save carts and send reminders', 'bool', 'A cart is saved once the shopper types an email or phone at checkout.'],
             'abandoned.first_hours' => ['First reminder after (hours)', 'number', ''],

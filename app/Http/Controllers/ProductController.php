@@ -73,8 +73,18 @@ class ProductController extends Controller
             'name' => 'required|string|max:80',
             'rating' => 'required|integer|between:1,5',
             'body' => 'nullable|string|max:2000',
+            'photos' => 'nullable|array|max:3',
+            'photos.*' => 'image|max:10240',
+            'website' => 'prohibited',   // honeypot: people never see this field, bots fill it
         ]);
-        Review::create($data + ['product_id' => $product->id, 'user_id' => $request->user()?->id, 'is_approved' => false]);
+        $order = Review::boughtBy($product->id, $request->user());
+        Review::create([
+            'product_id' => $product->id, 'user_id' => $request->user()?->id, 'order_id' => $order?->id,
+            'name' => $data['name'], 'rating' => $data['rating'], 'body' => $data['body'] ?? null,
+            'photos' => Review::storePhotos($request->file('photos', [])) ?: null,
+            'is_verified' => (bool) $order,
+            'is_approved' => $order && setting('reviews.auto_approve') && $data['rating'] >= 4,
+        ]);
 
         return back()->with('status', 'Thank you! Your review will appear once it is approved.');
     }

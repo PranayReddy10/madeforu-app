@@ -187,22 +187,33 @@
         @if($product->rating_count)
             <p class="big-rating"><b>{{ number_format($product->rating_avg, 1) }}</b> <span class="stars-sm"><span style="--r: {{ $product->rating_avg }}"></span></span> <span class="muted">based on {{ $product->rating_count }} {{ \Illuminate\Support\Str::plural('review', $product->rating_count) }}</span></p>
         @endif
+        @php $reviewPhotos = $product->reviews->flatMap(fn ($r) => $r->photoUrls())->take(12); @endphp
+        @if($reviewPhotos->isNotEmpty())
+            <div class="review-photos" aria-label="Customer photos">
+                @foreach($reviewPhotos as $src)<a href="{{ $src }}" target="_blank" rel="noopener"><img src="{{ $src }}" alt="Customer photo of {{ $product->name }}" loading="lazy" width="120" height="120"></a>@endforeach
+            </div>
+        @endif
         @foreach($product->reviews->take(10) as $r)
             <article class="review">
                 <div class="stars-sm"><span style="--r: {{ $r->rating }}"></span></div>
-                <p>{{ $r->body }}</p>
-                <small class="muted">{{ $r->name }} · {{ $r->created_at->format('j M Y') }}</small>
+                @if($r->body)<p>{{ $r->body }}</p>@endif
+                @if($r->photos)
+                    <div class="review-photos small">@foreach($r->photoUrls() as $src)<a href="{{ $src }}" target="_blank" rel="noopener"><img src="{{ $src }}" alt="Photo from {{ $r->name }}" loading="lazy" width="80" height="80"></a>@endforeach</div>
+                @endif
+                <small class="muted">{{ $r->name }}@if($r->is_verified) · <span class="verified">✓ Verified buyer</span>@endif · {{ $r->created_at->format('j M Y') }}</small>
             </article>
         @endforeach
         <details class="review-form">
             <summary class="btn ghost">Write a review</summary>
-            <form method="post" action="{{ route('product.review', $product) }}">
+            <form method="post" action="{{ route('product.review', $product) }}" enctype="multipart/form-data">
                 @csrf
                 <div class="rate-input" role="radiogroup" aria-label="Rating">
                     @for($i = 5; $i >= 1; $i--)<input type="radio" id="r{{ $i }}" name="rating" value="{{ $i }}" required><label for="r{{ $i }}" title="{{ $i }} stars">★</label>@endfor
                 </div>
                 <input type="text" name="name" placeholder="Your name" required maxlength="80" value="{{ auth()->user()?->name }}">
                 <textarea name="body" rows="3" placeholder="How did you like it?" maxlength="2000"></textarea>
+                <label class="small">Add up to 3 photos of your gift (optional)<input type="file" name="photos[]" accept="image/*" multiple></label>
+                <input type="text" name="website" class="hp" tabindex="-1" autocomplete="off" aria-hidden="true">
                 <button class="btn primary">Submit review</button>
             </form>
         </details>

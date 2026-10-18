@@ -13,6 +13,8 @@ class ImportWoo extends Command
         {--key= : WooCommerce REST API consumer key (ck_...). With key + secret, drafts are imported too (hidden)}
         {--secret= : WooCommerce REST API consumer secret (cs_...)}
         {--csv= : Import a WooCommerce product export CSV instead of calling the site}
+        {--customers : Also import customer accounts and past orders (needs --key/--secret)}
+        {--only-customers : Import only customer accounts and past orders}
         {--no-images : Keep image URLs pointing at the old site instead of downloading them}
         {--no-upload-fields : Do not add the default "upload your photo" field to new products}
         {--skip-pages : Do not import WordPress pages}
@@ -33,8 +35,12 @@ class ImportWoo extends Command
         try {
             if ($csv = $this->option('csv')) {
                 $importer->importCsv($csv);
-            } else {
+            } elseif (! $this->option('only-customers')) {
                 $importer->run(! $this->option('skip-pages'), ! $this->option('skip-reviews'));
+            }
+            if ($this->option('customers') || $this->option('only-customers')) {
+                $importer->importCustomers();
+                $importer->importOrders();
             }
         } catch (\Throwable $e) {
             $this->error($e->getMessage());

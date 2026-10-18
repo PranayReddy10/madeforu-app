@@ -47,6 +47,14 @@ return [
         'check_pincodes' => (bool) env('DELHIVERY_CHECK_PINCODES', true),
     ],
 
+    // Reviews
+    'reviews' => [
+        'request_enabled' => (bool) env('REVIEW_REQUESTS', true),
+        'request_days' => (int) env('REVIEW_REQUEST_DAYS', 2),
+        'auto_approve' => (bool) env('REVIEWS_AUTO_APPROVE', false),
+        'whatsapp_template' => env('WHATSAPP_TEMPLATE_REVIEW'),
+    ],
+
     // Abandoned cart reminders
     'abandoned' => [
         'enabled' => (bool) env('ABANDONED_CART_REMINDERS', true),

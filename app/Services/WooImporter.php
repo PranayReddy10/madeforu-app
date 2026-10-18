@@ -3,18 +3,23 @@
 namespace App\Services;
 
 use App\Models\Category;
+use App\Models\CustomerUpload;
 use App\Models\CustomizationField;
 use App\Models\Media;
+use App\Models\Order;
 use App\Models\Page;
 use App\Models\Product;
 use App\Models\ProductImage;
 use App\Models\ProductVariant;
 use App\Models\Redirect;
 use App\Models\Review;
+use App\Models\User;
 use Closure;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 /**
@@ -461,6 +466,229 @@ class WooImporter
         }
 
         return $slug;
+    }
+
+    /** WooCommerce's Indian state codes → the names the checkout uses. */
+    private const STATES = ['AN' => 'Andaman and Nicobar Islands', 'AP' => 'Andhra Pradesh', 'AR' => 'Arunachal Pradesh', 'AS' => 'Assam',
+        'BR' => 'Bihar', 'CH' => 'Chandigarh', 'CT' => 'Chhattisgarh', 'CG' => 'Chhattisgarh', 'DN' => 'Dadra and Nagar Haveli and Daman and Diu',
+        'DD' => 'Dadra and Nagar Haveli and Daman and Diu', 'DL' => 'Delhi', 'GA' => 'Goa', 'GJ' => 'Gujarat', 'HR' => 'Haryana',
+        'HP' => 'Himachal Pradesh', 'JK' => 'Jammu and Kashmir', 'JH' => 'Jharkhand', 'KA' => 'Karnataka', 'KL' => 'Kerala', 'LA' => 'Ladakh',
+        'LD' => 'Lakshadweep', 'MP' => 'Madhya Pradesh', 'MH' => 'Maharashtra', 'MN' => 'Manipur', 'ML' => 'Meghalaya', 'MZ' => 'Mizoram',
+        'NL' => 'Nagaland', 'OR' => 'Odisha', 'OD' => 'Odisha', 'PY' => 'Puducherry', 'PB' => 'Punjab', 'RJ' => 'Rajasthan', 'SK' => 'Sikkim',
+        'TN' => 'Tamil Nadu', 'TS' => 'Telangana', 'TG' => 'Telangana', 'TR' => 'Tripura', 'UP' => 'Uttar Pradesh', 'UK' => 'Uttarakhand',
+        'UT' => 'Uttarakhand', 'WB' => 'West Bengal'];
+
+    /**
+     * Customer accounts. They get no password here: "Forgot password" on the new site lets them set one.
+     * Needs REST API keys.
+     */
+    public function importCustomers(): void
+    {
+        if (! $this->usesApiKeys()) {
+            throw new \RuntimeException('Importing customers needs WooCommerce REST API keys (--key/--secret).');
+        }
+        $customers = $this->all('/wp-json/wc/v3/customers', ['role' => 'all', 'orderby' => 'id', 'order' => 'asc']);
+        $this->say('Customers: '.count($customers));
+        $this->stats['customers'] = 0;
+        foreach ($customers as $c) {
+            $email = strtolower(trim((string) ($c['email'] ?? '')));
+            if (! filter_var($email, FILTER_VALIDATE_EMAIL) || in_array($c['role'] ?? '', ['administrator', 'shop_manager'], true)) {
+                continue;
+            }
+            $name = trim(($c['first_name'] ?? '').' '.($c['last_name'] ?? ''))
+                ?: trim(($c['billing']['first_name'] ?? '').' '.($c['billing']['last_name'] ?? '')) ?: ($c['username'] ?? Str::before($email, '@'));
+            $user = User::where('woo_id', $c['id'])->first() ?? User::where('email', $email)->first() ?? new User;
+            $phone = $this->phone($c['billing']['phone'] ?? '');
+            $user->forceFill([
+                'woo_id' => $c['id'],
+                'name' => $user->name ?: $name,
+                'email' => $user->email ?: $email,
+                'phone' => $user->phone ?: ($phone && ! User::where('phone', $phone)->whereKeyNot($user->id ?? 0)->exists() ? $phone : null),
+                // Unusable until they set one with "Forgot password".
+                'password' => $user->password ?: Hash::make(Str::random(40)),
+                'created_at' => $user->created_at ?? (! empty($c['date_created']) ? date('Y-m-d H:i:s', strtotime($c['date_created'])) : now()),
+            ])->save();
+            $this->stats['customers']++;
+        }
+    }
+
+    /**
+     * Past orders, so customers see their history and you keep your records. No emails, WhatsApp,
+     * stock or invoice numbers are triggered for them. Needs REST API keys.
+     */
+    public function importOrders(): void
+    {
+        if (! $this->usesApiKeys()) {
+            throw new \RuntimeException('Importing orders needs WooCommerce REST API keys (--key/--secret).');
+        }
+        $orders = $this->all('/wp-json/wc/v3/orders', ['status' => 'any', 'orderby' => 'id', 'order' => 'asc']);
+        $orders = array_filter($orders, fn ($o) => ! in_array($o['status'] ?? '', ['trash', 'checkout-draft'], true));
+        $this->say('Orders: '.count($orders));
+        $this->stats['orders'] = 0;
+        $products = Product::whereNotNull('woo_id')->pluck('id', 'woo_id');
+        $variants = ProductVariant::whereNotNull('woo_id')->pluck('id', 'woo_id');
+        $users = User::whereNotNull('woo_id')->pluck('id', 'woo_id');
+
+        foreach ($orders as $w) {
+            $ship = array_filter($w['shipping'] ?? []) ? $w['shipping'] : ($w['billing'] ?? []);
+            $bill = $w['billing'] ?? [];
+            $status = $w['status'] ?? 'pending';
+            $method = ($w['payment_method'] ?? '') === 'cod' ? 'cod' : (str_contains((string) ($w['payment_method'] ?? ''), 'cashfree') ? 'cashfree' : (($w['payment_method'] ?? '') ?: 'razorpay'));
+            $paid = ! empty($w['date_paid']) || ($status === 'completed' && $method === 'cod');
+            $email = strtolower(trim((string) ($bill['email'] ?? '')));
+            $userId = $users[$w['customer_id'] ?? 0] ?? ($email ? User::where('email', $email)->value('id') : null);
+            $codFee = collect($w['fee_lines'] ?? [])->sum(fn ($f) => (float) $f['total']);
+            $created = ! empty($w['date_created']) ? date('Y-m-d H:i:s', strtotime($w['date_created'])) : now();
+
+            $order = Order::firstOrNew(['woo_id' => $w['id']]);
+            $order->forceFill([
+                'number' => 'WC-'.($w['number'] ?? $w['id']),
+                'user_id' => $userId,
+                'status' => match ($status) {
+                    'processing' => 'confirmed', 'completed' => 'delivered', 'cancelled', 'refunded', 'failed' => 'cancelled', default => 'pending',
+                },
+                'payment_method' => $method,
+                'payment_status' => $status === 'refunded' ? 'refunded' : ($status === 'failed' ? 'failed' : ($paid ? 'paid' : 'unpaid')),
+                'name' => trim(($ship['first_name'] ?? '').' '.($ship['last_name'] ?? '')) ?: trim(($bill['first_name'] ?? '').' '.($bill['last_name'] ?? '')) ?: 'Customer',
+                'email' => $email ?: 'no-email@madeforu.co.in',
+                'phone' => $this->phone($bill['phone'] ?? ($ship['phone'] ?? '')) ?: '0000000000',
+                'address_line1' => ($ship['address_1'] ?? '') ?: '-',
+                'address_line2' => ($ship['address_2'] ?? '') ?: null,
+                'city' => ($ship['city'] ?? '') ?: '-',
+                'state' => self::STATES[strtoupper((string) ($ship['state'] ?? ''))] ?? (($ship['state'] ?? '') ?: '-'),
+                'pincode' => preg_replace('/\s/', '', (string) ($ship['postcode'] ?? '')) ?: '000000',
+                'notes' => ($w['customer_note'] ?? '') ?: null,
+                'subtotal' => round(collect($w['line_items'] ?? [])->sum(fn ($l) => (float) $l['subtotal']), 2),
+                'discount' => (float) ($w['discount_total'] ?? 0),
+                'coupon_code' => collect($w['coupon_lines'] ?? [])->pluck('code')->implode(', ') ?: null,
+                'shipping' => (float) ($w['shipping_total'] ?? 0),
+                'cod_fee' => $codFee,
+                'total' => (float) ($w['total'] ?? 0),
+                'razorpay_payment_id' => $method === 'razorpay' ? (($w['transaction_id'] ?? '') ?: null) : null,
+                'stock_reduced' => false,
+                'delivered_at' => $status === 'completed' && ! empty($w['date_completed']) ? date('Y-m-d H:i:s', strtotime($w['date_completed'])) : null,
+                // Old orders never get a review request from the new site.
+                'review_requested_at' => $created,
+                'created_at' => $created,
+                'updated_at' => ! empty($w['date_modified']) ? date('Y-m-d H:i:s', strtotime($w['date_modified'])) : $created,
+            ]);
+            $order->timestamps = false;
+            $order->save();
+
+            $order->items()->delete();
+            foreach ($w['line_items'] ?? [] as $li) {
+                $qty = max(1, (int) $li['quantity']);
+                // Customer photos: the MadeForU upload plugin keeps the real links in _mfu_cb_data.
+                [$photoParts, $photoLabels] = $this->photoParts($li, (int) $w['id']);
+                // What the customer chose or typed. Photo fields are replaced by the photos themselves.
+                $meta = collect($li['meta_data'] ?? [])->filter(fn ($m) => ! str_starts_with((string) ($m['key'] ?? '_'), '_') && is_scalar($m['display_value'] ?? $m['value'] ?? null))
+                    ->map(fn ($m) => ['label' => strip_tags((string) ($m['display_key'] ?? $m['key'])), 'type' => 'text',
+                        'value' => trim(html_entity_decode(strip_tags((string) ($m['display_value'] ?? $m['value'])), ENT_QUOTES))])
+                    ->filter(fn ($m) => $m['value'] !== '' && ! in_array(strtolower($m['label']), $photoLabels, true))
+                    ->values()->all();
+                $meta = array_merge(array_map(fn ($p) => array_diff_key($p, ['uploads' => 1]), $photoParts), $meta);
+                $item = $order->items()->create([
+                    'product_id' => $products[$li['product_id'] ?? 0] ?? null,
+                    'variant_id' => $variants[$li['variation_id'] ?? 0] ?? null,
+                    'name' => html_entity_decode((string) $li['name'], ENT_QUOTES),
+                    'sku' => ($li['sku'] ?? '') ?: null,
+                    'qty' => $qty,
+                    'unit_price' => round((float) $li['total'] / $qty, 2),
+                    'line_total' => (float) $li['total'],
+                    'customization' => $meta ?: null,
+                ]);
+                foreach ($photoParts as $part) {
+                    CustomerUpload::whereIn('id', $part['uploads'])->update(['order_item_id' => $item->id]);
+                }
+            }
+            $this->stats['orders']++;
+        }
+    }
+
+    /**
+     * Download an order line's customer photos into private storage and describe them the way new
+     * orders do: [{label, type: images, files: [tokens], slots: [...], uploads: [ids]}].
+     *
+     * @return array{0: array, 1: array<int, string>} parts, lower-cased labels of the photo fields
+     */
+    private function photoParts(array $li, int $wooOrderId): array
+    {
+        $data = collect($li['meta_data'] ?? [])->firstWhere('key', '_mfu_cb_data')['value'] ?? null;
+        if (! is_array($data)) {
+            return [[], []];
+        }
+        $byLabel = [];
+        foreach ($data as $block) {
+            foreach ($block['fields'] ?? [] as $f) {
+                $urls = collect($f['instances'] ?? [])->pluck('photo_url')->filter()->values();
+                if ($urls->isEmpty()) {
+                    continue;
+                }
+                $label = trim((string) ($f['label'] ?? 'Photos'));
+                foreach ($urls as $k => $url) {
+                    $byLabel[$label][] = ['url' => $url, 'slot' => count($data) > 1 ? 'Item '.($block['item'] ?? 1).($urls->count() > 1 ? ' · photo '.($k + 1) : '') : ($urls->count() > 1 ? 'Photo '.($k + 1) : $label)];
+                }
+            }
+        }
+        $parts = [];
+        foreach ($byLabel as $label => $photos) {
+            $tokens = $ids = $slots = [];
+            foreach ($photos as $p) {
+                if ($u = $this->customerPhoto($p['url'], $wooOrderId)) {
+                    $tokens[] = $u->token;
+                    $ids[] = $u->id;
+                    $slots[] = $p['slot'];
+                }
+            }
+            $parts[] = ['label' => $label, 'type' => 'images', 'files' => $tokens, 'slots' => $slots, 'uploads' => $ids];
+            $this->stats['photos'] = ($this->stats['photos'] ?? 0) + count($tokens);
+        }
+
+        return [$parts, array_map('strtolower', array_keys($byLabel))];
+    }
+
+    /** One customer photo, kept privately like new uploads. Re-running the import reuses it. */
+    private function customerPhoto(string $url, int $wooOrderId): ?CustomerUpload
+    {
+        $name = Str::limit(basename((string) parse_url($url, PHP_URL_PATH)), 150, '') ?: md5($url).'.jpg';
+        $path = 'customer-uploads/woo/'.$wooOrderId.'/'.$name;
+        if ($existing = CustomerUpload::where('path', $path)->first()) {
+            return $existing;
+        }
+        try {
+            $res = Http::timeout(60)->retry(2, 1000, throw: false)->get($url);
+        } catch (\Throwable) {
+            $res = null;
+        }
+        if (! $res || ! $res->successful()) {
+            $this->say('    ! customer photo not downloaded: '.$url);
+
+            return null;
+        }
+        $disk = Storage::disk('local');
+        $disk->put($path, $res->body());
+        $token = (string) Str::uuid();
+        $thumb = 'customer-uploads/woo/'.$wooOrderId.'/'.pathinfo($name, PATHINFO_FILENAME).'_thumb.jpg';
+        [$w, $h] = @getimagesize($disk->path($path)) ?: [null, null];
+
+        return CustomerUpload::create([
+            'token' => $token,
+            'session_id' => 'woo-import',
+            'path' => $path,
+            'thumb_path' => ImageTools::thumbnail($disk->path($path), $disk->path($thumb), 480) ? $thumb : null,
+            'original_name' => $name,
+            'mime' => (string) ($res->header('Content-Type') ?: 'image/jpeg'),
+            'size' => strlen($res->body()),
+            'width' => $w,
+            'height' => $h,
+        ]);
+    }
+
+    private function phone(string $raw): ?string
+    {
+        $d = substr(preg_replace('/\D/', '', $raw), -10);
+
+        return preg_match('/^[6-9]\d{9}$/', $d) ? $d : null;
     }
 
     /** SEO titles/descriptions written in Yoast, when the site runs it. */

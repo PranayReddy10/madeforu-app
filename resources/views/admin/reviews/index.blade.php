@@ -8,9 +8,10 @@
     @forelse ($reviews as $r)
         <tr class="{{ $r->is_approved ? '' : 'pending' }}">
             <td>@if ($r->product)<a href="{{ $r->product->url() }}" target="_blank" rel="noopener">{{ $r->product->name }}</a>@else — @endif</td>
-            <td>{{ $r->name }}</td>
+            <td>{{ $r->name }}@if ($r->is_verified)<br><span class="badge ok">Verified buyer</span>@endif @if ($r->order)<br><a class="small" href="{{ route('admin.orders.show', $r->order) }}">{{ $r->order->number }}</a>@endif</td>
             <td class="nowrap stars">{{ str_repeat('★', $r->rating) }}{{ str_repeat('☆', 5 - $r->rating) }}</td>
-            <td>{{ \Illuminate\Support\Str::limit($r->body, 220) }}</td>
+            <td>{{ \Illuminate\Support\Str::limit($r->body, 220) }}
+                @if ($r->photos)<div class="uploads">@foreach ($r->photoUrls() as $src)<a href="{{ $src }}" target="_blank" rel="noopener"><img src="{{ $src }}" alt="" loading="lazy"></a>@endforeach</div>@endif</td>
             <td class="nowrap"><small>{{ $r->created_at->format('d M Y') }}</small></td>
             <td class="nowrap">
                 <form method="post" action="{{ route('admin.reviews.update', $r) }}" class="inline">@csrf @method('PUT')

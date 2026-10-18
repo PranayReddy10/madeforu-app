@@ -4,8 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use App\Services\Seo;
+use Illuminate\Auth\Events\PasswordReset;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Password;
+use Illuminate\Support\Str;
 
 class AuthController extends Controller
 {
@@ -59,6 +62,55 @@ class AuthController extends Controller
         }
 
         return redirect()->intended(route('account'));
+    }
+
+    public function showForgot(Seo $seo)
+    {
+        $seo->title('Forgot password')->noindex();
+
+        return view('auth.forgot');
+    }
+
+    /** Email a reset link. Accepts the mobile number too, since many customers remember that instead. */
+    public function sendReset(Request $request)
+    {
+        $data = $request->validate(['login' => 'required|string|max:160']);
+        $login = trim($data['login']);
+        $email = str_contains($login, '@') ? $login
+            : User::where('phone', substr(preg_replace('/\D/', '', $login), -10))->value('email');
+        if ($email) {
+            Password::sendResetLink(['email' => $email]);
+        }
+
+        // Same answer either way, so the form can't be used to find out who has an account.
+        return back()->with('status', 'If we have an account for that, we have emailed a link to set a new password. Please check your inbox (and spam).');
+    }
+
+    public function showReset(Request $request, string $token, Seo $seo)
+    {
+        $seo->title('Set a new password')->noindex();
+
+        return view('auth.reset', ['token' => $token, 'email' => (string) $request->query('email')]);
+    }
+
+    public function reset(Request $request)
+    {
+        $data = $request->validate([
+            'token' => 'required|string',
+            'email' => 'required|email',
+            'password' => 'required|string|min:8|confirmed',
+        ]);
+        $status = Password::reset($data, function (User $user, string $password) {
+            $user->forceFill(['password' => $password, 'remember_token' => Str::random(60)])->save();
+            event(new PasswordReset($user));
+            Auth::login($user, true);
+        });
+        if ($status !== Password::PASSWORD_RESET) {
+            return back()->withInput($request->only('email'))->withErrors(['email' => __($status)]);
+        }
+        $request->session()->regenerate();
+
+        return redirect()->route('account')->with('status', 'Your password is set. You are signed in.');
     }
 
     public function logout(Request $request)
