@@ -8,6 +8,7 @@ use App\Models\Media;
 use App\Models\Product;
 use App\Models\ProductImage;
 use App\Services\Stock;
+use App\Support\Personalisation;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -17,7 +18,7 @@ class ProductController extends Controller
 {
     public function index(Request $request)
     {
-        $q = Product::with(['images', 'variants', 'primaryCategory']);
+        $q = Product::with(['images', 'variants', 'primaryCategory', 'customizationFields']);
         if ($s = trim((string) $request->query('q'))) {
             $q->where(fn ($w) => $w->where('name', 'like', "%{$s}%")->orWhere('sku', 'like', "%{$s}%"));
         }
@@ -40,6 +41,38 @@ class ProductController extends Controller
             'products' => $q->latest()->paginate(30)->withQueryString(),
             'categories' => Category::orderBy('path')->get(),
         ]);
+    }
+
+    /** Apply a personalisation preset, or copy one product's setup, to many products at once. */
+    public function bulkPersonalisation(Request $request)
+    {
+        $data = $request->validate([
+            'source' => 'required|string',
+            'ids' => 'nullable|array',
+            'ids.*' => 'integer',
+            'category' => 'nullable|integer',
+        ]);
+        if (str_starts_with($data['source'], 'product:')) {
+            $from = Product::with('customizationFields')->findOrFail((int) substr($data['source'], 8));
+            $fields = Personalisation::fromProduct($from);
+            $label = 'the setup of “'.$from->name.'”';
+        } else {
+            $preset = Personalisation::presets()[$data['source']] ?? abort(422, 'Unknown preset.');
+            [$label, $fields] = [$preset[0], $preset[1]];
+        }
+        $targets = ! empty($data['category'])
+            ? Product::whereHas('categories', fn ($q) => $q->where('categories.id', $data['category']))->get()
+            : Product::whereIn('id', $data['ids'] ?? [])->get();
+        if ($targets->isEmpty()) {
+            return back()->with('error', 'Tick some products (or choose a category) first.');
+        }
+        foreach ($targets as $p) {
+            if (! isset($from) || ! $p->is($from)) {
+                Personalisation::apply($p, $fields);
+            }
+        }
+
+        return back()->with('status', 'Applied '.$label.' to '.$targets->count().' '.Str::plural('product', $targets->count()).'.');
     }
 
     public function create()
@@ -166,6 +199,7 @@ class ProductController extends Controller
             'fields.*.options' => 'nullable|string|max:3000',
             'fields.*.extra_price' => 'nullable|numeric|min:0',
             'fields.*.position' => 'nullable|integer',
+            'fields.*.slots' => 'nullable|string|max:1000',
         ]);
 
         $stockBefore = $product->stock_qty;
@@ -295,6 +329,11 @@ class ProductController extends Controller
                 }
                 $min = (int) ($f['min_files'] ?? 1);
                 $max = max($min, (int) ($f['max_files'] ?? 1));
+                if ($f['type'] === 'images') {
+                    // One label per photo box, e.g. "His photo" / "Her photo"
+                    $slots = collect(preg_split('/\r?\n/', (string) ($f['slots'] ?? '')))->map('trim')->filter()->take($max)->values();
+                    $options = $slots->isNotEmpty() ? $slots->map(fn ($l) => ['label' => $l])->all() : null;
+                }
                 $row = [
                     'type' => $f['type'],
                     'label' => $label,

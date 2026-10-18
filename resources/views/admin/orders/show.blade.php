@@ -1,8 +1,9 @@
 @extends('admin.layout')
 @section('title', 'Order '.$order->number)
 @section('actions')
+    <a class="btn ghost" href="{{ route('admin.orders.production', $order) }}" target="_blank" rel="noopener">🖨 Production sheet</a>
     @if ($order->items->sum(fn ($i) => $i->uploads->count()))
-        <a class="btn" href="{{ route('admin.orders.uploads', $order) }}">Download all photos (ZIP)</a>
+        <a class="btn" href="{{ route('admin.orders.uploads', $order) }}">⬇ Download all photos (ZIP)</a>
     @endif
 @endsection
 @section('content')
@@ -21,25 +22,41 @@
                     </div>
                     <div class="right">{{ $item->qty }} × {{ money($item->unit_price) }}<br><strong>{{ money($item->line_total) }}</strong></div>
                 </div>
-                @foreach ($item->customization ?? [] as $c)
+                @php $row = $sheet[$idx]; @endphp
+                @forelse ($row['parts'] as $part)
                     <div class="oi-custom">
-                        <span class="muted">{{ $c['label'] }}:</span>
-                        @if (($c['type'] ?? '') === 'images')
-                            <div class="uploads">
-                                @foreach ($item->uploads->whereIn('token', $c['files'] ?? []) as $u)
-                                    <a href="{{ $u->fullUrl() }}" target="_blank" rel="noopener" title="{{ $u->original_name }} {{ $u->width ? '('.$u->width.'×'.$u->height.')' : '' }}">
-                                        <img src="{{ $u->thumb_path ? $u->thumbUrl() : $u->fullUrl() }}" alt="{{ $u->original_name }}" loading="lazy">
-                                        @if ($u->width && min($u->width, $u->height) < 800)<span class="badge warn">low res</span>@endif
-                                    </a>
-                                @endforeach
+                        <span class="muted">{{ $part['label'] }}</span>
+                        @if ($part['type'] === 'images')
+                            <div class="uploads big">
+                                @forelse ($part['photos'] as $p)
+                                    @php $u = $p['upload']; $lowRes = $u->width && min($u->width, $u->height) < 800; @endphp
+                                    <figure class="up">
+                                        <a href="{{ $u->fullUrl() }}" target="_blank" rel="noopener" title="Open full size">
+                                            <img src="{{ $u->thumb_path ? $u->thumbUrl() : $u->fullUrl() }}" alt="{{ $p['slot'] }}" loading="lazy">
+                                        </a>
+                                        <figcaption>
+                                            <b>{{ $p['slot'] }}</b>
+                                            <small class="muted">{{ $u->width ? $u->width.'×'.$u->height.' · ' : '' }}{{ number_format($u->size / 1048576, 1) }} MB</small>
+                                            @if ($lowRes)<span class="badge warn">low res — may print blurry</span>@endif
+                                            <a class="btn small ghost" href="{{ route('admin.orders.upload', [$order, $u]) }}">⬇ Download</a>
+                                        </figcaption>
+                                    </figure>
+                                @empty
+                                    <span class="err small">No photos were uploaded.</span>
+                                @endforelse
                             </div>
-                        @elseif (($c['type'] ?? '') === 'color')
-                            <span class="swatch" style="background: {{ $c['value'] }}"></span> {{ $c['value'] }}
+                        @elseif ($part['type'] === 'color')
+                            <div><span class="swatch" style="background: {{ $part['value'] }}"></span> {{ $part['value'] }}</div>
                         @else
-                            <strong class="pre">{{ $c['value'] }}</strong>
+                            <div class="print-text">
+                                <strong class="pre">{{ $part['value'] !== '' ? $part['value'] : '—' }}</strong>
+                                @if ($part['value'] !== '')<button type="button" class="btn small ghost" data-copy="{{ $part['value'] }}">Copy</button>@endif
+                            </div>
                         @endif
                     </div>
-                @endforeach
+                @empty
+                    <p class="muted small">No personalisation on this item.</p>
+                @endforelse
             </div>
         @endforeach
         <table class="tbl totals">

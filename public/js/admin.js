@@ -9,6 +9,18 @@
     if (b && !confirm(b.dataset.confirm)) { e.preventDefault(); e.stopPropagation(); }
   }, true);
 
+  // Select-all checkbox in lists
+  document.addEventListener('change', (e) => {
+    if (e.target.matches('[data-check-all]')) $$('[data-check]').forEach((c) => { c.checked = e.target.checked; });
+  });
+
+  // Copy text to clipboard (order personalisation)
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-copy]');
+    if (!b) return;
+    navigator.clipboard && navigator.clipboard.writeText(b.dataset.copy).then(() => { const t = b.textContent; b.textContent = 'Copied ✓'; setTimeout(() => { b.textContent = t; }, 1500); });
+  });
+
   // Repeatable rows: <template> uses __i__ as the index placeholder
   const counters = {};
   function nextIndex(name) {
@@ -55,6 +67,24 @@
     apply();
   }
   $$('#fields [data-row]').forEach(initFieldRow);
+
+  // Personalisation presets: one click replaces the fields with a ready-made setup
+  const presetBar = $('[data-presets]');
+  if (presetBar) {
+    const presets = JSON.parse(presetBar.dataset.presets);
+    presetBar.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-preset]');
+      if (!b) return;
+      const box = document.getElementById('fields');
+      if (box.querySelector('[data-row]') && !confirm('Replace the current personalisation fields with “' + presets[b.dataset.preset].label + '”?')) return;
+      box.innerHTML = '';
+      presets[b.dataset.preset].fields.forEach((f, i) => {
+        const row = addRow('fields', 'tpl-field', Object.assign({ min_files: 1, max_files: 1, max_length: '', help: '', extra_price: 0 }, f, { position: i }));
+        const sel = row && row.querySelector('[data-field-type]');
+        if (sel) sel.dispatchEvent(new Event('change'));
+      });
+    });
+  }
 
   // Character counters
   $$('.counter[data-for]').forEach((c) => {

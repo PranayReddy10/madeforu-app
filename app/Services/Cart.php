@@ -207,6 +207,7 @@ class Cart
                     'type' => $field->type,
                     'value' => $field->type === 'images' ? null : $v,
                     'uploads' => $field->type === 'images' ? collect($v)->map(fn ($t) => $uploads->get($t))->filter()->values() : collect(),
+                    'slots' => $field->type === 'images' ? collect($field->options ?? [])->pluck('label')->all() : [],
                 ];
             }
             $out->push((object) [

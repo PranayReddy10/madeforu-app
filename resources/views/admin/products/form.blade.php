@@ -17,7 +17,8 @@
     $fields = old('fields', $product->exists ? $product->customizationFields->map(fn ($f) => [
         'id' => $f->id, 'type' => $f->type, 'label' => $f->label, 'help' => $f->help, 'required' => $f->required,
         'min_files' => $f->min_files, 'max_files' => $f->max_files, 'max_length' => $f->max_length,
-        'options' => collect($f->options ?? [])->map(fn ($o) => $o['label'].'|'.($o['price'] ?? 0))->implode("\n"),
+        'options' => $f->type === 'select' ? collect($f->options ?? [])->map(fn ($o) => $o['label'].'|'.($o['price'] ?? 0))->implode("\n") : '',
+        'slots' => $f->type === 'images' ? collect($f->options ?? [])->pluck('label')->implode("\n") : '',
         'extra_price' => $f->extra_price, 'position' => $f->position,
     ])->all() : [
         ['type' => 'images', 'label' => 'Upload your photo', 'help' => 'Clear, well-lit photos print best.', 'required' => true, 'min_files' => 1, 'max_files' => 1, 'position' => 0],
@@ -82,6 +83,11 @@
         <section class="card">
             <h2>Customer personalisation</h2>
             <p class="muted">What the customer uploads or types before adding to cart. A "Photo upload" field sets how many photos this product needs.</p>
+            @php $presetJson = collect(\App\Support\Personalisation::presets())->map(fn ($p) => ['label' => $p[0], 'fields' => collect($p[1])->map(fn ($f) => array_merge($f, ['slots' => implode("\n", $f['slots'] ?? [])]))->all()]); @endphp
+            <div class="preset-bar" data-presets='@json($presetJson)'>
+                <span class="muted small">Quick setup:</span>
+                @foreach ($presetJson as $key => $p)<button type="button" class="chip-btn" data-preset="{{ $key }}">{{ $p['label'] }}</button>@endforeach
+            </div>
             <div id="fields" data-rows>
                 @foreach (array_values($fields) as $i => $f)
                     @include('admin.products._field', ['i' => $i, 'f' => $f, 'fieldTypes' => $fieldTypes])
