@@ -28,7 +28,7 @@
             <td><span class="badge s-{{ $o->status }}">{{ $o->statusLabel() }}</span></td>
         </tr>
     @empty
-        <tr><td colspan="7" class="muted">No orders found.</td></tr>
+        <tr><td colspan="7" class="muted">No orders found.@unless (request()->query()) <a href="{{ route('admin.import') }}">Import past orders from WordPress →</a>@endunless</td></tr>
     @endforelse
     </tbody>
 </table>

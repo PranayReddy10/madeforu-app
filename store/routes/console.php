@@ -3,6 +3,8 @@
 use Illuminate\Support\Facades\Schedule;
 
 // Hostinger: hPanel → Advanced → Cron Jobs → every minute: php /home/USER/madeforu/artisan schedule:run
+// Imports started from Admin → Import.
+Schedule::command('store:import-queued')->everyMinute()->withoutOverlapping(60);
 Schedule::command('store:prune-uploads')->daily();
 Schedule::command('store:indexnow')->dailyAt('03:15');
 Schedule::command('store:delhivery-sync')->hourly();
