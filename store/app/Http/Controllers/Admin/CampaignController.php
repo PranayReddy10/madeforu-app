@@ -52,7 +52,7 @@ class CampaignController extends Controller
         if (! empty($data['coupon']) && (float) ($data['discount'] ?? 0) > 0) {
             Coupon::updateOrCreate(['code' => strtoupper($data['coupon'])], [
                 'type' => 'percent', 'value' => $data['discount'], 'min_subtotal' => $data['min_order'] ?? 0,
-                'starts_at' => now()->startOfDay(), 'expires_at' => Carbon::parse($data['festival'])->endOfDay(), 'is_active' => $on,
+                'starts_at' => now()->startOfDay(), 'expires_at' => Carbon::parse($data['festival'])->endOfDay(), 'is_active' => $on, 'show_on_cart' => true,
             ]);
         }
 

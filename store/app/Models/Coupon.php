@@ -8,7 +8,7 @@ class Coupon extends Model
 {
     protected $guarded = ['id'];
 
-    protected $casts = ['starts_at' => 'datetime', 'expires_at' => 'datetime', 'is_active' => 'boolean'];
+    protected $casts = ['starts_at' => 'datetime', 'expires_at' => 'datetime', 'is_active' => 'boolean', 'show_on_cart' => 'boolean'];
 
     /**
      * Why this coupon can't be used on a subtotal right now, or null when it can.
@@ -54,6 +54,14 @@ class Coupon extends Model
         }
 
         return round(min($d, $subtotal), 2);
+    }
+
+    /** "10% off on orders of ₹499+ · up to ₹100 off" for the cart's offer list. */
+    public function offerText(): string
+    {
+        return $this->offText()
+            .((float) $this->min_subtotal > 0 ? ' on orders of '.money($this->min_subtotal).'+' : ' on your order')
+            .($this->type === 'percent' && $this->max_discount !== null ? ' · up to '.money($this->max_discount).' off' : '');
     }
 
     /** "10% off" / "₹100 off" */

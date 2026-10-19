@@ -26,7 +26,9 @@ class CartController extends Controller
             }
         }
 
-        return view('cart', ['lines' => $lines, 'totals' => $this->cart->totals($lines)]);
+        $totals = $this->cart->totals($lines);
+
+        return view('cart', ['lines' => $lines, 'totals' => $totals, 'offers' => $totals['coupon'] || $totals['coupon_waiting'] ? collect() : $this->cart->offers($totals['subtotal'])]);
     }
 
     public function add(Request $request, Product $product)

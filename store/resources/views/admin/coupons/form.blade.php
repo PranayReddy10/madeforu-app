@@ -24,6 +24,7 @@
         <label>Expires <input type="datetime-local" name="expires_at" value="{{ old('expires_at', $coupon->expires_at?->format('Y-m-d\TH:i')) }}"></label>
     </div>
     <label class="check"><input type="checkbox" name="is_active" value="1" @checked(old('is_active', $coupon->is_active))> Active</label>
+    <label class="check"><input type="checkbox" name="show_on_cart" value="1" @checked(old('show_on_cart', $coupon->show_on_cart))> Show on the cart page as an offer <small class="muted">— customers see it under “Available offers” and apply it with one tap. Leave unticked for private codes (influencers, apologies, staff).</small></label>
     <button class="btn">Save coupon</button>
 </form>
 @if ($coupon->exists)

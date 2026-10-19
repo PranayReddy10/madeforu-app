@@ -309,6 +309,34 @@ class Cart
         return $problem ? $problem['message'].' We’ve saved it — it applies automatically once you do.' : null;
     }
 
+    /**
+     * Coupons ticked "Show on the cart page" that a customer can use now (or once they add more).
+     *
+     * @return Collection<int, array{code: string, text: string, short: float}>
+     */
+    public function offers(float $subtotal): Collection
+    {
+        return Coupon::where('show_on_cart', true)->where('is_active', true)->orderBy('min_subtotal')->get()
+            ->map(fn (Coupon $c) => [$c, $c->problem($subtotal)])
+            ->filter(fn ($x) => ! $x[1] || $x[1]['reason'] === 'min')
+            ->map(fn ($x) => ['code' => strtoupper($x[0]->code), 'text' => $x[0]->offerText(), 'short' => (float) ($x[1]['short'] ?? 0)])
+            ->values();
+    }
+
+    /** "Pay online & save": the higher of the fixed amount and the %, capped, only when online payment is on. */
+    public static function prepaidDiscount(float $orderValue): float
+    {
+        if ($orderValue <= 0 || ! \App\Http\Controllers\CheckoutController::gateways()) {
+            return 0.0;
+        }
+        $byPercent = $orderValue * (float) setting('prepaid.percent') / 100;
+        if ((float) setting('prepaid.max') > 0) {
+            $byPercent = min($byPercent, (float) setting('prepaid.max'));
+        }
+
+        return round(min(max((float) setting('prepaid.amount'), $byPercent), $orderValue), 2);
+    }
+
     public function removeCoupon(): void
     {
         session()->forget(self::COUPON);
@@ -332,7 +360,7 @@ class Cart
      * With the "live" shipping setting and a delivery PIN, shipping is Delhivery's own rate for the
      * parcel (weight or packed size, whichever is billed) to that PIN; otherwise the flat fee.
      *
-     * @return array{subtotal: float, discount: float, coupon: ?string, coupon_waiting: ?array, coupon_dropped: ?string, shipping: float, cod_fee: float, total: float, free_shipping_gap: float, shipping_live: bool, shipping_estimate: bool}
+     * @return array{subtotal: float, discount: float, coupon: ?string, coupon_waiting: ?array, coupon_dropped: ?string, prepaid_discount: float, shipping: float, cod_fee: float, total: float, free_shipping_gap: float, shipping_live: bool, shipping_estimate: bool}
      */
     public function totals(?Collection $lines = null, string $paymentMethod = 'razorpay', ?string $pin = null): array
     {
@@ -363,6 +391,7 @@ class Cart
         $quote = $lines->isEmpty() ? null : self::shippingQuote($lines->map(fn ($l) => [$l->product, $l->qty]), $pin, $paymentMethod === 'cod', $after);
         $shipping = $lines->isEmpty() || $after >= $freeOver ? 0.0 : ($quote['shipping'] ?? (float) setting('shipping_fee'));
         $cod = $paymentMethod === 'cod' ? ($quote['cod'] ?? self::codCharge($after + $shipping)) : 0.0;
+        $prepaid = $paymentMethod !== 'cod' && $lines->isNotEmpty() ? self::prepaidDiscount($after) : 0.0;
 
         return [
             'subtotal' => $subtotal,
@@ -374,7 +403,8 @@ class Cart
             'cod_fee' => $cod,
             'shipping_live' => (bool) ($quote['live'] ?? false),
             'shipping_estimate' => self::liveShipping() && ! ($quote['live'] ?? false) && $shipping > 0,
-            'total' => round($after + $shipping + $cod, 2),
+            'prepaid_discount' => $prepaid,
+            'total' => round($after - $prepaid + $shipping + $cod, 2),
             'free_shipping_gap' => $lines->isEmpty() ? 0.0 : max(0, round($freeOver - $after, 2)),
         ];
     }

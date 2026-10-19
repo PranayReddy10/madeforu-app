@@ -35,7 +35,7 @@
                 <div class="pay-options">
                     @php $names = ['razorpay' => 'Razorpay', 'cashfree' => 'Cashfree']; $chosen = old('payment_method', $gateways[0] ?? 'cod'); @endphp
                     @foreach($gateways as $g)
-                        <label class="pay-opt"><input type="radio" name="payment_method" value="{{ $g }}" @checked($chosen === $g) data-total="{{ money($totals['total']) }}"><span><b>Pay online{{ count($gateways) > 1 ? ' · '.$names[$g] : '' }}</b><small>UPI, GPay, PhonePe, Paytm, cards, netbanking{{ count($gateways) > 1 ? '' : ' · secured by '.$names[$g] }}</small></span></label>
+                        <label class="pay-opt"><input type="radio" name="payment_method" value="{{ $g }}" @checked($chosen === $g) data-total="{{ money($totals['total']) }}"><span><b>Pay online{{ count($gateways) > 1 ? ' · '.$names[$g] : '' }} @if($totals['prepaid_discount'] > 0)<em class="save-tag">Save {{ money($totals['prepaid_discount']) }}</em>@endif</b><small>UPI, GPay, PhonePe, Paytm, cards, netbanking{{ count($gateways) > 1 ? '' : ' · secured by '.$names[$g] }}</small></span></label>
                     @endforeach
                     @if($codAllowed)
                         <label class="pay-opt"><input type="radio" name="payment_method" value="cod" @checked($chosen === 'cod') data-total="{{ money($codTotals['total']) }}"><span><b>Cash on delivery</b><small data-cod-note>@if($codTotals['cod_fee'] > 0)+{{ money($codTotals['cod_fee']) }} cash on delivery charges @else Pay when it arrives @endif</small></span></label>

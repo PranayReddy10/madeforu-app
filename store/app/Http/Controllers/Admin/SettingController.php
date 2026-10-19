@@ -46,6 +46,9 @@ class SettingController extends Controller
             'cod_fee' => ['Cash on delivery charges, fixed (₹)', 'number', 'Shown as its own line, “Cash on delivery charges”.'],
             'cod_fee_percent' => ['Cash on delivery charges, % of order', 'number', 'Optional. The higher of the fixed amount and this % is charged — e.g. ₹40 and 2%.'],
             'cod_max' => ['COD allowed up to (₹)', 'number', 'Orders above this must pay online.'],
+            'prepaid.amount' => ['Online payment discount, fixed (₹)', 'number', 'Shown at checkout as “Pay online & save ₹30”. Blank or 0 = off. Fewer COD orders means fewer refused parcels.'],
+            'prepaid.percent' => ['Online payment discount, % of order', 'number', 'Optional. The higher of the fixed amount and this % is given.'],
+            'prepaid.max' => ['Online payment discount, at most (₹)', 'number', 'Optional cap for the % discount, e.g. 75.'],
         ],
         'Payment gateways' => [
             'payments.default' => ['Pre-selected online gateway at checkout', 'select:razorpay=Razorpay,cashfree=Cashfree', 'When both are on, customers see both; this one is ticked first.'],

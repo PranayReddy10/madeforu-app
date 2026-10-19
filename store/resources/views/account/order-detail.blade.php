@@ -33,7 +33,8 @@
     @endforeach
     <dl class="totals">
         <div><dt>Subtotal</dt><dd>{{ money($order->subtotal) }}</dd></div>
-        @if($order->discount > 0)<div class="good"><dt>Discount</dt><dd>−{{ money($order->discount) }}</dd></div>@endif
+        @if($order->discount - $order->prepaid_discount > 0)<div class="good"><dt>Discount @if($order->coupon_code)({{ $order->coupon_code }})@endif</dt><dd>−{{ money($order->discount - $order->prepaid_discount) }}</dd></div>@endif
+        @if($order->prepaid_discount > 0)<div class="good"><dt>Online payment discount</dt><dd>−{{ money($order->prepaid_discount) }}</dd></div>@endif
         <div><dt>Shipping</dt><dd>{{ $order->shipping > 0 ? money($order->shipping) : 'Free' }}</dd></div>
         @if($order->cod_fee > 0)<div><dt>Cash on delivery charges</dt><dd>{{ money($order->cod_fee) }}</dd></div>@endif
         <div class="grand"><dt>Total</dt><dd>{{ money($order->total) }}</dd></div>

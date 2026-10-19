@@ -6,7 +6,8 @@
     </td><td align="right" style="padding:8px 0;white-space:nowrap">{{ money($item->line_total) }}</td></tr>
 @endforeach
     <tr><td style="padding:4px 0">Shipping</td><td align="right">{{ $order->shipping > 0 ? money($order->shipping) : 'Free' }}</td></tr>
-    @if($order->discount > 0)<tr><td style="padding:4px 0">Discount @if($order->coupon_code)({{ $order->coupon_code }})@endif</td><td align="right">−{{ money($order->discount) }}</td></tr>@endif
+    @if($order->discount - $order->prepaid_discount > 0)<tr><td style="padding:4px 0">Discount @if($order->coupon_code)({{ $order->coupon_code }})@endif</td><td align="right">−{{ money($order->discount - $order->prepaid_discount) }}</td></tr>@endif
+    @if($order->prepaid_discount > 0)<tr><td style="padding:4px 0">Online payment discount</td><td align="right">−{{ money($order->prepaid_discount) }}</td></tr>@endif
     @if($order->cod_fee > 0)<tr><td style="padding:4px 0">Cash on delivery charges</td><td align="right">{{ money($order->cod_fee) }}</td></tr>@endif
     <tr><td style="padding:8px 0;border-top:2px solid #1c2844"><b>Total</b></td><td align="right" style="border-top:2px solid #1c2844"><b>{{ money($order->total) }}</b></td></tr>
 </table>
