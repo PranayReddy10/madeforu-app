@@ -48,6 +48,18 @@ class ProductApiTest extends TestCase
         $this->assertGreaterThanOrEqual(1, $cats['photo-frames']['products']);   // counts its sub-category's products
     }
 
+    public function test_buy_links_carry_the_app_name_into_the_order(): void
+    {
+        $p = $this->getJson('/api/v1/products/magic-photo-mug?source=GiftApp')->assertOk()->json('data');
+        $this->assertSame('http://localhost/product/magic-photo-mug/?utm_source=giftapp&utm_medium=app', $p['buy_url']);
+        $frame = $this->getJson('/api/v1/products/personalised-wooden-photo-frame')->json('data');
+        $this->assertStringContainsString('?variant='.$frame['variants'][0]['id'].'&utm_source=app&utm_medium=app', $frame['variants'][0]['buy_url']);
+
+        // Opening the link remembers the source for the order.
+        $this->call('GET', '/product/magic-photo-mug/', ['utm_source' => 'giftapp', 'utm_medium' => 'app'])->assertOk();
+        $this->assertSame('giftapp', session('utm.utm_source'));
+    }
+
     public function test_optional_api_key(): void
     {
         $this->getJson('/api/v1')->assertOk()->assertJsonPath('auth', 'open');
