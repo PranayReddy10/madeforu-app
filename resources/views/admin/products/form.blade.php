@@ -12,7 +12,7 @@
     $variants = old('variants', $product->exists ? $product->variants->map(fn ($v) => [
         'id' => $v->id,
         'options' => collect($v->options)->map(fn ($val, $k) => "$k=$val")->implode('; '),
-        'price' => $v->price, 'sale_price' => $v->sale_price, 'sku' => $v->sku, 'in_stock' => $v->in_stock, 'stock_qty' => $v->stock_qty, 'image' => $v->image,
+        'price' => $v->price, 'sale_price' => $v->sale_price, 'cost_price' => $v->cost_price, 'sku' => $v->sku, 'in_stock' => $v->in_stock, 'stock_qty' => $v->stock_qty, 'image' => $v->image,
     ])->all() : []);
     $fields = old('fields', $product->exists ? $product->customizationFields->map(fn ($f) => [
         'id' => $f->id, 'type' => $f->type, 'label' => $f->label, 'help' => $f->help, 'required' => $f->required,
@@ -56,6 +56,11 @@
                 <label>Regular price (₹) <input type="number" step="0.01" min="0" name="price" id="f-price" value="{{ old('price', $product->price) }}" required></label>
                 <label>Sale price (₹) <input type="number" step="0.01" min="0" name="sale_price" value="{{ old('sale_price', $product->sale_price) }}"></label>
                 <label>Weight (grams) <small class="muted">packed, e.g. 350</small> <input type="number" step="1" min="0" max="30000" name="weight_g" value="{{ old('weight_g', $product->weight_kg ? (int) round(\App\Services\Parcel::itemGrams($product)) : '') }}"></label>
+            </div>
+            <div class="row3">
+                <label>Cost to make (₹) <small class="muted">materials + printing, for the Profit page</small>
+                    <input type="number" step="0.01" min="0" name="cost_price" value="{{ old('cost_price', $product->cost_price) }}" data-cost-input></label>
+                <p class="muted small margin-hint" data-margin-hint></p>
             </div>
             <h3>Packed size <small class="muted">— used for live Delhivery delivery charges and sent with every shipment</small></h3>
             <div class="row4">
@@ -105,6 +110,48 @@
             </div>
         </section>
 
+        @php
+            $pv = old('preview', $product->preview ?? []) + ['on' => false, 'image' => null, 'x' => 25, 'y' => 25, 'w' => 50, 'h' => 50, 'shape' => 'rounded', 'blend' => 'normal'];
+            $pvBg = ! empty($pv['image']) ? media_url($pv['image']) : ($product->exists ? $product->mainImageUrl() : asset('images/placeholder.svg'));
+        @endphp
+        <section class="card" data-preview-editor>
+            <h2>Live preview</h2>
+            <p class="muted">Shows the customer's own photo on this product while they personalise it. Drag the pink box onto the area where the photo is printed (resize with its corner), or type the numbers.</p>
+            <input type="hidden" name="preview[on]" value="0">
+            <label class="check"><input type="checkbox" name="preview[on]" value="1" @checked(! empty($pv['on'])) data-pv-on> Show live preview on this product</label>
+            <div class="pv-grid">
+                <div class="pv-stage" data-pv-stage>
+                    <img src="{{ $pvBg }}" alt="" data-pv-bg data-preview-for="preview[image]" data-default="{{ $product->exists ? $product->mainImageUrl() : '' }}">
+                    <div class="pv-box shape-{{ $pv['shape'] }}" data-pv-box style="left:{{ $pv['x'] }}%;top:{{ $pv['y'] }}%;width:{{ $pv['w'] }}%;height:{{ $pv['h'] }}%"><span>Customer photo</span><i data-pv-resize></i></div>
+                </div>
+                <div class="pv-fields">
+                    <div class="row2">
+                        <label>Left % <input type="number" step="0.1" min="0" max="100" name="preview[x]" value="{{ $pv['x'] }}" data-pv="x"></label>
+                        <label>Top % <input type="number" step="0.1" min="0" max="100" name="preview[y]" value="{{ $pv['y'] }}" data-pv="y"></label>
+                        <label>Width % <input type="number" step="0.1" min="1" max="100" name="preview[w]" value="{{ $pv['w'] }}" data-pv="w"></label>
+                        <label>Height % <input type="number" step="0.1" min="1" max="100" name="preview[h]" value="{{ $pv['h'] }}" data-pv="h"></label>
+                    </div>
+                    <label>Shape
+                        <select name="preview[shape]" data-pv-shape>
+                            @foreach (['rounded' => 'Rounded rectangle', 'rect' => 'Rectangle', 'circle' => 'Circle / oval'] as $k => $l)<option value="{{ $k }}" @selected($pv['shape'] === $k)>{{ $l }}</option>@endforeach
+                        </select>
+                    </label>
+                    <label>Look
+                        <select name="preview[blend]">
+                            <option value="normal" @selected($pv['blend'] === 'normal')>Photo on top (magnets, frames, badges)</option>
+                            <option value="multiply" @selected($pv['blend'] === 'multiply')>Printed into the surface (mugs, bottles, fabric)</option>
+                        </select>
+                    </label>
+                    <span class="lbl">Background picture <small class="muted">— optional: a plain product photo without a sample print works best. Blank = the main image.</small></span>
+                    <div class="row-inline">
+                        <input type="hidden" name="preview[image]" value="{{ $pv['image'] }}" data-pv-image>
+                        <button type="button" class="btn small ghost" data-media-pick data-multiple="0" data-input="preview[image]" data-folder="products">Choose picture</button>
+                        <button type="button" class="link danger" data-pv-clear>Use main image</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
         <section class="card">
             <h2>Customer personalisation</h2>
             <p class="muted">What the customer uploads or types before adding to cart. A "Photo upload" field sets how many photos this product needs.</p>
@@ -137,7 +184,7 @@
             <p class="muted">Options are written <code>Size=A4; Frame=Black</code>.</p>
             <div class="tbl-wrap">
             <table class="tbl compact">
-                <thead><tr><th>Options</th><th>Price</th><th>Sale</th><th>SKU</th><th>In stock</th><th>Stock</th><th>Image</th><th></th></tr></thead>
+                <thead><tr><th>Options</th><th>Price</th><th>Sale</th><th>Cost</th><th>SKU</th><th>In stock</th><th>Stock</th><th>Image</th><th></th></tr></thead>
                 <tbody id="variants" data-rows>
                     @foreach (array_values($variants) as $i => $v)
                         @include('admin.products._variant', ['i' => $i, 'v' => $v])

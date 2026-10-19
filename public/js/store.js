@@ -417,6 +417,28 @@
             var block = e.target.closest('[data-item-block]') || form;
             photoRule(block);
         });
+        // Live preview: the chosen photos laid over the product picture (one box per item).
+        function livePreview(block) {
+            var lp = $('[data-live-preview]', block);
+            if (!lp) return;
+            var u = $('[data-photo-target]', block) || $('[data-upload]', block);
+            var pics = u ? $$('[data-slot]', u).filter(function (s) { return !s.hidden; }).map(function (s) { var im = $('img', s); return im && im.src ? im.src : null; }).filter(Boolean) : [];
+            var img = $('[data-lp-img]', lp), empty = $('[data-lp-empty]', lp), sw = $('[data-lp-switch]', lp);
+            var pick = Math.min(+(lp.dataset.pick || 0), Math.max(0, pics.length - 1));
+            img.hidden = !pics.length; empty.hidden = !!pics.length;
+            if (pics.length) img.src = pics[pick];
+            sw.hidden = pics.length < 2;
+            sw.innerHTML = '';
+            pics.forEach(function (src, i) {
+                var b = document.createElement('button'); b.type = 'button'; b.className = i === pick ? 'on' : '';
+                b.setAttribute('aria-label', 'Preview photo ' + (i + 1));
+                var t = new Image(); t.src = src; t.alt = ''; b.appendChild(t);
+                b.onclick = function () { lp.dataset.pick = i; livePreview(block); };
+                sw.appendChild(b);
+            });
+        }
+        form.addEventListener('mfu:photos', function (e) { livePreview(e.target.closest('[data-item-block]') || form); });
+
         // Picture choices (shape, style…): reprice and show the chosen name, in every item box.
         form.addEventListener('change', function (e) {
             if (!e.target.matches('[data-extra-choice]')) return;
@@ -484,6 +506,7 @@
     function uploader(u, url) {
         var slots = $$('[data-slot]', u), countEl = $('[data-count]', u), name = u.dataset.name;
         function update() {
+            u.dispatchEvent(new CustomEvent('mfu:photos', { bubbles: true }));
             var n = $$('input[type=hidden]', u).length;
             countEl.textContent = n; u.classList.toggle('done', n >= +u.dataset.min);
             u.dataset.busy = $$('.slot.busy', u).length ? '1' : '0';

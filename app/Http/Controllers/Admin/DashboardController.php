@@ -41,6 +41,7 @@ class DashboardController extends Controller
         return view('admin.dashboard', [
             'revenue' => $revenue,
             'speed' => $speed,
+            'profit' => (new \App\Services\ProfitReport(30))->summary(),
             'traffic' => $week->kpis()['now'],
             'topSource' => $week->sources()->first(),
             'byStatus' => Order::selectRaw('status, count(*) as n')->groupBy('status')->pluck('n', 'status'),

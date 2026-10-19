@@ -1,6 +1,21 @@
 {{-- Personalisation fields for one item. $prefix: input name (custom, or items[N][custom]); $suffix: makes ids unique. --}}
 @php($photoField = $product->photoFieldId())
 @php($photoDriver = $product->photoDriver())
+@php($lp = $product->livePreview())
+@if($lp)
+    {{-- Live preview: the customer's photo laid over the product picture as soon as it's chosen --}}
+    <div class="live-preview" data-live-preview>
+        <div class="lp-stage">
+            <img src="{{ $lp['image'] }}" alt="" class="lp-bg" loading="lazy">
+            <div class="lp-photo shape-{{ $lp['shape'] }} blend-{{ $lp['blend'] }}" style="left:{{ $lp['x'] }}%;top:{{ $lp['y'] }}%;width:{{ $lp['w'] }}%;height:{{ $lp['h'] }}%">
+                <img alt="Your photo on the product" data-lp-img hidden>
+                <span class="lp-empty" data-lp-empty>@include('partials.icon', ['i' => 'camera'])<b>Your photo here</b></span>
+            </div>
+        </div>
+        <div class="lp-switch" data-lp-switch hidden></div>
+        <small class="muted">Live preview — we place and check every photo by hand before printing.</small>
+    </div>
+@endif
 @foreach($product->customizationFields as $f)
     <div class="field" data-field="{{ $f->id }}">
         @if($f->type === 'images')

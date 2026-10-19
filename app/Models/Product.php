@@ -20,6 +20,8 @@ class Product extends Model
         'stock_qty' => 'integer',
         'price' => 'decimal:2',
         'sale_price' => 'decimal:2',
+        'cost_price' => 'decimal:2',
+        'preview' => 'array',
         'is_active' => 'boolean',
         'is_featured' => 'boolean',
         'in_stock' => 'boolean',
@@ -173,6 +175,37 @@ class Product extends Model
         }
 
         return $this->mainImageUrl();
+    }
+
+    /**
+     * Live preview on the product page: the customer's photo laid over the product picture.
+     * Null when it's switched off (for this product, or for the whole shop in Settings).
+     *
+     * @return array{image: string, x: float, y: float, w: float, h: float, shape: string, blend: string}|null
+     */
+    public function livePreview(): ?array
+    {
+        $p = $this->preview ?? [];
+        if (empty($p['on']) || ! setting('preview.enabled', true) || ! $this->needsUpload()) {
+            return null;
+        }
+        $clamp = fn ($v, $d) => max(0, min(100, is_numeric($v ?? null) ? (float) $v : $d));
+
+        return [
+            'image' => ! empty($p['image']) ? media_url($p['image']) : $this->mainImageUrl(),
+            'x' => $clamp($p['x'] ?? null, 25), 'y' => $clamp($p['y'] ?? null, 25),
+            'w' => max(5, $clamp($p['w'] ?? null, 50)), 'h' => max(5, $clamp($p['h'] ?? null, 50)),
+            'shape' => in_array($p['shape'] ?? '', ['rect', 'rounded', 'circle'], true) ? $p['shape'] : 'rounded',
+            'blend' => ($p['blend'] ?? '') === 'multiply' ? 'multiply' : 'normal',
+        ];
+    }
+
+    /** What one costs to make: the variation's own cost, else the product's. */
+    public function costFor(?ProductVariant $variant = null): ?float
+    {
+        $c = $variant?->cost_price ?? $this->cost_price;
+
+        return $c !== null ? (float) $c : null;
     }
 
     public function needsUpload(): bool

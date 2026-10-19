@@ -5,6 +5,7 @@
     @foreach ($revenue as $label => [$amount, $count])
         <div class="card stat"><span>{{ $label }}</span><strong>{{ money($amount) }}</strong><small>{{ $count }} {{ \Illuminate\Support\Str::plural('order', $count) }}</small></div>
     @endforeach
+    <a class="card stat profit-card {{ $profit['profit'] < 0 ? 'neg' : '' }}" href="{{ route('admin.profit') }}"><span>Profit, last 30 days</span><strong>{{ money($profit['profit']) }}</strong><small>{{ number_format($profit['margin'], 1) }}% of sales @if ($profit['missing'])· some costs missing @endif →</small></a>
 </div>
 
 @if (! $speed['direct'] || $speed['missing'])

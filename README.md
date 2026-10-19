@@ -219,6 +219,29 @@ Hi {{1}}, you left {{2}} in your MadeForU cart 💝 Your photos are saved — fi
 - **Review requests:** a couple of days after an order is delivered, the customer gets "How was your gift?" by email (and WhatsApp when set up) with a link to review every item on one page. Settings → Reviews: days to wait, and whether verified 4★/5★ reviews publish straight away (otherwise approve them in Admin → Reviews).
 - Optional WhatsApp template **review_request** (Utility): `Hi {{1}}, how was your MadeForU order {{2}}? 💝 We'd love a quick review — photos of your gift are extra special: {{3}}`
 
+## Live preview
+
+**Products → Edit → Live preview:** tick "Show live preview" and drag the pink box onto the area where the customer's photo is printed. Resize from its corner, or type the numbers. Then choose:
+- the shape: rounded rectangle, rectangle, or circle/oval
+- the look: "photo on top" for magnets, frames and badges, or "printed into the surface" for mugs, bottles and fabric
+- optionally, a plain background picture without a sample print
+
+On the product page, the customer's photo appears on the product the moment they upload it. With several photos, they can tap between them.
+
+**Settings → Live preview & profit → Live photo preview on product pages** switches it off for the whole shop.
+
+## Profit
+
+1. Give each product a **Cost to make** (materials and printing; options can have their own). The form shows the margin as you type.
+2. In **Settings → Live preview & profit**, set:
+   - packing cost per order
+   - payment gateway % (online orders only)
+   - how to count courier cost: what the customer paid for delivery, or a fixed amount per parcel
+
+**Admin → Profit** (Today / 7 / 30 / 90 days / 1 year) shows sales, then subtracts making, packing, courier and gateway fees, and returned parcels (made, sent both ways, no money in). What's left is your profit, shown as a margin and per order. The product table lists each product's sales, cost, profit and margin. Products without a cost are marked "set cost".
+
+Orders save the cost when they're placed, so changing a cost later doesn't rewrite past profit. The dashboard shows profit for the last 30 days.
+
 ## SKUs
 
 Every product and option gets a SKU automatically when it's saved without one:

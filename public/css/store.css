@@ -1103,3 +1103,22 @@ input, select, textarea, img, video, iframe, table { max-width: 100%; }
 .cart-layout > *, .checkout-layout > * { min-width: 0; }
 .an-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .an-actions .btn { flex: 1 1 120px; }
+
+/* Live preview of the customer's photo on the product */
+.live-preview { margin: 4px 0 14px; display: grid; gap: 8px; justify-items: center; }
+.lp-stage { position: relative; width: 100%; max-width: 340px; border-radius: 16px; overflow: hidden; background: #fff; box-shadow: 0 6px 18px rgba(240,69,119,.12); }
+.lp-bg { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; }
+.lp-photo { position: absolute; overflow: hidden; display: grid; place-items: center; background: rgba(255,255,255,.55); outline: 2px dashed rgba(240,69,119,.7); outline-offset: -2px; }
+.lp-photo:has(img:not([hidden])) { outline: 0; background: none; }
+.lp-photo img { width: 100%; height: 100%; object-fit: cover; }
+.lp-photo.shape-rounded { border-radius: 14%; }
+.lp-photo.shape-circle { border-radius: 50%; }
+.lp-photo.blend-multiply img { mix-blend-mode: multiply; opacity: .94; }
+.lp-empty { display: grid; justify-items: center; gap: 2px; color: var(--rose-d); font-size: 12px; text-align: center; padding: 4px; }
+.lp-empty svg { width: 22px; height: 22px; }
+.lp-switch { display: flex; gap: 6px; }
+.lp-switch button { width: 40px; height: 40px; padding: 0; border-radius: 10px; overflow: hidden; border: 2px solid transparent; background: #fff; }
+.lp-switch button.on { border-color: var(--rose); }
+.lp-switch img { width: 100%; height: 100%; object-fit: cover; }
+.live-preview small { font-size: 12px; }
+.lp-switch[hidden], .lp-empty[hidden] { display: none; }

@@ -563,3 +563,31 @@ table th { color: var(--muted); }
 }
 
 .danger-zone { border: 1px solid #f6c9c9 !important; background: #fffafa; }
+
+/* Live preview editor */
+.pv-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px; align-items: start; margin-top: 10px; }
+.pv-stage { position: relative; border-radius: 12px; overflow: hidden; background: var(--soft); touch-action: none; user-select: none; }
+.pv-stage img { display: block; width: 100%; height: auto; aspect-ratio: 1; object-fit: cover; }
+.pv-box { position: absolute; border: 2px dashed #f04577; background: rgba(240,69,119,.22); cursor: move; display: grid; place-items: center; }
+.pv-box span { font-size: 11px; font-weight: 700; color: #fff; background: rgba(240,69,119,.85); padding: 2px 6px; border-radius: 6px; pointer-events: none; }
+.pv-box.shape-rounded { border-radius: 14%; }
+.pv-box.shape-circle { border-radius: 50%; }
+.pv-box i { position: absolute; right: -7px; bottom: -7px; width: 14px; height: 14px; border-radius: 50%; background: #f04577; border: 2px solid #fff; cursor: nwse-resize; }
+.pv-fields .lbl { display: block; font-weight: 600; font-size: 13px; margin-top: 4px; }
+.margin-hint { align-self: center; margin: 0; }
+@media (max-width: 700px) { .pv-grid { grid-template-columns: 1fr; } }
+
+/* Profit page */
+.pf-rows { display: grid; gap: 8px; margin-bottom: 10px; }
+.pf-row { position: relative; display: flex; justify-content: space-between; gap: 12px; padding: 8px 10px; border-radius: 8px; background: var(--soft); overflow: hidden; }
+.pf-row span, .pf-row b { position: relative; z-index: 1; }
+.pf-row i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 8px; }
+.pf-row.in i { background: rgba(31,157,85,.14); }
+.pf-row.out i { background: rgba(240,69,119,.12); }
+.pf-row.out b { color: var(--primary-dark); }
+.pf-row.total { background: #e7f6ec; font-size: 16px; }
+.pf-row.total b { color: #135c32; }
+.pf-row.total.neg, .profit-card.neg { background: #fdecec; }
+.pf-row.total.neg b { color: var(--err); }
+.profit-card strong { color: #1f9d55; }
+.profit-card.neg strong { color: var(--err); }
