@@ -45,6 +45,15 @@ class StorefrontTest extends TestCase
         $this->get('/?product=magic-photo-mug')->assertRedirect('http://localhost/product/magic-photo-mug/');
     }
 
+    public function test_product_page_has_share_buttons_tagged_by_app(): void
+    {
+        $html = $this->get('/product/magic-photo-mug/')->assertOk()->getContent();
+        foreach (['wa.me/?text=', 'facebook.com/sharer', 't.me/share', 'x.com/intent/post', 'pinterest.com/pin/create', 'mailto:?subject=', 'data-copy-link', 'data-native-share'] as $needle) {
+            $this->assertStringContainsString($needle, $html);
+        }
+        $this->assertStringContainsString(rawurlencode('http://localhost/product/magic-photo-mug/?utm_source=facebook&utm_medium=share'), $html);
+    }
+
     public function test_saved_redirects_catch_old_urls(): void
     {
         Redirect::create(['from_path' => '/old-mug', 'to_path' => '/product/magic-photo-mug/']);

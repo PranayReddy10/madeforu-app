@@ -157,11 +157,26 @@
                 <li>@include('partials.icon', ['i' => 'hand'])<b>Handmade</b><small>In {{ config('store.city') }}</small></li>
             </ul>
 
-            <div class="share-row">
-                @auth
+            @auth
+                <div class="share-row">
                     <form method="post" action="{{ route('wishlist.toggle', $product) }}" data-wishlist>@csrf<button class="link-btn">♡ Save to wishlist</button></form>
-                @endauth
-                <a class="link-btn" href="https://wa.me/?text={{ rawurlencode($product->name.' '.$product->url()) }}" rel="noopener" target="_blank">Share on WhatsApp</a>
+                </div>
+            @endauth
+            @php
+                // utm_source tells Analytics which app a visit was shared from.
+                $shareUrl = fn ($src) => $product->url().'?utm_source='.$src.'&utm_medium=share';
+                $shareText = $product->name.' – '.config('store.name');
+            @endphp
+            <div class="share-box" data-share-box data-title="{{ $shareText }}" data-url="{{ $shareUrl('native') }}">
+                <span class="share-label">Share</span>
+                <a class="sh sh-wa" href="https://wa.me/?text={{ rawurlencode($shareText.' '.$shareUrl('whatsapp')) }}" target="_blank" rel="noopener" aria-label="Share on WhatsApp" title="WhatsApp">@include('partials.icon', ['i' => 'whatsapp'])</a>
+                <a class="sh sh-fb" href="https://www.facebook.com/sharer/sharer.php?u={{ rawurlencode($shareUrl('facebook')) }}" target="_blank" rel="noopener" aria-label="Share on Facebook" title="Facebook">@include('partials.icon', ['i' => 'facebook'])</a>
+                <a class="sh sh-tg" href="https://t.me/share/url?url={{ rawurlencode($shareUrl('telegram')) }}&text={{ rawurlencode($shareText) }}" target="_blank" rel="noopener" aria-label="Share on Telegram" title="Telegram">@include('partials.icon', ['i' => 'telegram'])</a>
+                <a class="sh sh-x" href="https://x.com/intent/post?url={{ rawurlencode($shareUrl('x')) }}&text={{ rawurlencode($shareText) }}" target="_blank" rel="noopener" aria-label="Share on X" title="X (Twitter)">@include('partials.icon', ['i' => 'x'])</a>
+                <a class="sh sh-pin" href="https://pinterest.com/pin/create/button/?url={{ rawurlencode($shareUrl('pinterest')) }}&media={{ rawurlencode($product->mainImageUrl()) }}&description={{ rawurlencode($shareText) }}" target="_blank" rel="noopener" aria-label="Save on Pinterest" title="Pinterest">@include('partials.icon', ['i' => 'pinterest'])</a>
+                <a class="sh sh-mail" href="mailto:?subject={{ rawurlencode($shareText) }}&body={{ rawurlencode('Have a look at this: '.$shareUrl('email')) }}" aria-label="Share by email" title="Email">@include('partials.icon', ['i' => 'mail'])</a>
+                <button type="button" class="sh sh-copy" data-copy-link="{{ $shareUrl('copy') }}" aria-label="Copy link" title="Copy link">@include('partials.icon', ['i' => 'link'])</button>
+                <button type="button" class="sh sh-more" data-native-share hidden aria-label="More ways to share (Instagram, Messenger, SMS…)" title="More">@include('partials.icon', ['i' => 'share'])</button>
             </div>
         </div>
     </div>
