@@ -139,6 +139,7 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'admin'])->group(fun
     Route::get('orders', [Admin\OrderController::class, 'index'])->name('orders.index');
     Route::get('orders/{order}', [Admin\OrderController::class, 'show'])->name('orders.show');
     Route::put('orders/{order}', [Admin\OrderController::class, 'update'])->name('orders.update');
+    Route::delete('orders/{order}', [Admin\OrderController::class, 'destroy'])->name('orders.destroy');
     Route::get('orders/{order}/uploads.zip', [Admin\OrderController::class, 'downloadUploads'])->name('orders.uploads');
     Route::get('orders/{order}/uploads/{upload}', [Admin\OrderController::class, 'downloadUpload'])->name('orders.upload');
     Route::get('orders/{order}/production', [Admin\OrderController::class, 'productionSheet'])->name('orders.production');

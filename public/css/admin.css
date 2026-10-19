@@ -561,3 +561,5 @@ table th { color: var(--muted); }
   .tbl td:has(> a:first-child) a { display: inline-block; }
   .tbl td:has(> img:only-child), .tbl td:has(> input[type=checkbox]:only-child) { min-width: 0; }
 }
+
+.danger-zone { border: 1px solid #f6c9c9 !important; background: #fffafa; }

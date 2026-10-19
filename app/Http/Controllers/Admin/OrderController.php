@@ -15,6 +15,8 @@ use App\Services\Shipping;
 use App\Services\Stock;
 use App\Services\WhatsApp;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use ZipArchive;
 
@@ -58,8 +60,15 @@ class OrderController extends Controller
     /** Ticked orders: book them with Delhivery, or move them to the next step together. */
     public function bulk(Request $request, Shipping $shipping)
     {
-        $data = $request->validate(['ids' => 'required|array|max:100', 'ids.*' => 'integer', 'action' => 'required|in:book,in_production,shipped,delivered']);
+        $data = $request->validate(['ids' => 'required|array|max:100', 'ids.*' => 'integer', 'action' => 'required|in:book,in_production,shipped,delivered,delete']);
         $orders = Order::whereIn('id', $data['ids'])->get();
+        if ($data['action'] === 'delete') {
+            $gone = $orders->filter(fn ($o) => $o->status === 'cancelled')->each(fn ($o) => self::wipe($o))->count();
+            $kept = $orders->count() - $gone;
+
+            return back()->with($gone ? 'status' : 'error', ($gone ? $gone.' cancelled '.Str::plural('order', $gone).' deleted.' : 'Nothing deleted.')
+                .($kept ? ' '.$kept.' not cancelled — only cancelled orders can be deleted.' : ''));
+        }
         if ($data['action'] === 'book') {
             $ok = $fail = 0;
             foreach ($orders as $o) {
@@ -91,6 +100,30 @@ class OrderController extends Controller
         }
 
         return back()->with('status', $orders->count().' '.Str::plural('order', $orders->count()).' marked '.strtolower(Order::STATUSES[$data['action']]).'.');
+    }
+
+    /** Delete a cancelled order for good: its items, the customer's photos and their files. */
+    public function destroy(Order $order)
+    {
+        if ($order->status !== 'cancelled') {
+            return back()->with('error', 'Only cancelled orders can be deleted. Set the status to Cancelled first.');
+        }
+        $number = $order->number;
+        self::wipe($order);
+
+        return redirect()->route('admin.orders.index')->with('status', "Order {$number} deleted.");
+    }
+
+    private static function wipe(Order $order): void
+    {
+        DB::transaction(function () use ($order) {
+            $uploads = CustomerUpload::whereIn('order_item_id', $order->items()->pluck('id'))->get();
+            foreach ($uploads as $u) {
+                Storage::disk('local')->delete(array_filter([$u->path, $u->thumb_path]));
+                $u->delete();
+            }
+            $order->delete();   // items, invoice links and WhatsApp log go with it; reviews and carts keep their row
+        });
     }
 
     /** Register the shop's pickup address with Delhivery and use that name from now on. */
