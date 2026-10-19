@@ -302,6 +302,23 @@
         clean();
     });
 
+    /* Product share buttons: copy link, and the phone's own share sheet (Instagram, Messenger, SMS…) */
+    $$('[data-copy-link]').forEach(function (b) {
+        b.addEventListener('click', function () {
+            var done = function () { toast('Link copied — paste it anywhere to share'); };
+            if (navigator.clipboard) navigator.clipboard.writeText(b.dataset.copyLink).then(done, function () { prompt('Copy this link:', b.dataset.copyLink); });
+            else prompt('Copy this link:', b.dataset.copyLink);
+        });
+    });
+    $$('[data-native-share]').forEach(function (b) {
+        if (!navigator.share) return;
+        b.hidden = false;
+        var box = b.closest('[data-share-box]');
+        b.addEventListener('click', function () {
+            navigator.share({ title: box.dataset.title, text: box.dataset.title, url: box.dataset.url }).catch(function () {});
+        });
+    });
+
     /* Character counters */
     $$('[data-count-chars]').forEach(function (el) {
         if (!el.maxLength || el.maxLength < 0) return;
