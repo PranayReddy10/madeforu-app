@@ -39,6 +39,7 @@
                 <p class="muted">Fill this in and we’ll reply by email or WhatsApp.</p>
                 <form method="post" action="{{ route('contact.send') }}" class="cform">
                     @csrf
+                    <input type="hidden" name="_ts" value="{{ \App\Services\SpamCheck::stamp() }}">
                     <div class="hp" aria-hidden="true"><label>Website <input name="website" tabindex="-1" autocomplete="off"></label></div>
                     <label>Your name <input name="name" value="{{ old('name', auth()->user()?->name) }}" required maxlength="120" autocomplete="name"></label>
                     <div class="row2">
@@ -52,6 +53,10 @@
                         <label>Order number <small class="muted">(if any)</small><input name="order_number" value="{{ old('order_number') }}" maxlength="40" placeholder="e.g. MFU1024"></label>
                     </div>
                     <label>Message <textarea name="message" rows="5" required minlength="5" maxlength="3000" placeholder="Tell us what you need — for a custom idea, describe it and we’ll suggest options.">{{ old('message') }}</textarea></label>
+                    @if (\App\Services\SpamCheck::turnstileOn())
+                        <div class="cf-turnstile" data-sitekey="{{ setting('turnstile.site_key') }}" data-theme="light"></div>
+                        <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+                    @endif
                     @if ($errors->any())<p class="form-error">{{ $errors->first() }}</p>@endif
                     <button class="btn primary block">Send message @include('partials.icon', ['i' => 'arrow'])</button>
                     <p class="muted small center">By sending this you agree to our <a href="{{ url('legal/privacy-policy-2') }}/">privacy policy</a>.</p>

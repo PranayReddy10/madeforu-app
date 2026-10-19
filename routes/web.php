@@ -172,6 +172,9 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'admin'])->group(fun
     Route::put('settings', [Admin\SettingController::class, 'update']);
     Route::get('messages', [Admin\MessageController::class, 'index'])->name('messages.index');
     Route::delete('messages/{message}', [Admin\MessageController::class, 'destroy'])->name('messages.destroy');
+    Route::post('messages/{message}/spam', [Admin\MessageController::class, 'spam'])->name('messages.spam');
+    Route::post('messages/{message}/not-spam', [Admin\MessageController::class, 'notSpam'])->name('messages.not-spam');
+    Route::delete('messages-spam', [Admin\MessageController::class, 'emptySpam'])->name('messages.empty-spam');
     Route::get('import', [Admin\ImportController::class, 'index'])->name('import');
     Route::post('import', [Admin\ImportController::class, 'store'])->name('import.store');
     Route::post('import/run', [Admin\ImportController::class, 'run'])->name('import.run');

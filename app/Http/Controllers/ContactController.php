@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Mail\AdminAlert;
 use App\Models\ContactMessage;
 use App\Services\OrderEmails;
+use App\Services\SpamCheck;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
 
@@ -23,16 +24,27 @@ class ContactController extends Controller
             'topic' => 'nullable|in:'.implode(',', self::TOPICS),
             'order_number' => 'nullable|string|max:40',
             'message' => 'required|string|min:5|max:3000',
-            'website' => 'prohibited',   // honeypot: people never see this field, bots fill it
         ], [
             'email.required' => 'Please enter your email address.',
             'email.email' => 'Please enter a valid email address, e.g. name@gmail.com.',
             'phone.required' => 'Please enter your mobile number so we can call or WhatsApp you back.',
             'phone.regex' => 'Please enter a 10-digit Indian mobile number.',
         ]);
-        unset($data['website']);
+        $data['email'] = mb_strtolower($data['email']);
+        $data['phone'] = substr($data['phone'], -10);
+        if (SpamCheck::turnstileOn() && ! SpamCheck::turnstilePassed($request)) {
+            return back()->withInput()->withErrors(['captcha' => 'Please complete the “I’m human” check and send again.']);
+        }
+        // Bots get the same "sent" screen as people, so they learn nothing.
+        if (SpamCheck::drop($request, $data)) {
+            return back()->with('contact_sent', true);
+        }
+        $spam = SpamCheck::spamReason($request, $data);
 
-        $msg = ContactMessage::create($data + ['ip' => $request->ip()]);
+        $msg = ContactMessage::create($data + ['ip' => $request->ip(), 'spam_reason' => $spam]);
+        if ($spam) {
+            return back()->with('contact_sent', true);
+        }
 
         try {
             $alert = new AdminAlert('Message from '.$msg->name.' ('.self::pretty($msg->phone).')'.($msg->topic ? ' — '.$msg->topic : ''), array_values(array_filter([
