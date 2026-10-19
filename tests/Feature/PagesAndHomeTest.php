@@ -45,17 +45,17 @@ class PagesAndHomeTest extends TestCase
     {
         Mail::fake();
 
-        $this->from('/contact-us/')->post('/contact-message', ['name' => 'Asha', 'phone' => '98765 43210', 'topic' => 'Custom or bulk order', 'message' => 'Need 50 mugs for a wedding.'])
+        $this->from('/contact-us/')->post('/contact-message', ['name' => 'Asha', 'email' => 'asha@example.com', 'phone' => '98765 43210', 'topic' => 'Custom or bulk order', 'message' => 'Need 50 mugs for a wedding.'])
             ->assertRedirect('/contact-us/')->assertSessionHas('contact_sent');
         $this->assertSame('9876543210', ContactMessage::first()->phone);
         Mail::assertSent(AdminAlert::class, fn ($m) => $m->title === 'Message from Asha (98765 43210) — Custom or bulk order'
             && str_contains(implode(' ', $m->lines), 'https://wa.me/919876543210') && $m->hasTo('support@madeforu.co.in'));
 
-        // The mobile number is required (email alone isn't enough), and bots filling the hidden field are turned away.
-        $this->post('/contact-message', ['name' => 'X', 'message' => 'Hello there'])->assertSessionHasErrors('phone');
-        $this->post('/contact-message', ['name' => 'X', 'email' => 'x@x.com', 'message' => 'Hello there'])->assertSessionHasErrors('phone');
-        $this->post('/contact-message', ['name' => 'X', 'phone' => '12345', 'message' => 'Hello there'])->assertSessionHasErrors('phone');
-        $this->post('/contact-message', ['name' => 'Bot', 'phone' => '9876543210', 'message' => 'Buy now', 'website' => 'spam'])->assertSessionHasErrors('website');
+        // Both the mobile number and the email are required, and bots filling the hidden field are turned away.
+        $this->post('/contact-message', ['name' => 'X', 'message' => 'Hello there'])->assertSessionHasErrors(['email', 'phone']);
+        $this->post('/contact-message', ['name' => 'X', 'email' => 'x@x.com', 'message' => 'Hello there'])->assertSessionHasErrors('phone')->assertSessionDoesntHaveErrors('email');
+        $this->post('/contact-message', ['name' => 'X', 'email' => 'x@x.com', 'phone' => '12345', 'message' => 'Hello there'])->assertSessionHasErrors('phone');
+        $this->post('/contact-message', ['name' => 'Bot', 'email' => 'b@x.com', 'phone' => '9876543210', 'message' => 'Buy now', 'website' => 'spam'])->assertSessionHasErrors('website');
         $this->assertSame(1, ContactMessage::count());
 
         $admin = User::factory()->create();

@@ -18,13 +18,15 @@ class ContactController extends Controller
         $request->merge(['phone' => $phone ?: null]);
         $data = $request->validate([
             'name' => 'required|string|max:120',
-            'email' => 'nullable|email|max:191',
+            'email' => 'required|email|max:191',
             'phone' => ['required', 'regex:/^(\+?91)?[6-9]\d{9}$/'],
             'topic' => 'nullable|in:'.implode(',', self::TOPICS),
             'order_number' => 'nullable|string|max:40',
             'message' => 'required|string|min:5|max:3000',
             'website' => 'prohibited',   // honeypot: people never see this field, bots fill it
         ], [
+            'email.required' => 'Please enter your email address.',
+            'email.email' => 'Please enter a valid email address, e.g. name@gmail.com.',
             'phone.required' => 'Please enter your mobile number so we can call or WhatsApp you back.',
             'phone.regex' => 'Please enter a 10-digit Indian mobile number.',
         ]);
@@ -37,7 +39,7 @@ class ContactController extends Controller
                 nl2br(e($msg->message)),
                 $msg->order_number ? 'Order: <b>'.e($msg->order_number).'</b>' : null,
                 self::phoneLine($msg->phone),
-                $msg->email ? 'Email: <b>'.e($msg->email).'</b> (just reply to this email)' : null,
+                'Email: <b>'.e($msg->email).'</b> (just reply to this email)',
             ])), route('admin.messages.index'), 'Open messages');
             if ($msg->email) {
                 $alert->replyTo($msg->email, $msg->name);
