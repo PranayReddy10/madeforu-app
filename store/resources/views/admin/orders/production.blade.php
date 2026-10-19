@@ -54,6 +54,7 @@
     @php $item = $row['item']; @endphp
     <section class="item">
         <h2><span class="tick"></span>{{ $row['n'] }}. {{ $item->name }} <span class="qty">× {{ $item->qty }}</span></h2>
+        @if ($sku = $item->skuCode())<div class="muted">SKU <b>{{ $sku }}</b></div>@endif
         @if ($item->options)<div class="muted">{{ collect($item->options)->map(fn ($v, $k) => "$k: $v")->implode(' · ') }}</div>@endif
         @foreach ($row['parts'] as $part)
             <div class="part">

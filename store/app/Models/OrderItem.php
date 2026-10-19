@@ -22,6 +22,17 @@ class OrderItem extends Model
         return $this->belongsTo(Product::class);
     }
 
+    public function variant(): BelongsTo
+    {
+        return $this->belongsTo(ProductVariant::class, 'variant_id');
+    }
+
+    /** The SKU saved with the order; older or imported orders fall back to the product's current one. */
+    public function skuCode(): ?string
+    {
+        return $this->sku ?: ($this->variant_id ? $this->variant?->sku : null) ?: $this->product?->sku;
+    }
+
     public function uploads(): HasMany
     {
         return $this->hasMany(CustomerUpload::class);

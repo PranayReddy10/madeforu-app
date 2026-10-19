@@ -70,6 +70,7 @@ class Invoice
             $lines[] = [
                 'name' => $item->name.($item->options ? ' ('.implode(' / ', $item->options).')' : ''),
                 'hsn' => $item->product?->hsn_code ?: setting('invoice.hsn'),
+                'sku' => $item->skuCode(),
                 'qty' => $item->qty, 'unit' => (float) $item->unit_price, 'discount' => round($share, 2),
                 'rate' => $rate, 'taxable' => $taxable, 'tax' => $tax, 'total' => round($gross, 2),
             ];
