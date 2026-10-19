@@ -12,8 +12,9 @@
     <p class="muted">While it's on, every page shows a countdown strip with your coupon, products say whether they'll arrive before the festival, and a landing page lists your festive gifts. It ends by itself after the festival day.</p>
     <div class="preset-bar">
         <span class="muted small">Quick fill:</span>
-        @foreach ($presets as $key => [$n, $fest, $dl, $code, $head])
-            <button type="button" class="chip-btn" data-preset='@json(['name' => $n, 'festival' => $fest, 'deadline' => $dl, 'coupon' => $code, 'headline' => $head])'>{{ $n }} {{ \Illuminate\Support\Carbon::parse($fest)->format('Y') }}</button>
+        @foreach ($presets as $key => $pr)
+            @php $presetData = ['name' => $pr[0], 'festival' => $pr[1], 'deadline' => $pr[2], 'coupon' => $pr[3], 'headline' => $pr[4]]; @endphp
+            <button type="button" class="chip-btn" data-preset="{{ json_encode($presetData) }}">{{ $pr[0] }} {{ \Illuminate\Support\Carbon::parse($pr[1])->format('Y') }}</button>
         @endforeach
     </div>
     <label class="check"><input type="hidden" name="enabled" value="0"><input type="checkbox" name="enabled" value="1" @checked(old('enabled', setting('campaign.enabled')))> <b>Campaign is on</b></label>
