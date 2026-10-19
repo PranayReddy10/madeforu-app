@@ -15,6 +15,15 @@ class BannerController extends Controller
         return view('admin.banners.index', ['banners' => Banner::orderBy('position')->get()]);
     }
 
+    /** The built-in home slides: which ones show, and whether they show next to the shop's own banners. */
+    public function builtin(Request $request)
+    {
+        \App\Models\Setting::put(collect(['brand', 'product', 'offer', 'with_banners'])
+            ->mapWithKeys(fn ($k) => ['hero.'.$k => $request->boolean($k) ? '1' : '0'])->all());
+
+        return back()->with('status', 'Home page slides saved.');
+    }
+
     public function create()
     {
         return view('admin.banners.form', ['banner' => new Banner(['is_active' => true, 'show_text' => true, 'position' => 0])]);

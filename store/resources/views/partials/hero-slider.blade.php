@@ -10,13 +10,23 @@
     foreach ($banners as $b) {
         $slides->push(['kind' => 'banner', 'b' => $b]);
     }
-    if ($slides->reject(fn ($s) => $s['kind'] === 'campaign')->isEmpty()) {
-        $pics = $featured->concat($bestsellers)->unique('id')->filter(fn ($p) => $p->images->isNotEmpty())->values();
-        $slides->push(['kind' => 'brand', 'pics' => $pics->take(3)]);
-        if ($top = $bestsellers->first()) {
+    // Built-in slides (Admin → Banners): shown while there are no banners, or alongside them if chosen.
+    $own = $slides->reject(fn ($s) => $s['kind'] === 'campaign')->isNotEmpty();
+    if (! $own || setting('hero.with_banners')) {
+        $on = fn ($k) => (string) setting('hero.'.$k, '1') !== '0';
+        if ($on('brand')) {
+            $pics = $featured->concat($bestsellers)->unique('id')->filter(fn ($p) => $p->images->isNotEmpty())->values();
+            $slides->push(['kind' => 'brand', 'pics' => $pics->take(3)]);
+        }
+        if ($on('product') && ($top = $bestsellers->first())) {
             $slides->push(['kind' => 'product', 'p' => $top]);
         }
-        $slides->push(['kind' => 'offer']);
+        if ($on('offer')) {
+            $slides->push(['kind' => 'offer']);
+        }
+    }
+    if ($slides->isEmpty()) {   // never an empty hero
+        $slides->push(['kind' => 'brand', 'pics' => $featured->concat($bestsellers)->unique('id')->filter(fn ($p) => $p->images->isNotEmpty())->take(3)->values()]);
     }
 @endphp
 <section class="hero-slider" data-slider aria-roledescription="carousel" aria-label="Featured">
