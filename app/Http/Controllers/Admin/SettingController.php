@@ -27,6 +27,9 @@ class SettingController extends Controller
             'home_title' => ['Home page title', 'text', 'The <title> Google shows for the home page (aim for 50–60 characters).'],
             'home_description' => ['Home page meta description', 'textarea', '70–160 characters.'],
         ],
+        'Product API' => [
+            'api.key' => ['API key (optional)', 'text', 'Product data in JSON at /api/v1/products (name, prices, images, variants, categories…). Blank = open to anyone, like your shop pages. Type any long random text here to require it as ?key=… on every call.'],
+        ],
         'Contact form' => [
             'contact.block' => ['Block list', 'textarea', 'Emails, mobile numbers or words, one per line. Matching messages go to Messages → Spam with no email to you. The “Spam” button on a message adds its sender here.'],
             'turnstile.site_key' => ['Cloudflare Turnstile site key (optional)', 'text', 'Free “I’m human” check, only if spam still gets through. dash.cloudflare.com → Turnstile → Add site (madeforu.co.in) → copy both keys. Leave blank to keep it off.'],
