@@ -107,7 +107,7 @@
                     <div class="oi-title">
                         <strong>{{ $item->name }}</strong>
                         @if ($item->options)<br><small class="muted">{{ collect($item->options)->map(fn ($v, $k) => "$k: $v")->implode(', ') }}</small>@endif
-                        @if ($item->sku)<br><small class="muted">SKU {{ $item->sku }}</small>@endif
+                        @if ($sku = $item->skuCode())<br><small class="muted">SKU <b>{{ $sku }}</b></small>@endif
                     </div>
                     <div class="right oi-price"><span class="qty-pill">× {{ $item->qty }}</span><small class="muted">{{ money($item->unit_price) }} each</small><strong>{{ money($item->line_total) }}</strong></div>
                 </div>

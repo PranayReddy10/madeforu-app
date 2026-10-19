@@ -23,7 +23,7 @@
     @endif
     @foreach($order->items as $item)
         <div class="mini-line">
-            <span>{{ $item->name }} <small class="muted">× {{ $item->qty }}@if($item->options) · {{ implode(' / ', $item->options) }}@endif</small>
+            <span>{{ $item->name }} <small class="muted">× {{ $item->qty }}@if($item->options) · {{ implode(' / ', $item->options) }}@endif @if($sku = $item->skuCode()) · SKU {{ $sku }}@endif</small>
                 @foreach($item->customization ?? [] as $c)
                     <small class="block muted">{{ $c['label'] }}: {{ $c['type'] === 'images' ? count($c['files'] ?? []).' photo(s)' : $c['value'] }}</small>
                 @endforeach

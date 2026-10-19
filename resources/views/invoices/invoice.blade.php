@@ -67,7 +67,7 @@
     @foreach($b['lines'] as $i => $l)
         <tr>
             <td>{{ $i + 1 }}</td>
-            <td>{{ $l['name'] }}@if($l['discount'] > 0)<br><span class="muted small">Discount −₹{{ number_format($l['discount'], 2) }}</span>@endif</td>
+            <td>{{ $l['name'] }}@if(! empty($l['sku']))<br><span class="muted small">SKU {{ $l['sku'] }}</span>@endif @if($l['discount'] > 0)<br><span class="muted small">Discount −₹{{ number_format($l['discount'], 2) }}</span>@endif</td>
             @if($b['gst'])<td>{{ $l['hsn'] }}</td>@endif
             <td class="c">{{ $l['qty'] }}</td>
             <td class="r">₹{{ number_format($l['unit'], 2) }}</td>

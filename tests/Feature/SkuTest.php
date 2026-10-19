@@ -54,4 +54,21 @@ class SkuTest extends TestCase
         $this->assertSame(0, Sku::missingCount());
         $this->get(route('admin.products.index'))->assertDontSee('missing SKU');
     }
+
+    public function test_sku_shows_on_order_pages_and_invoice_even_for_old_orders(): void
+    {
+        $p = $this->product('Round Fridge Magnet');                       // gets MFU-MAG-001
+        $order = \App\Models\Order::create(['number' => 'MFU9', 'status' => 'confirmed', 'payment_method' => 'cod', 'payment_status' => 'unpaid',
+            'subtotal' => 100, 'total' => 100, 'name' => 'Asha', 'email' => 'a@example.com', 'phone' => '9876543210',
+            'address_line1' => 'x', 'city' => 'Hyderabad', 'state' => 'Telangana', 'pincode' => '500001']);
+        $item = $order->items()->create(['product_id' => $p->id, 'name' => $p->name, 'sku' => null, 'qty' => 1, 'unit_price' => 100, 'line_total' => 100]);
+        $this->assertSame('MFU-MAG-001', $item->skuCode());
+        $admin = User::factory()->create();
+        $admin->forceFill(['is_admin' => true])->save();
+
+        $this->actingAs($admin)->get(route('admin.orders.show', $order))->assertSee('MFU-MAG-001');
+        $this->get(route('admin.orders.production', $order))->assertSee('MFU-MAG-001');
+        $this->assertSame('MFU-MAG-001', \App\Services\Invoice::breakdown($order->fresh('items'))['lines'][0]['sku']);
+        $this->get(route('admin.orders.invoice', $order))->assertOk()->assertHeader('Content-Type', 'application/pdf');
+    }
 }

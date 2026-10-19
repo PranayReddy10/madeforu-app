@@ -522,10 +522,11 @@ document.addEventListener('click', function (e) {
         var name = box.dataset.base + '[' + Date.now() % 1000000 + ']';
         var row = document.createElement('div');
         row.className = 'choice-row'; row.setAttribute('data-choice-row', '');
-        row.innerHTML = '<img class="preview" hidden alt=""><input type="hidden"><button type="button" class="btn small ghost" data-media-pick data-multiple="0" data-folder="options">Picture</button>'
-            + '<input placeholder="e.g. Heart" maxlength="60"><input type="number" step="0.01" min="0" value="0" title="Extra price (₹)" class="price-in">'
-            + '<input type="number" min="1" max="50" title="Photos needed with this option (blank = as the photo field)" placeholder="photos" class="price-in">'
-            + '<button type="button" class="link danger" data-choice-remove aria-label="Remove option">✕</button>';
+        row.innerHTML = '<img class="preview" hidden alt=""><input type="hidden"><button type="button" class="btn small ghost ch-pic" data-media-pick data-multiple="0" data-folder="options">Picture</button>'
+            + '<label class="ch-f ch-name"><small>Option name</small><input placeholder="e.g. Heart" maxlength="60"></label>'
+            + '<label class="ch-f"><small>Extra ₹</small><input type="number" step="0.01" min="0" value="0"></label>'
+            + '<label class="ch-f"><small>Photos</small><input type="number" min="1" max="50" placeholder="auto" title="Photos the customer uploads with this option (blank = as the photo field)"></label>'
+            + '<button type="button" class="link danger ch-x" data-choice-remove aria-label="Remove option" title="Remove option">✕</button>';
         row.querySelector('img').setAttribute('data-preview-for', name + '[image]');
         row.querySelector('input[type=hidden]').name = name + '[image]';
         row.querySelector('[data-media-pick]').setAttribute('data-input', name + '[image]');
