@@ -52,6 +52,8 @@
             @endforeach
             <div data-totals="online" @if($chosen === 'cod') hidden @endif>@include('partials.totals', ['totals' => $totals])</div>
             <div data-totals="cod" @if($chosen !== 'cod') hidden @endif>@include('partials.totals', ['totals' => $codTotals])</div>
+            @if($w = $totals['coupon_waiting'])<p class="coupon-msg wait">🏷️ <b>{{ $w['code'] }}</b> needs orders of {{ money($w['min']) }}+ — add {{ money($w['short']) }} more in your <a href="{{ route('cart') }}">cart</a> to get {{ $w['off'] }}.</p>@endif
+            @if($totals['coupon_dropped'])<p class="coupon-msg err">{{ $totals['coupon_dropped'] }} It has been removed from your order.</p>@endif
             <button class="btn primary block" data-place>Place order · <span data-place-total>{{ money($chosen === 'cod' ? $codTotals['total'] : $totals['total']) }}</span></button>
             <p class="small muted center">By placing your order you agree to our <a href="{{ collect($footerPages)->first(fn ($p) => str_contains($p['url'], 'term'))['url'] ?? url('/') }}">terms</a>. Personalised items are made just for you.</p>
         </aside>

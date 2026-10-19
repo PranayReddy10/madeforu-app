@@ -52,10 +52,19 @@
                 <div class="ship-meter done"><p>🎉 You get free shipping</p><span style="--p: 100%"></span></div>
             @endif
             @include('partials.totals', ['totals' => $totals])
+            @if($totals['coupon_dropped'])<p class="coupon-msg err" role="alert">{{ $totals['coupon_dropped'] }} It has been removed.</p>@endif
             @if($totals['coupon'])
                 <form method="post" action="{{ route('cart.coupon.remove') }}" class="coupon-on">@csrf Coupon <b>{{ $totals['coupon'] }}</b> applied <button class="link-btn">Remove</button></form>
+                @if(session('coupon_ok'))<p class="coupon-msg ok" role="status">{{ session('coupon_ok') }}</p>@endif
+            @elseif($w = $totals['coupon_waiting'])
+                <form method="post" action="{{ route('cart.coupon.remove') }}" class="coupon-wait">@csrf
+                    <span>🏷️ <b>{{ $w['code'] }}</b> is saved — add <b>{{ money($w['short']) }}</b> more to get {{ $w['off'] }} <small>(orders of {{ money($w['min']) }}+)</small></span>
+                    <button class="link-btn">Remove</button>
+                </form>
             @else
-                <form method="post" action="{{ route('cart.coupon') }}" class="coupon">@csrf<input name="code" placeholder="Coupon code" aria-label="Coupon code"><button class="btn small">Apply</button></form>
+                @php($couponErr = session('coupon_error') ?: $errors->first('code'))
+                <form method="post" action="{{ route('cart.coupon') }}" class="coupon @if($couponErr) has-err @endif">@csrf<input name="code" value="{{ old('code') }}" placeholder="Coupon code" aria-label="Coupon code" maxlength="40" autocomplete="off" @if($couponErr) aria-invalid="true" aria-describedby="coupon-err" @endif><button class="btn small">Apply</button></form>
+                @if($couponErr)<p class="coupon-msg err" id="coupon-err" role="alert">{{ $couponErr }}</p>@endif
             @endif
             <a href="{{ route('checkout') }}" class="btn primary block">Checkout · {{ money($totals['total']) }}</a>
             <a href="{{ url('shop') }}/" class="link-btn center">Continue shopping</a>

@@ -289,19 +289,24 @@ class Cart
         return $out;
     }
 
+    /**
+     * Returns null when applied, else a message for the customer. A coupon that only needs a
+     * bigger cart is kept and switches on by itself once the cart reaches its minimum.
+     */
     public function applyCoupon(string $code): ?string
     {
-        $coupon = Coupon::whereRaw('upper(code) = ?', [strtoupper(trim($code))])->first();
+        $code = strtoupper(trim($code));
+        $coupon = Coupon::whereRaw('upper(code) = ?', [$code])->first();
         if (! $coupon) {
-            return 'That coupon code is not valid.';
+            return "“{$code}” isn’t a valid coupon code — please check the spelling.";
         }
-        $result = $coupon->discountFor($this->subtotal($this->lines()));
-        if (is_string($result)) {
-            return $result;
+        $problem = $coupon->problem($this->subtotal($this->lines()));
+        if ($problem && $problem['reason'] !== 'min') {
+            return $problem['message'];
         }
         session([self::COUPON => $coupon->code]);
 
-        return null;
+        return $problem ? $problem['message'].' We’ve saved it — it applies automatically once you do.' : null;
     }
 
     public function removeCoupon(): void
@@ -327,7 +332,7 @@ class Cart
      * With the "live" shipping setting and a delivery PIN, shipping is Delhivery's own rate for the
      * parcel (weight or packed size, whichever is billed) to that PIN; otherwise the flat fee.
      *
-     * @return array{subtotal: float, discount: float, coupon: ?string, shipping: float, cod_fee: float, total: float, free_shipping_gap: float, shipping_live: bool, shipping_estimate: bool}
+     * @return array{subtotal: float, discount: float, coupon: ?string, coupon_waiting: ?array, coupon_dropped: ?string, shipping: float, cod_fee: float, total: float, free_shipping_gap: float, shipping_live: bool, shipping_estimate: bool}
      */
     public function totals(?Collection $lines = null, string $paymentMethod = 'razorpay', ?string $pin = null): array
     {
@@ -335,11 +340,18 @@ class Cart
         $subtotal = $this->subtotal($lines);
         $discount = 0.0;
         $code = session(self::COUPON);
+        $waiting = null;
+        $dropped = null;
         if ($code && ($coupon = Coupon::where('code', $code)->first())) {
-            $d = $coupon->discountFor($subtotal);
-            if (is_float($d)) {
-                $discount = $d;
+            $problem = $coupon->problem($subtotal);
+            if (! $problem) {
+                $discount = $coupon->discountFor($subtotal);
+            } elseif ($problem['reason'] === 'min' && $lines->isNotEmpty()) {
+                // Kept: it switches on once the cart reaches the minimum.
+                $waiting = ['code' => strtoupper($coupon->code), 'short' => $problem['short'], 'off' => $coupon->offText(), 'min' => (float) $coupon->min_subtotal];
+                $code = null;
             } else {
+                $dropped = $problem['message'];
                 $code = null;
                 $this->removeCoupon();
             }
@@ -356,6 +368,8 @@ class Cart
             'subtotal' => $subtotal,
             'discount' => $discount,
             'coupon' => $code,
+            'coupon_waiting' => $waiting,
+            'coupon_dropped' => $dropped,
             'shipping' => $shipping,
             'cod_fee' => $cod,
             'shipping_live' => (bool) ($quote['live'] ?? false),
