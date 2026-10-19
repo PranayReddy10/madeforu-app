@@ -32,6 +32,7 @@ class CatalogController extends Controller
                 'featured' => '1 = only featured products',
                 'updated_since' => 'date/time, e.g. 2026-10-01 — only products changed since then (for syncing)',
                 'per_page' => '1–100, default 50',
+                'source' => 'your app name, e.g. myapp — buy_url links then carry utm_source=myapp so orders show which app they came from',
                 'page' => 'page number',
             ],
             'auth' => setting('api.key') ? 'API key required: ?key=… or X-Api-Key header' : 'open',
@@ -43,7 +44,7 @@ class CatalogController extends Controller
         $request->validate([
             'per_page' => 'nullable|integer|min:1|max:100', 'page' => 'nullable|integer|min:1',
             'category' => 'nullable|string|max:191', 'q' => 'nullable|string|max:100',
-            'updated_since' => 'nullable|date', 'in_stock' => 'nullable|boolean', 'featured' => 'nullable|boolean',
+            'updated_since' => 'nullable|date', 'in_stock' => 'nullable|boolean', 'featured' => 'nullable|boolean', 'source' => 'nullable|string|max:40',
         ]);
         $q = Product::active()->with(['images', 'variants', 'categories', 'customizationFields', 'productAttributes', 'primaryCategory'])->orderBy('id');
         if ($slug = $request->query('category')) {
@@ -111,6 +112,17 @@ class CatalogController extends Controller
         ])->values()]);
     }
 
+    /**
+     * Product page link for a "Buy" button in another app: ?source=myapp on the API call tags it
+     * utm_source=myapp&utm_medium=app, so the order shows which app it came from (Orders → order → Source).
+     */
+    private static function buyUrl(string $url): string
+    {
+        $source = substr(preg_replace('/[^a-z0-9_-]/', '', strtolower((string) request()->query('source', 'app'))), 0, 40) ?: 'app';
+
+        return $url.(str_contains($url, '?') ? '&' : '?').'utm_source='.$source.'&utm_medium=app';
+    }
+
     /** Readable JSON: real slashes in URLs and ₹ / – as themselves. */
     private static function json(array $data, int $status = 200): JsonResponse
     {
@@ -128,6 +140,7 @@ class CatalogController extends Controller
             'name' => $p->name,
             'slug' => $p->slug,
             'url' => $p->url(),
+            'buy_url' => self::buyUrl($p->url()),
             'type' => $p->type,
             'price' => $price,
             'regular_price' => $regular,
@@ -156,6 +169,7 @@ class CatalogController extends Controller
                 'stock_qty' => $v->stock_qty,
                 'image' => $v->image ? media_url($v->image) : null,
                 'url' => $p->url().'?variant='.$v->id,
+                'buy_url' => self::buyUrl($p->url().'?variant='.$v->id),
             ])->values(),
             'personalisation' => $p->customizationFields->map(fn (CustomizationField $f) => array_filter([
                 'label' => $f->label,
