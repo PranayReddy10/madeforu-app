@@ -596,3 +596,56 @@ document.querySelectorAll('[data-rate-test]').forEach(function (box) {
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape') set(false); });
     window.matchMedia('(min-width: 901px)').addEventListener('change', function (m) { if (m.matches) set(false); });
 })();
+
+/* Product form: live preview editor — drag the box over the photo area, resize from the corner */
+document.querySelectorAll('[data-preview-editor]').forEach(function (ed) {
+    var stage = ed.querySelector('[data-pv-stage]'), box = ed.querySelector('[data-pv-box]');
+    var f = {}; ed.querySelectorAll('[data-pv]').forEach(function (i) { f[i.dataset.pv] = i; });
+    var r1 = function (v) { return Math.round(v * 10) / 10; };
+    function place() {
+        box.style.left = f.x.value + '%'; box.style.top = f.y.value + '%';
+        box.style.width = f.w.value + '%'; box.style.height = f.h.value + '%';
+    }
+    Object.values(f).forEach(function (i) { i.addEventListener('input', place); });
+    ed.querySelector('[data-pv-shape]').addEventListener('change', function (e) { box.className = 'pv-box shape-' + e.target.value; });
+    var drag = null;
+    box.addEventListener('pointerdown', function (e) {
+        e.preventDefault();
+        var r = stage.getBoundingClientRect();
+        drag = { resize: !!e.target.closest('[data-pv-resize]'), sx: e.clientX, sy: e.clientY, r: r, x: +f.x.value, y: +f.y.value, w: +f.w.value, h: +f.h.value };
+        box.setPointerCapture(e.pointerId);
+    });
+    box.addEventListener('pointermove', function (e) {
+        if (!drag) return;
+        var dx = (e.clientX - drag.sx) / drag.r.width * 100, dy = (e.clientY - drag.sy) / drag.r.height * 100;
+        if (drag.resize) {
+            f.w.value = r1(Math.max(5, Math.min(100 - drag.x, drag.w + dx)));
+            f.h.value = r1(Math.max(5, Math.min(100 - drag.y, drag.h + dy)));
+        } else {
+            f.x.value = r1(Math.max(0, Math.min(100 - drag.w, drag.x + dx)));
+            f.y.value = r1(Math.max(0, Math.min(100 - drag.h, drag.y + dy)));
+        }
+        place();
+    });
+    box.addEventListener('pointerup', function () { drag = null; });
+    ed.querySelector('[data-pv-clear]').addEventListener('click', function () {
+        ed.querySelector('[data-pv-image]').value = '';
+        var bg = ed.querySelector('[data-pv-bg]'); if (bg.dataset.default) bg.src = bg.dataset.default;
+    });
+});
+
+/* Product form: margin as you type the cost */
+(function () {
+    var cost = document.querySelector('[data-cost-input]'), out = document.querySelector('[data-margin-hint]');
+    if (!cost || !out) return;
+    var price = document.querySelector('input[name=price]'), sale = document.querySelector('input[name=sale_price]');
+    function show() {
+        var sell = +(sale && sale.value > 0 ? sale.value : price.value), c = +cost.value;
+        if (!sell || cost.value === '') { out.textContent = 'Add the cost to see your margin on each sale.'; return; }
+        var m = sell - c;
+        out.textContent = 'You keep ₹' + m.toFixed(2) + ' per sale (' + Math.round(100 * m / sell) + '% margin) before packing, shipping and payment fees.';
+        out.style.color = m < 0 ? 'var(--err)' : '';
+    }
+    [cost, price, sale].forEach(function (i) { if (i) i.addEventListener('input', show); });
+    show();
+})();

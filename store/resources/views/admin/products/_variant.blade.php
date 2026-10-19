@@ -2,6 +2,7 @@
     <td><input type="hidden" name="variants[{{ $i }}][id]" value="{{ $v['id'] ?? '' }}"><input name="variants[{{ $i }}][options]" value="{{ $v['options'] ?? '' }}" placeholder="Size=A4; Frame=Black" data-variant-options></td>
     <td><input type="number" step="0.01" min="0" name="variants[{{ $i }}][price]" value="{{ $v['price'] ?? '' }}" class="w-num"></td>
     <td><input type="number" step="0.01" min="0" name="variants[{{ $i }}][sale_price]" value="{{ $v['sale_price'] ?? '' }}" class="w-num"></td>
+    <td><input type="number" step="0.01" min="0" name="variants[{{ $i }}][cost_price]" value="{{ $v['cost_price'] ?? '' }}" class="w-num" placeholder="as product" title="What one costs you to make (blank = the product's cost)"></td>
     <td><input name="variants[{{ $i }}][sku]" value="{{ $v['sku'] ?? '' }}" class="w-sku"></td>
     <td class="center"><input type="checkbox" name="variants[{{ $i }}][in_stock]" value="1" @checked(! empty($v['in_stock']))></td>
     <td><input type="number" min="0" step="1" name="variants[{{ $i }}][stock_qty]" value="{{ $v['stock_qty'] ?? '' }}" class="w-num" placeholder="∞" title="Blank = made to order"></td>

@@ -10,7 +10,7 @@ class ProductVariant extends Model
 {
     protected $guarded = ['id'];
 
-    protected $casts = ['options' => 'array', 'in_stock' => 'boolean', 'stock_qty' => 'integer', 'price' => 'decimal:2', 'sale_price' => 'decimal:2'];
+    protected $casts = ['options' => 'array', 'in_stock' => 'boolean', 'stock_qty' => 'integer', 'price' => 'decimal:2', 'sale_price' => 'decimal:2', 'cost_price' => 'decimal:2'];
 
     protected static function booted(): void
     {

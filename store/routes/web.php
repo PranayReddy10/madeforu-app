@@ -124,6 +124,7 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'admin'])->group(fun
     Route::put('customers/{user}', [Admin\UserController::class, 'update'])->name('users.update');
     Route::post('customers/{user}/reset-link', [Admin\UserController::class, 'resetLink'])->name('users.reset-link');
     Route::get('analytics', [Admin\AnalyticsController::class, 'index'])->name('analytics');
+    Route::get('profit', [Admin\ProfitController::class, 'index'])->name('profit');
     Route::get('home-page', [Admin\HomePageController::class, 'edit'])->name('home.edit');
     Route::put('home-page', [Admin\HomePageController::class, 'update'])->name('home.update');
     Route::post('analytics/refresh', [Admin\AnalyticsController::class, 'refresh'])->name('analytics.refresh');

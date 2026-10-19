@@ -156,6 +156,7 @@ class CheckoutController extends Controller
                     'variant_id' => $l->variant?->id,
                     'name' => $l->product->name,
                     'sku' => $l->variant?->sku ?: $l->product->sku,
+                    'unit_cost' => $l->product->costFor($l->variant),
                     'options' => $l->variant?->options,
                     'customization' => collect($l->details)->map(fn ($d) => [
                         'label' => $d->label, 'type' => $d->type, 'value' => $d->value,

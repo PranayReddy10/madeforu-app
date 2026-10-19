@@ -22,6 +22,7 @@
                 $nav = [
                     ['admin.dashboard', 'Dashboard', 'admin'],
                     ['admin.analytics', 'Analytics', 'admin/analytics*'],
+                    ['admin.profit', 'Profit', 'admin/profit*'],
                     ['admin.orders.index', 'Orders', 'admin/orders*'],
                     ['admin.users.index', 'Customers', 'admin/customers*'],
                     ['admin.products.index', 'Products', 'admin/products*'],

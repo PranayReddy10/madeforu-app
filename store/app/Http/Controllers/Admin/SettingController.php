@@ -27,6 +27,13 @@ class SettingController extends Controller
             'home_title' => ['Home page title', 'text', 'The <title> Google shows for the home page (aim for 50–60 characters).'],
             'home_description' => ['Home page meta description', 'textarea', '70–160 characters.'],
         ],
+        'Live preview & profit' => [
+            'preview.enabled' => ['Live photo preview on product pages', 'bool', 'Master switch. Each product also has its own switch under Products → Edit → Live preview.'],
+            'profit.packing' => ['Packing cost per order (₹)', 'number', 'Box or flyer, tape, filler — used on the Profit page.'],
+            'profit.gateway_percent' => ['Payment gateway fee (% of online orders)', 'number', 'Razorpay / Cashfree charge, e.g. 2. COD orders have no gateway fee.'],
+            'profit.shipping_mode' => ['Courier cost on the Profit page', 'select:charged=Same as the delivery charge the customer paid,fixed=A fixed amount per order (below)', 'For free-shipping orders the fixed amount is used either way.'],
+            'profit.shipping_fixed' => ['Courier cost per order (₹)', 'number', 'Your average Delhivery bill per parcel, e.g. 65.'],
+        ],
         'Shipping & payment' => [
             'free_shipping_over' => ['Free shipping over (₹)', 'number', ''],
             'shipping.mode' => ['How delivery charges are worked out', 'select:flat=Flat fee (below),live=Live Delhivery rate by weight, size and PIN', 'Live uses each product’s weight and packed size, the customer’s PIN code and your pickup PIN. If Delhivery doesn’t answer, the flat fee is used.'],
