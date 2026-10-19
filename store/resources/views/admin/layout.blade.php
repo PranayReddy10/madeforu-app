@@ -31,6 +31,7 @@
                     ['admin.abandoned.index', 'Abandoned carts', 'admin/abandoned-carts*'],
                     ['admin.reviews.index', 'Reviews', 'admin/reviews*'],
                     ['admin.messages.index', 'Messages', 'admin/messages*'],
+                    ['admin.campaign.edit', 'Campaign', 'admin/campaign*'],
                     ['admin.coupons.index', 'Coupons', 'admin/coupons*'],
                     ['admin.home.edit', 'Home page', 'admin/home-page*'],
                     ['admin.banners.index', 'Banners', 'admin/banners*'],

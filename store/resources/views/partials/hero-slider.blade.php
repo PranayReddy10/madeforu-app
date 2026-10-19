@@ -4,10 +4,13 @@
 --}}
 @php
     $slides = collect();
+    if (\App\Support\Campaign::active()) {
+        $slides->push(['kind' => 'campaign']);
+    }
     foreach ($banners as $b) {
         $slides->push(['kind' => 'banner', 'b' => $b]);
     }
-    if ($slides->isEmpty()) {
+    if ($slides->reject(fn ($s) => $s['kind'] === 'campaign')->isEmpty()) {
         $pics = $featured->concat($bestsellers)->unique('id')->filter(fn ($p) => $p->images->isNotEmpty())->values();
         $slides->push(['kind' => 'brand', 'pics' => $pics->take(3)]);
         if ($top = $bestsellers->first()) {
@@ -20,7 +23,18 @@
     <div class="hs-track" data-slider-track>
         @foreach($slides as $i => $s)
             <div class="hs-slide hs-{{ $s['kind'] }}" role="group" aria-roledescription="slide" aria-label="{{ $i + 1 }} of {{ $slides->count() }}">
-                @if($s['kind'] === 'banner')
+                @if($s['kind'] === 'campaign')
+                    @php $C = \App\Support\Campaign::class; @endphp
+                    <a href="{{ $C::url() }}" class="hs-inner hs-camp">
+                        <div class="hs-copy">
+                            <span class="hs-kicker">🪔 {{ $C::name() }} gifts</span>
+                            <h2 class="hs-title">{{ $C::headline() }}</h2>
+                            <p class="hs-sub">@if($C::beforeDeadline())Order by {{ $C::deadline()->format('D, j M') }} for delivery before {{ $C::name() }}@else Last-minute? Message us on WhatsApp @endif @if($C::coupon() && $C::discount() > 0)· use <b>{{ $C::coupon() }}</b> for {{ rtrim(rtrim(number_format($C::discount(), 1), '0'), '.') }}% off @endif</p>
+                            <span class="btn light">Shop {{ $C::name() }} gifts</span>
+                        </div>
+                        <div class="hs-art camp-art" aria-hidden="true"><span>🪔</span><span>✨</span><span>🎁</span></div>
+                    </a>
+                @elseif($s['kind'] === 'banner')
                     @php $b = $s['b']; @endphp
                     <a href="{{ $b->link ?: url('shop').'/' }}" class="hs-banner">
                         <picture>

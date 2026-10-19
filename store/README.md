@@ -219,6 +219,32 @@ Hi {{1}}, you left {{2}} in your MadeForU cart 💝 Your photos are saved — fi
 - **Review requests:** a couple of days after an order is delivered, the customer gets "How was your gift?" by email (and WhatsApp when set up) with a link to review every item on one page. Settings → Reviews: days to wait, and whether verified 4★/5★ reviews publish straight away (otherwise approve them in Admin → Reviews).
 - Optional WhatsApp template **review_request** (Utility): `Hi {{1}}, how was your MadeForU order {{2}}? 💝 We'd love a quick review — photos of your gift are extra special: {{3}}`
 
+## Festival campaign (Diwali and others)
+
+Set it up in **Admin → Campaign**:
+1. Tap a preset (Diwali, Christmas, Valentine's) or type your own festival.
+2. Check the festival date and the last order-by date.
+3. Set the coupon and the gifts to feature, tick **Campaign is on**, and save.
+
+While it's on:
+- Every page shows a countdown strip with the coupon. After the order-by date it changes to "Last-minute? Message us on WhatsApp".
+- The home banner opens with a festive slide.
+- Product pages say "Order now, arrives before Diwali" or warn that it may arrive late (worked out from production days plus delivery).
+- The landing page `/diwali-gifts/` has a big countdown, a tap-to-copy coupon, the gifts, and a bulk/corporate WhatsApp button.
+- The coupon is created for you and expires at the end of the festival day.
+
+Everything switches off by itself after the festival.
+
+## WhatsApp your customers
+
+**Admin → Customers → WhatsApp your customers** lists everyone who has ordered (imported WordPress orders included) or has an account with a mobile number, with one row per number.
+- Filter by bought before, ordered in the last 90 days, not ordered in 90+ days, or everyone.
+- Write the message once; `{name}` becomes their first name and `{link}` the campaign page.
+- Each **Send** opens WhatsApp with their message ready, and rows you've sent are ticked.
+- **Download list (CSV)** gives you the list for WhatsApp Business broadcast lists.
+
+Send 20–30 an hour so WhatsApp doesn't flag your number.
+
 ## Live preview
 
 **Products → Edit → Live preview:** tick "Show live preview" and drag the pink box onto the area where the customer's photo is printed. Resize from its corner, or type the numbers. Then choose:

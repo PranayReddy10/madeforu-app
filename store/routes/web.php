@@ -120,11 +120,15 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'admin'])->group(fun
     Route::post('speed', [Admin\DashboardController::class, 'speed'])->name('speed');
     Route::get('customers', [Admin\UserController::class, 'index'])->name('users.index');
     Route::post('customers', [Admin\UserController::class, 'store'])->name('users.store');
+    Route::get('customers/whatsapp', [Admin\UserController::class, 'whatsapp'])->name('users.whatsapp');
+    Route::post('customers/whatsapp', [Admin\UserController::class, 'saveWhatsappMessage'])->name('users.whatsapp.message');
     Route::get('customers/{user}', [Admin\UserController::class, 'show'])->name('users.show');
     Route::put('customers/{user}', [Admin\UserController::class, 'update'])->name('users.update');
     Route::post('customers/{user}/reset-link', [Admin\UserController::class, 'resetLink'])->name('users.reset-link');
     Route::get('analytics', [Admin\AnalyticsController::class, 'index'])->name('analytics');
     Route::get('profit', [Admin\ProfitController::class, 'index'])->name('profit');
+    Route::get('campaign', [Admin\CampaignController::class, 'edit'])->name('campaign.edit');
+    Route::put('campaign', [Admin\CampaignController::class, 'update'])->name('campaign.update');
     Route::get('home-page', [Admin\HomePageController::class, 'edit'])->name('home.edit');
     Route::put('home-page', [Admin\HomePageController::class, 'update'])->name('home.update');
     Route::post('analytics/refresh', [Admin\AnalyticsController::class, 'refresh'])->name('analytics.refresh');

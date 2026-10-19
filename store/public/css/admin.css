@@ -591,3 +591,7 @@ table th { color: var(--muted); }
 .pf-row.total.neg b { color: var(--err); }
 .profit-card strong { color: #1f9d55; }
 .profit-card.neg strong { color: var(--err); }
+.wa-send { background: #25d366; border-color: #25d366; color: #fff; white-space: nowrap; }
+.wa-send:hover { text-decoration: none; filter: brightness(.95); }
+tr.wa-done td { opacity: .55; }
+tr.wa-done .wa-send { background: #fff; color: #128c47; }

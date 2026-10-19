@@ -51,6 +51,7 @@
 @if($announcement = setting('announcement'))
     <div class="announce">{{ $announcement }}</div>
 @endif
+@include('partials.campaign-strip')
 
 <header class="site-header" id="top">
     <div class="wrap header-row">

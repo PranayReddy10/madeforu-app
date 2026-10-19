@@ -1,5 +1,6 @@
 @extends('admin.layout')
 @section('title', 'Customers & admins')
+@section('actions')<a class="btn wa-send" href="{{ route('admin.users.whatsapp') }}">WhatsApp your customers</a>@endsection
 @section('content')
 <nav class="ol-tabs">
     <a href="{{ route('admin.users.index', array_filter(['q' => request('q')])) }}" class="{{ request('role') ? '' : 'on' }}">Everyone <b>{{ $counts['all'] }}</b></a>

@@ -649,3 +649,41 @@ document.querySelectorAll('[data-preview-editor]').forEach(function (ed) {
     [cost, price, sale].forEach(function (i) { if (i) i.addEventListener('input', show); });
     show();
 })();
+
+/* Campaign: quick-fill a festival preset */
+document.querySelectorAll('[data-campaign-form] [data-preset]').forEach(function (b) {
+    b.addEventListener('click', function () {
+        var p = JSON.parse(b.dataset.preset), f = b.closest('form');
+        ['name', 'festival', 'deadline', 'coupon', 'headline'].forEach(function (k) { if (f[k]) f[k].value = p[k]; });
+        f.querySelector('input[type=checkbox][name=enabled]').checked = true;
+    });
+});
+
+/* WhatsApp your customers: personalised wa.me links, rows you've sent are ticked (kept in this browser) */
+(function () {
+    var list = document.querySelector('[data-wa-list]'), msg = document.querySelector('[data-wa-message]');
+    if (!list || !msg) return;
+    var KEY = 'mfu.wa.sent', sent = {};
+    try { sent = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch (e) {}
+    var left = document.querySelector('[data-wa-left]');
+    function build() {
+        list.querySelectorAll('[data-wa-send]').forEach(function (a) {
+            var text = msg.value.replace(/\{name\}/g, a.dataset.name).replace(/\{link\}/g, list.dataset.link);
+            a.href = 'https://wa.me/' + a.dataset.phone + '?text=' + encodeURIComponent(text);
+            var row = a.closest('[data-wa-row]'), done = sent[row.dataset.waRow];
+            row.classList.toggle('wa-done', !!done);
+            a.textContent = done ? 'Sent ✓ again?' : 'Send';
+        });
+        var rows = list.querySelectorAll('[data-wa-row]'), n = [].filter.call(rows, function (r) { return sent[r.dataset.waRow]; }).length;
+        if (left) left.textContent = n + ' of ' + rows.length + ' sent from this browser';
+    }
+    msg.addEventListener('input', build);
+    list.addEventListener('click', function (e) {
+        var a = e.target.closest('[data-wa-send]');
+        if (!a) return;
+        sent[a.closest('[data-wa-row]').dataset.waRow] = Date.now();
+        try { localStorage.setItem(KEY, JSON.stringify(sent)); } catch (x) {}
+        setTimeout(build, 50);
+    });
+    build();
+})();
