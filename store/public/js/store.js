@@ -269,9 +269,20 @@
         var input = $('input', q);
         $$('[data-step]', q).forEach(function (b) {
             b.addEventListener('click', function () {
+                // A personalised cart line: ask "same for all / different for each" before adding one more.
+                var pop = q.hasAttribute('data-each-ask') && +b.dataset.step > 0 && q.closest('.line') && $('[data-each-pop]', q.closest('.line'));
+                if (pop) { pop.hidden = !pop.hidden; return; }
                 var v = Math.max(+input.min || 0, Math.min(+input.max || 99, (+input.value || 0) + +b.dataset.step));
                 input.value = v; input.dispatchEvent(new Event('change', { bubbles: true }));
             });
+        });
+    });
+    $$('[data-each-same]').forEach(function (b) {
+        b.addEventListener('click', function () {
+            var input = $('[data-qty] input', b.closest('.line'));
+            input.value = Math.min(+input.max || 99, (+input.value || 0) + 1);
+            b.closest('[data-each-pop]').hidden = true;
+            input.dispatchEvent(new Event('change', { bubbles: true }));
         });
     });
     var cartTimer;
