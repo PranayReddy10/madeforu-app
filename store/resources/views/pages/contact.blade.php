@@ -43,7 +43,7 @@
                     <div class="hp" aria-hidden="true"><label>Website <input name="website" tabindex="-1" autocomplete="off"></label></div>
                     <label>Your name <input name="name" value="{{ old('name', auth()->user()?->name) }}" required maxlength="120" autocomplete="name"></label>
                     <div class="row2">
-                        <label>Mobile number <input type="tel" name="phone" value="{{ old('phone', auth()->user()?->phone) }}" required inputmode="tel" autocomplete="tel" placeholder="10-digit mobile" pattern="[\d\s+\-]{10,16}" title="10-digit mobile number"></label>
+                        <label>Mobile number <input type="tel" name="phone" value="{{ old('phone', substr(preg_replace('/\D/', '', (string) auth()->user()?->phone), -10)) }}" required inputmode="numeric" pattern="[6-9][0-9]{9}" title="Enter a 10-digit mobile number" data-mobile autocomplete="tel-national" placeholder="10-digit mobile"></label>
                         <label>Email <input type="email" name="email" value="{{ old('email', auth()->user()?->email) }}" required maxlength="191" autocomplete="email" placeholder="name@gmail.com"></label>
                     </div>
                     <div class="row2">

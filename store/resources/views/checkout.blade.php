@@ -10,7 +10,7 @@
                 <h2 class="h-sm">Contact</h2>
                 <div class="form-grid">
                     <label class="span2">Full name<input name="name" value="{{ old('name', $prefill['name']) }}" required autocomplete="name"></label>
-                    <label>Mobile number<input name="phone" type="tel" value="{{ old('phone', $prefill['phone']) }}" required inputmode="tel" autocomplete="tel" placeholder="10-digit mobile"></label>
+                    <label>Mobile number<input name="phone" type="tel" value="{{ old('phone', substr(preg_replace('/\D/', '', (string) $prefill['phone']), -10)) }}" required inputmode="numeric" pattern="[6-9][0-9]{9}" title="Enter a 10-digit mobile number" data-mobile autocomplete="tel-national" placeholder="10-digit mobile"></label>
                     <label>Email<input name="email" type="email" value="{{ old('email', $prefill['email']) }}" required autocomplete="email"></label>
                 </div>
             </section>
