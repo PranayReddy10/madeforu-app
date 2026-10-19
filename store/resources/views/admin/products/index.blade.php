@@ -1,6 +1,11 @@
 @extends('admin.layout')
 @section('title', 'Products')
-@section('actions')<a class="btn" href="{{ route('admin.products.create') }}">+ New product</a>@endsection
+@section('actions')
+    @if ($missingSkus)
+        <form method="post" action="{{ route('admin.products.skus') }}">@csrf<button class="btn ghost" title="Makes MFU-MAG-007 style codes for every product and option without one; existing SKUs stay">Create {{ $missingSkus }} missing {{ $missingSkus === 1 ? 'SKU' : 'SKUs' }}</button></form>
+    @endif
+    <a class="btn" href="{{ route('admin.products.create') }}">+ New product</a>
+@endsection
 @section('content')
 <form class="filters card" method="get">
     <input type="search" name="q" value="{{ request('q') }}" placeholder="Search name or SKU">

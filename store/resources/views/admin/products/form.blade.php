@@ -43,7 +43,7 @@
                 <input name="slug" id="f-slug" value="{{ old('slug', $product->slug) }}" maxlength="255" placeholder="auto from name">
             </label>
             <div class="row3">
-                <label>SKU <input name="sku" value="{{ old('sku', $product->sku) }}"></label>
+                <label>SKU <input name="sku" value="{{ old('sku', $product->sku) }}" placeholder="auto, e.g. MFU-MAG-007" maxlength="64"></label>
                 <label>Type
                     <select name="type" id="f-type">
                         <option value="simple" @selected(old('type', $product->type) === 'simple')>Simple</option>
