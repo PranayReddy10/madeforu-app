@@ -428,6 +428,14 @@ html.locked body { position: fixed; left: 0; right: 0; }
 .coupon { display: flex; gap: 8px; }
 .coupon input { flex: 1; height: 38px; border: 1.5px solid var(--line); border-radius: 999px; padding: 0 14px; text-transform: uppercase; }
 .coupon-on { font-size: 14px; background: var(--mint-l); padding: 8px 12px; border-radius: 10px; }
+.coupon.has-err input { border-color: #d64545; background: #fff6f6; }
+.coupon-msg { font-size: 13.5px; line-height: 1.45; margin: 6px 2px 0; padding: 8px 12px; border-radius: 10px; }
+.coupon-msg.err { color: #a12a2a; background: #fdeeee; border: 1px solid #f5cccc; }
+.coupon-msg.ok { color: #1d6b45; background: var(--mint-l); }
+.coupon-msg.wait { color: #7a5200; background: #fff6e0; border: 1px solid #f3dfa8; }
+.coupon-msg.wait a { color: inherit; font-weight: 600; }
+.coupon-wait { display: flex; gap: 8px; align-items: center; justify-content: space-between; font-size: 14px; line-height: 1.45; background: #fff6e0; border: 1px dashed #e9c66c; color: #6b4a00; padding: 9px 12px; border-radius: 10px; }
+.coupon-wait small { color: #8a6a20; }
 .panel { background: #fff; border-radius: var(--r); padding: 16px; box-shadow: var(--shadow); margin-bottom: 14px; }
 .form-grid { display: grid; gap: 12px; }
 .form-grid label, .auth label { display: grid; gap: 6px; font-size: 14px; font-weight: 600; }

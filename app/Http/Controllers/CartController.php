@@ -19,6 +19,12 @@ class CartController extends Controller
     {
         $seo->title('Cart')->noindex();
         $lines = $this->cart->lines();
+        // ?coupon=CODE from a campaign or WhatsApp link.
+        if (($code = request()->query('coupon')) && is_string($code) && strlen($code) <= 40 && $lines->isNotEmpty()) {
+            if ($error = $this->cart->applyCoupon($code)) {
+                session()->now('coupon_error', $error);
+            }
+        }
 
         return view('cart', ['lines' => $lines, 'totals' => $this->cart->totals($lines)]);
     }
@@ -123,10 +129,16 @@ class CartController extends Controller
 
     public function coupon(Request $request)
     {
-        $request->validate(['code' => 'required|string|max:40']);
+        $request->validate(['code' => 'required|string|max:40'], [
+            'code.required' => 'Please type a coupon code first.',
+            'code.max' => 'That code is too long — please check it.',
+        ]);
         $error = $this->cart->applyCoupon($request->code);
+        if ($error) {
+            return back()->withInput()->with('coupon_error', $error);
+        }
 
-        return back()->with($error ? 'error' : 'status', $error ?: 'Coupon applied.');
+        return back()->with('coupon_ok', 'Coupon '.strtoupper(trim($request->code)).' applied 🎉');
     }
 
     public function removeCoupon()
