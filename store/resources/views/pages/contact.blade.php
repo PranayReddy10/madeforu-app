@@ -43,7 +43,7 @@
                     <label>Your name <input name="name" value="{{ old('name', auth()->user()?->name) }}" required maxlength="120" autocomplete="name"></label>
                     <div class="row2">
                         <label>Mobile number <input type="tel" name="phone" value="{{ old('phone', auth()->user()?->phone) }}" required inputmode="tel" autocomplete="tel" placeholder="10-digit mobile" pattern="[\d\s+\-]{10,16}" title="10-digit mobile number"></label>
-                        <label>Email <small class="muted">(optional)</small><input type="email" name="email" value="{{ old('email', auth()->user()?->email) }}" maxlength="191" autocomplete="email"></label>
+                        <label>Email <input type="email" name="email" value="{{ old('email', auth()->user()?->email) }}" required maxlength="191" autocomplete="email" placeholder="name@gmail.com"></label>
                     </div>
                     <div class="row2">
                         <label>What’s it about?
