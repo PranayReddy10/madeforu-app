@@ -63,6 +63,6 @@ class CouponController extends Controller
             throw ValidationException::withMessages(['value' => 'A percentage cannot be more than 100.']);
         }
 
-        return $data + ['min_subtotal' => $data['min_subtotal'] ?? 0, 'is_active' => $request->boolean('is_active')];
+        return $data + ['min_subtotal' => $data['min_subtotal'] ?? 0, 'is_active' => $request->boolean('is_active'), 'show_on_cart' => $request->boolean('show_on_cart')];
     }
 }

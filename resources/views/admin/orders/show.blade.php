@@ -153,7 +153,8 @@
         @endforeach
         <table class="tbl totals">
             <tr><td>Subtotal</td><td class="right">{{ money($order->subtotal) }}</td></tr>
-            @if ((float) $order->discount)<tr><td>Discount {{ $order->coupon_code ? '('.$order->coupon_code.')' : '' }}</td><td class="right">−{{ money($order->discount) }}</td></tr>@endif
+            @if ($order->discount - $order->prepaid_discount > 0)<tr><td>Discount {{ $order->coupon_code ? '('.$order->coupon_code.')' : '' }}</td><td class="right">−{{ money($order->discount - $order->prepaid_discount) }}</td></tr>@endif
+            @if ($order->prepaid_discount > 0)<tr><td>Online payment discount</td><td class="right">−{{ money($order->prepaid_discount) }}</td></tr>@endif
             <tr><td>Shipping</td><td class="right">{{ money($order->shipping) }}</td></tr>
             @if ((float) $order->cod_fee)<tr><td>Cash on delivery charges</td><td class="right">{{ money($order->cod_fee) }}</td></tr>@endif
             <tr><th>Total</th><th class="right">{{ money($order->total) }}</th></tr>

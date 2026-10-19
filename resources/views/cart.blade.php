@@ -65,7 +65,19 @@
                 @php($couponErr = session('coupon_error') ?: $errors->first('code'))
                 <form method="post" action="{{ route('cart.coupon') }}" class="coupon @if($couponErr) has-err @endif">@csrf<input name="code" value="{{ old('code') }}" placeholder="Coupon code" aria-label="Coupon code" maxlength="40" autocomplete="off" @if($couponErr) aria-invalid="true" aria-describedby="coupon-err" @endif><button class="btn small">Apply</button></form>
                 @if($couponErr)<p class="coupon-msg err" id="coupon-err" role="alert">{{ $couponErr }}</p>@endif
+                @if($offers->isNotEmpty())
+                    <div class="offers">
+                        <p class="offers-h">🏷️ Available offers</p>
+                        @foreach($offers as $o)
+                            <form method="post" action="{{ route('cart.coupon') }}" class="offer">@csrf<input type="hidden" name="code" value="{{ $o['code'] }}">
+                                <span><b class="offer-code">{{ $o['code'] }}</b> {{ $o['text'] }}@if($o['short'] > 0)<small>Add {{ money($o['short']) }} more to use it</small>@endif</span>
+                                <button class="btn small {{ $o['short'] > 0 ? 'ghost' : '' }}">{{ $o['short'] > 0 ? 'Save' : 'Apply' }}</button>
+                            </form>
+                        @endforeach
+                    </div>
+                @endif
             @endif
+            @if($totals['prepaid_discount'] > 0)<p class="prepaid-note">💳 Includes {{ money($totals['prepaid_discount']) }} off for paying online (UPI, cards). Choosing cash on delivery at checkout removes it.</p>@endif
             <a href="{{ route('checkout') }}" class="btn primary block">Checkout · {{ money($totals['total']) }}</a>
             <a href="{{ url('shop') }}/" class="link-btn center">Continue shopping</a>
         </aside>

@@ -121,6 +121,7 @@
                     <button class="btn primary grow" data-add @disabled(!$stock)>{{ $stock ? 'Add to cart' : 'Out of stock' }}</button>
                 </div>
                 <button class="btn dark block" name="buy_now" value="1" @disabled(!$stock)>Buy now</button>
+                @if($shipNudge)<p class="ship-nudge {{ $shipNudge['ok'] ? 'ok' : '' }}">@include('partials.icon', ['i' => 'truck']) {{ $shipNudge['text'] }}</p>@endif
                 <p class="err" data-form-error hidden></p>
                 @if(config('store.whatsapp'))
                     <a class="help-line" href="https://wa.me/{{ config('store.whatsapp') }}?text={{ rawurlencode('Hi! I need help personalising: '.$product->name.' '.$product->url()) }}" target="_blank" rel="noopener">@include('partials.icon', ['i' => 'whatsapp']) Need help with your design? <b>Chat with us</b></a>
@@ -136,6 +137,18 @@
                     <p class="small" data-pin-result aria-live="polite"></p>
                 </form>
             </div>
+
+            @if($together->isNotEmpty())
+                <div class="together">
+                    <p class="together-h">Often bought together</p>
+                    @foreach($together as $t)
+                        <a href="{{ $t->url() }}" class="together-item">
+                            <img src="{{ $t->thumbUrl() }}" alt="" width="56" height="56" loading="lazy">
+                            <span>{{ \Illuminate\Support\Str::limit($t->name, 60) }}<b>{{ money($t->currentPrice()) }}</b></span>
+                        </a>
+                    @endforeach
+                </div>
+            @endif
 
             <ul class="trust-tiles">
                 <li>@include('partials.icon', ['i' => 'shield'])<b>Secure payment</b><small>UPI, cards{{ setting('cod_enabled') ? ', COD' : '' }}</small></li>
