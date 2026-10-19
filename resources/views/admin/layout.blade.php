@@ -23,6 +23,7 @@
                     ['admin.dashboard', 'Dashboard', 'admin'],
                     ['admin.analytics', 'Analytics', 'admin/analytics*'],
                     ['admin.orders.index', 'Orders', 'admin/orders*'],
+                    ['admin.users.index', 'Customers', 'admin/customers*'],
                     ['admin.products.index', 'Products', 'admin/products*'],
                     ['admin.categories.index', 'Categories', 'admin/categories*'],
                     ['admin.media.index', 'Media', 'admin/media*'],
