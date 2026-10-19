@@ -64,6 +64,7 @@
         <button name="action" value="in_production" class="btn small ghost">Mark being made</button>
         <button name="action" value="shipped" class="btn small ghost">Mark shipped</button>
         <button name="action" value="delivered" class="btn small ghost" data-confirm="Mark the ticked orders delivered? COD orders are marked paid.">Mark delivered</button>
+        <button name="action" value="delete" class="btn small danger" data-confirm="Delete the ticked CANCELLED orders for good, with the customer's photos? Orders that aren't cancelled are skipped. This can't be undone.">🗑 Delete cancelled</button>
     </div>
 
     <div class="ol-list">

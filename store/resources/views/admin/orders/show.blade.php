@@ -260,6 +260,16 @@
             <table class="tbl compact">@foreach ($order->utm as $k => $v)<tr><td>{{ $k }}</td><td>{{ $v }}</td></tr>@endforeach</table>
         </section>
     @endif
+    @if ($order->status === 'cancelled')
+    <section class="card danger-zone">
+        <h2>Delete order</h2>
+        <p class="muted small">Removes this cancelled order for good, with the customer's uploaded photos.@if ($order->invoice_number) It had invoice {{ $order->invoice_number }} — keep a copy for your GST records first.@endif</p>
+        <form method="post" action="{{ route('admin.orders.destroy', $order) }}">
+            @csrf @method('DELETE')
+            <button class="btn danger" data-confirm="Delete order {{ $order->number }} for good? This can't be undone.">🗑 Delete order</button>
+        </form>
+    </section>
+    @endif
 </aside>
 </div>
 @endsection
