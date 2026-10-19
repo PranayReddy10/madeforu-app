@@ -18,15 +18,14 @@ class ContactController extends Controller
         $request->merge(['phone' => $phone ?: null]);
         $data = $request->validate([
             'name' => 'required|string|max:120',
-            'email' => 'nullable|email|max:191|required_without:phone',
-            'phone' => ['nullable', 'regex:/^(\+?91)?[6-9]\d{9}$/', 'required_without:email'],
+            'email' => 'nullable|email|max:191',
+            'phone' => ['required', 'regex:/^(\+?91)?[6-9]\d{9}$/'],
             'topic' => 'nullable|in:'.implode(',', self::TOPICS),
             'order_number' => 'nullable|string|max:40',
             'message' => 'required|string|min:5|max:3000',
             'website' => 'prohibited',   // honeypot: people never see this field, bots fill it
         ], [
-            'email.required_without' => 'Please give an email or a phone number so we can reply.',
-            'phone.required_without' => 'Please give an email or a phone number so we can reply.',
+            'phone.required' => 'Please enter your mobile number so we can call or WhatsApp you back.',
             'phone.regex' => 'Please enter a 10-digit Indian mobile number.',
         ]);
         unset($data['website']);
@@ -34,10 +33,11 @@ class ContactController extends Controller
         $msg = ContactMessage::create($data + ['ip' => $request->ip()]);
 
         try {
-            $alert = new AdminAlert('Message from '.$msg->name.($msg->topic ? ' — '.$msg->topic : ''), array_values(array_filter([
+            $alert = new AdminAlert('Message from '.$msg->name.' ('.self::pretty($msg->phone).')'.($msg->topic ? ' — '.$msg->topic : ''), array_values(array_filter([
                 nl2br(e($msg->message)),
                 $msg->order_number ? 'Order: <b>'.e($msg->order_number).'</b>' : null,
-                collect([$msg->email ? e($msg->email) : null, $msg->phone ? e($msg->phone) : null])->filter()->implode(' · '),
+                self::phoneLine($msg->phone),
+                $msg->email ? 'Email: <b>'.e($msg->email).'</b> (just reply to this email)' : null,
             ])), route('admin.messages.index'), 'Open messages');
             if ($msg->email) {
                 $alert->replyTo($msg->email, $msg->name);
@@ -48,5 +48,23 @@ class ContactController extends Controller
         }
 
         return back()->with('contact_sent', true);
+    }
+
+    /** 9876543210 → "98765 43210" */
+    private static function pretty(string $phone): string
+    {
+        $d = substr(preg_replace('/\D/', '', $phone), -10);
+
+        return substr($d, 0, 5).' '.substr($d, 5);
+    }
+
+    /** "Mobile: 98765 43210 · Call · WhatsApp" for the shop's email. */
+    private static function phoneLine(string $phone): string
+    {
+        $d = substr(preg_replace('/\D/', '', $phone), -10);
+        $wa = \App\Services\WhatsApp::number($d);
+
+        return 'Mobile: <b style="font-size:17px">'.self::pretty($d).'</b> · <a href="tel:+91'.$d.'">Call</a>'
+            .($wa ? ' · <a href="https://wa.me/'.$wa.'">WhatsApp</a>' : '');
     }
 }
