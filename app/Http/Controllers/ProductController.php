@@ -43,10 +43,31 @@ class ProductController extends Controller
         ])->values();
 
         $ratingBars = $product->reviews->countBy('rating')->all();
+        $fromLine = self::prefillFromCartLine($product, $cart);
         $together = self::boughtTogether($product);
         $shipNudge = self::shipNudge($product, $cart);
 
-        return view('product', compact('product', 'related', 'variants', 'ratingBars', 'together', 'shipNudge'));
+        return view('product', compact('product', 'related', 'variants', 'ratingBars', 'together', 'shipNudge', 'fromLine'));
+    }
+
+    /**
+     * "Different for each" from the cart: open the product with that line's choices (size, print side,
+     * gift box…) already picked, so only the photos and text need doing for the new item.
+     */
+    private static function prefillFromCartLine(Product $product, Cart $cart): ?object
+    {
+        $id = request()->query('from_line');
+        $line = is_string($id) ? $cart->lines()->firstWhere('id', $id) : null;
+        if (! $line || $line->product->id !== $product->id) {
+            return null;
+        }
+        $choices = collect($line->details)->filter(fn ($d) => in_array($d->type, ['select', 'choice'], true))
+            ->mapWithKeys(fn ($d) => [$d->field_id => $d->value])->all();
+        if ($choices && ! session()->hasOldInput()) {
+            session()->now('_old_input', ['custom' => $choices]);
+        }
+
+        return $line;
     }
 
     /** Products most often in the same orders as this one (up to 3). */

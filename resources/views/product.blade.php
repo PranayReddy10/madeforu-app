@@ -93,6 +93,7 @@
                 @endif
 
                 @if($product->customizationFields->isNotEmpty())
+                @if($fromLine)<p class="from-line">✨ Personalising <b>one more {{ \Illuminate\Support\Str::limit($product->name, 40) }}</b> with its own photos &amp; text. It goes in your cart next to the {{ $fromLine->qty }} you already have.</p>@endif
                 <div class="personalise" data-item-block="0">
                     <div class="pz-head"><span class="pz-step">@include('partials.icon', ['i' => 'sparkle'])</span><div><h2 class="h-sm">Personalise it <span class="item-tag" data-item-tag hidden>Item 1</span></h2><small class="muted">Your photos are private and used only to make your gift.</small></div></div>
                     @include('partials.personalise-fields', ['prefix' => 'custom', 'suffix' => ''])

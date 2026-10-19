@@ -49,7 +49,7 @@
             <select id="cf{{ $f->id }}{{ $suffix }}" name="{{ $prefix }}[{{ $f->id }}]" @required($f->required) data-extra-select>
                 <option value="">Choose…</option>
                 @foreach($f->options ?? [] as $o)
-                    <option value="{{ $o['label'] }}" data-price="{{ (float) ($o['price'] ?? 0) }}" @if(! empty($o['photos'])) data-photos="{{ $o['photos'] }}" @endif>{{ $o['label'] }}@if(!empty($o['price']) && $o['price'] > 0) (+{{ money($o['price']) }})@endif @if(! empty($o['photos'])) · {{ $o['photos'] }} {{ \Illuminate\Support\Str::plural('photo', $o['photos']) }}@endif</option>
+                    <option value="{{ $o['label'] }}" @selected(! $suffix && old('custom.'.$f->id) === $o['label']) data-price="{{ (float) ($o['price'] ?? 0) }}" @if(! empty($o['photos'])) data-photos="{{ $o['photos'] }}" @endif>{{ $o['label'] }}@if(!empty($o['price']) && $o['price'] > 0) (+{{ money($o['price']) }})@endif @if(! empty($o['photos'])) · {{ $o['photos'] }} {{ \Illuminate\Support\Str::plural('photo', $o['photos']) }}@endif</option>
                 @endforeach
             </select>
         @elseif($f->type === 'choice')

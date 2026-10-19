@@ -16,7 +16,8 @@
                         @if($l->variant)<p class="muted small">{{ $l->variant->label() }}</p>@endif
                         @include('partials.line-custom', ['l' => $l])
                         <div class="line-foot">
-                            <div class="qty small" data-qty>
+                            @php($personalised = collect($l->details)->isNotEmpty())
+                            <div class="qty small" data-qty @if($personalised) data-each-ask @endif>
                                 <button type="button" data-step="-1" aria-label="Decrease">−</button>
                                 <input type="number" name="qty[{{ $l->id }}]" value="{{ $l->qty }}" min="0" max="99" inputmode="numeric" data-autosubmit aria-label="Quantity">
                                 <button type="button" data-step="1" aria-label="Increase">+</button>
@@ -25,6 +26,14 @@
                         </div>
                         <button formaction="{{ route('cart.remove', $l->id) }}" class="link-btn small">Remove</button>
                     </div>
+                    @if($personalised)
+                        {{-- Same question as the product page when adding one more of a personalised item. --}}
+                        <div class="each-choice cart-each" data-each-pop hidden>
+                            <p class="cart-each-h">Adding one more — how should it be personalised?</p>
+                            <button type="button" data-each-same><b>Same for all {{ $l->qty + 1 }}</b><small>One design, repeated</small></button>
+                            <a href="{{ $l->product->url() }}?{{ http_build_query(array_filter(['variant' => $l->variant?->id, 'from_line' => $l->id])) }}"><b>Different for each</b><small>Own photos &amp; text for the new one</small></a>
+                        </div>
+                    @endif
                 </article>
             @endforeach
             <noscript><button class="btn ghost">Update cart</button></noscript>
