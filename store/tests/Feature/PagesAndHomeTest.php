@@ -48,11 +48,14 @@ class PagesAndHomeTest extends TestCase
         $this->from('/contact-us/')->post('/contact-message', ['name' => 'Asha', 'phone' => '98765 43210', 'topic' => 'Custom or bulk order', 'message' => 'Need 50 mugs for a wedding.'])
             ->assertRedirect('/contact-us/')->assertSessionHas('contact_sent');
         $this->assertSame('9876543210', ContactMessage::first()->phone);
-        Mail::assertSent(AdminAlert::class, fn ($m) => str_contains($m->title, 'Asha') && $m->hasTo('support@madeforu.co.in'));
+        Mail::assertSent(AdminAlert::class, fn ($m) => $m->title === 'Message from Asha (98765 43210) — Custom or bulk order'
+            && str_contains(implode(' ', $m->lines), 'https://wa.me/919876543210') && $m->hasTo('support@madeforu.co.in'));
 
-        // A way to reply is required, and bots filling the hidden field are turned away.
-        $this->post('/contact-message', ['name' => 'X', 'message' => 'Hello there'])->assertSessionHasErrors('email');
-        $this->post('/contact-message', ['name' => 'Bot', 'email' => 'b@x.com', 'message' => 'Buy now', 'website' => 'spam'])->assertSessionHasErrors('website');
+        // The mobile number is required (email alone isn't enough), and bots filling the hidden field are turned away.
+        $this->post('/contact-message', ['name' => 'X', 'message' => 'Hello there'])->assertSessionHasErrors('phone');
+        $this->post('/contact-message', ['name' => 'X', 'email' => 'x@x.com', 'message' => 'Hello there'])->assertSessionHasErrors('phone');
+        $this->post('/contact-message', ['name' => 'X', 'phone' => '12345', 'message' => 'Hello there'])->assertSessionHasErrors('phone');
+        $this->post('/contact-message', ['name' => 'Bot', 'phone' => '9876543210', 'message' => 'Buy now', 'website' => 'spam'])->assertSessionHasErrors('website');
         $this->assertSame(1, ContactMessage::count());
 
         $admin = User::factory()->create();
