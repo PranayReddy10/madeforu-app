@@ -159,6 +159,7 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'admin'])->group(fun
     Route::post('orders/delhivery-warehouse', [Admin\OrderController::class, 'delhiveryWarehouse'])->name('orders.warehouse');
     Route::resource('coupons', Admin\CouponController::class)->except('show');
     Route::resource('pages', Admin\PageController::class)->except('show');
+    Route::post('banners/built-in', [Admin\BannerController::class, 'builtin'])->name('banners.builtin');
     Route::resource('banners', Admin\BannerController::class)->except('show');
     Route::resource('redirects', Admin\RedirectController::class)->except('show');
     Route::get('reviews', [Admin\ReviewController::class, 'index'])->name('reviews.index');
