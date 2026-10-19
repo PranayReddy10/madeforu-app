@@ -219,6 +219,16 @@ Hi {{1}}, you left {{2}} in your MadeForU cart 💝 Your photos are saved — fi
 - **Review requests:** a couple of days after an order is delivered, the customer gets "How was your gift?" by email (and WhatsApp when set up) with a link to review every item on one page. Settings → Reviews: days to wait, and whether verified 4★/5★ reviews publish straight away (otherwise approve them in Admin → Reviews).
 - Optional WhatsApp template **review_request** (Utility): `Hi {{1}}, how was your MadeForU order {{2}}? 💝 We'd love a quick review — photos of your gift are extra special: {{3}}`
 
+## Customers and admins
+
+**Admin → Customers** lists every account: name, email, phone, number of orders, money spent, last order and whether they're an admin. Search by name, email or phone, or filter to Customers or Admins. Open an account to see its orders, change details, set a new password, email a password link, or turn admin access on or off.
+
+**Add an admin** is at the bottom of the list:
+- name, email, optional mobile and a password, or leave the password blank to email them a link to set their own
+- if the email already has a customer account, that account becomes an admin and keeps its orders
+
+You can't remove your own admin access, and the last admin can't be removed. From SSH: `php artisan store:admin someone@example.com`.
+
 ## SEO auto-fill
 
 **Admin → SEO → Auto-fill SEO**, or `php artisan store:seo-fill` from SSH, fills in, for every product:
