@@ -290,6 +290,18 @@
         i.addEventListener('change', function () { clearTimeout(cartTimer); cartTimer = setTimeout(function () { i.form.submit(); }, 500); });
     });
 
+    /* Mobile number boxes: digits only, at most 10 (a pasted or autofilled "+91 98765-43210" becomes 9876543210) */
+    $$('[data-mobile]').forEach(function (el) {
+        var clean = function () {
+            var d = el.value.replace(/\D/g, '');
+            if (d.length > 10 && /^(91|0)/.test(d)) d = d.slice(-10);
+            d = d.slice(0, 10);
+            if (d !== el.value) el.value = d;
+        };
+        el.addEventListener('input', clean);
+        clean();
+    });
+
     /* Character counters */
     $$('[data-count-chars]').forEach(function (el) {
         if (!el.maxLength || el.maxLength < 0) return;
