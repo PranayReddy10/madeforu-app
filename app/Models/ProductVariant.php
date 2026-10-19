@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\Sku;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -16,6 +17,11 @@ class ProductVariant extends Model
         static::saving(function (ProductVariant $v) {
             if ($v->stock_qty !== null) {
                 $v->in_stock = $v->stock_qty > 0;
+            }
+        });
+        static::saved(function (ProductVariant $v) {
+            if (trim((string) $v->sku) === '') {
+                $v->forceFill(['sku' => Sku::forVariant($v)])->saveQuietly();
             }
         });
     }

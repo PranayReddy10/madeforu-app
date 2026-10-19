@@ -10,6 +10,7 @@ use App\Models\ProductImage;
 use App\Services\Cart;
 use App\Services\Delhivery;
 use App\Services\Parcel;
+use App\Services\Sku;
 use App\Services\Stock;
 use App\Support\Personalisation;
 use Illuminate\Http\Request;
@@ -43,7 +44,16 @@ class ProductController extends Controller
         return view('admin.products.index', [
             'products' => $q->latest()->paginate(30)->withQueryString(),
             'categories' => Category::orderBy('path')->get(),
+            'missingSkus' => Sku::missingCount(),
         ]);
+    }
+
+    /** One click: an MFU-MAG-007 style SKU for every product and option that has none. */
+    public function fillSkus()
+    {
+        $n = Sku::fillMissing();
+
+        return back()->with('status', "Created {$n} ".($n === 1 ? 'SKU' : 'SKUs').'. SKUs you had already set were kept.');
     }
 
     /** Apply a personalisation preset, or copy one product's setup, to many products at once. */

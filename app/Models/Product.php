@@ -2,12 +2,15 @@
 
 namespace App\Models;
 
+use App\Services\ImageTools;
+use App\Services\Sku;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Storage;
 
 class Product extends Model
 {
@@ -29,6 +32,12 @@ class Product extends Model
         // Publishing or hiding a product can add or empty a category in the menu.
         $forget = fn () => self::flushMenuCache();
         static::saved($forget);
+        // No SKU typed? Make one (MFU-MAG-007). Categories may be attached right after, so this runs once saved.
+        static::saved(function (Product $p) {
+            if (trim((string) $p->sku) === '') {
+                $p->forceFill(['sku' => Sku::forProduct($p)])->saveQuietly();
+            }
+        });
         static::deleted($forget);
         // A counted stock decides "in stock" by itself.
         static::saving(function (Product $p) {
@@ -159,7 +168,7 @@ class Product extends Model
     {
         $img = $this->relationLoaded('images') ? $this->images->first() : $this->images()->first();
         if ($img && ! preg_match('#^https?://#', $img->path) && config('store.media_disk') === 'public'
-            && \Illuminate\Support\Facades\Storage::disk('public')->exists($thumb = \App\Services\ImageTools::thumbPath($img->path))) {
+            && Storage::disk('public')->exists($thumb = ImageTools::thumbPath($img->path))) {
             return media_url($thumb);
         }
 
