@@ -665,3 +665,27 @@
         window.addEventListener('load', function () { navigator.serviceWorker.register('/sw.js').catch(function () {}); });
     }
 })();
+
+/* Festival campaign: live countdown to the order-by time, and tap-to-copy coupon */
+(function () {
+    var els = document.querySelectorAll('[data-countdown]');
+    function tick() {
+        els.forEach(function (el) {
+            var ms = new Date(el.dataset.countdown) - new Date();
+            if (ms <= 0) { el.textContent = ''; return; }
+            var d = Math.floor(ms / 864e5), h = Math.floor(ms % 864e5 / 36e5), m = Math.floor(ms % 36e5 / 6e4);
+            if (el.hasAttribute('data-long')) {
+                el.innerHTML = [[d, 'days'], [h, 'hours'], [m, 'mins']].map(function (p) { return '<span>' + p[0] + '<small>' + p[1] + '</small></span>'; }).join('');
+            } else {
+                el.textContent = (d ? d + 'd ' : '') + h + 'h ' + m + 'm left';
+            }
+        });
+    }
+    if (els.length) { tick(); setInterval(tick, 30000); }
+    document.addEventListener('click', function (e) {
+        var b = e.target.closest && e.target.closest('[data-copy]');
+        if (!b) return;
+        var done = function () { var s = b.querySelector('small'); if (s) s.textContent = 'copied ✓'; };
+        if (navigator.clipboard) navigator.clipboard.writeText(b.dataset.copy).then(done, done); else done();
+    });
+})();

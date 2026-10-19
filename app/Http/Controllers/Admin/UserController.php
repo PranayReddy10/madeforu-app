@@ -39,6 +39,86 @@ class UserController extends Controller
         ]);
     }
 
+    /**
+     * Everyone who has ordered (imported WordPress orders too) or has an account with a phone,
+     * one row per number, for WhatsApp messages: send one by one, or download for a broadcast list.
+     */
+    public static function contacts(): \Illuminate\Support\Collection
+    {
+        $norm = function (?string $p): ?string {
+            $d = preg_replace('/\D/', '', (string) $p);
+            $d = strlen($d) > 10 ? substr($d, -10) : $d;
+
+            return preg_match('/^[6-9]\d{9}$/', $d) ? $d : null;
+        };
+        $rows = [];
+        foreach (\App\Models\Order::orderBy('created_at')->get(['name', 'phone', 'city', 'status', 'total', 'payment_status', 'payment_method', 'created_at']) as $o) {
+            if (! $ph = $norm($o->phone)) {
+                continue;
+            }
+            $r = $rows[$ph] ?? ['phone' => $ph, 'name' => $o->name, 'city' => $o->city, 'orders' => 0, 'spent' => 0.0, 'last' => null];
+            $r['name'] = $o->name ?: $r['name'];
+            $r['city'] = $o->city ?: $r['city'];
+            if ($o->status !== 'cancelled') {
+                $r['orders']++;
+                $r['spent'] += ($o->payment_status === 'paid' || $o->payment_method === 'cod') ? (float) $o->total : 0;
+                $r['last'] = $o->created_at;
+            }
+            $rows[$ph] = $r;
+        }
+        foreach (User::whereNotNull('phone')->get(['name', 'phone', 'created_at']) as $u) {
+            if (($ph = $norm($u->phone)) && ! isset($rows[$ph])) {
+                $rows[$ph] = ['phone' => $ph, 'name' => $u->name, 'city' => null, 'orders' => 0, 'spent' => 0.0, 'last' => null];
+            }
+        }
+
+        return collect($rows)->map(fn ($r) => (object) $r)->sortByDesc(fn ($r) => [$r->orders, $r->spent])->values();
+    }
+
+    public function whatsapp(Request $request)
+    {
+        $filter = $request->query('show', 'buyers');
+        $all = self::contacts();
+        $list = match ($filter) {
+            'recent' => $all->filter(fn ($r) => $r->last && $r->last->gte(now()->subDays(90))),
+            'lapsed' => $all->filter(fn ($r) => $r->orders && (! $r->last || $r->last->lt(now()->subDays(90)))),
+            'all' => $all,
+            default => $all->filter(fn ($r) => $r->orders > 0),
+        };
+        if ($request->query('download')) {
+            return response()->streamDownload(function () use ($list) {
+                $out = fopen('php://output', 'w');
+                fputcsv($out, ['Name', 'Phone', 'City', 'Orders', 'Spent', 'Last order']);
+                foreach ($list as $r) {
+                    fputcsv($out, [$r->name, '+91'.$r->phone, $r->city, $r->orders, round($r->spent), $r->last?->format('Y-m-d')]);
+                }
+                fclose($out);
+            }, 'madeforu-whatsapp-'.$filter.'-'.now()->format('Y-m-d').'.csv', ['Content-Type' => 'text/csv']);
+        }
+        $C = \App\Support\Campaign::class;
+        $default = $C::active()
+            ? "Hi {name}! 🪔 {$C::name()} is coming — make it special with a gift from your own photos. "
+              .($C::coupon() && $C::discount() > 0 ? 'Use code '.$C::coupon().' for '.rtrim(rtrim(number_format($C::discount(), 1), '0'), '.').'% off. ' : '')
+              .'Order by '.$C::deadline()?->format('j M').' for delivery in time: {link}  — Team '.config('store.name')
+            : 'Hi {name}! Thank you for ordering from '.config('store.name').' 💝 New personalised gifts are up — have a look: {link}';
+
+        return view('admin.users.whatsapp', [
+            'list' => $list->values(), 'filter' => $filter,
+            'counts' => ['buyers' => $all->where('orders', '>', 0)->count(), 'recent' => $all->filter(fn ($r) => $r->last && $r->last->gte(now()->subDays(90)))->count(),
+                'lapsed' => $all->filter(fn ($r) => $r->orders && (! $r->last || $r->last->lt(now()->subDays(90))))->count(), 'all' => $all->count()],
+            'message' => (string) (setting('whatsapp.broadcast') ?: $default),
+            'link' => $C::active() ? $C::url() : url('/'),
+        ]);
+    }
+
+    public function saveWhatsappMessage(Request $request)
+    {
+        $data = $request->validate(['message' => 'required|string|max:1000']);
+        \App\Models\Setting::put(['whatsapp.broadcast' => $data['message']]);
+
+        return back()->with('status', 'Message saved.');
+    }
+
     public function show(User $user)
     {
         return view('admin.users.show', [

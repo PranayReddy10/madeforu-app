@@ -128,6 +128,7 @@
             </form>
 
             <div class="delivery-card">
+                @if($festNote = \App\Support\Campaign::productNote($product))<div class="camp-note {{ $festNote['ok'] ? 'ok' : 'late' }}">🪔 {{ $festNote['text'] }}</div>@endif
                 <div class="dc-eta">@include('partials.icon', ['i' => 'truck'])<span>Get it by <b>{{ $deliverTo->format('D, j M') }}</b><small>Made in {{ $product->production_days }} {{ \Illuminate\Support\Str::plural('day', $product->production_days) }}, then shipped with tracking</small></span></div>
                 <form class="pin-check" data-pin-check="{{ route('delivery.check') }}" data-days="{{ $product->production_days }}" onsubmit="return false">
                     <label for="pinbox" class="sr">Check delivery to your PIN code</label>

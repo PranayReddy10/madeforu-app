@@ -14,6 +14,17 @@ class PageController extends Controller
 {
     public function show(Request $request, string $slug, Seo $seo)
     {
+        // The festival landing page (Admin → Campaign), e.g. /diwali-gifts/
+        if (\App\Support\Campaign::active() && $slug === \App\Support\Campaign::slug()) {
+            if (! str_ends_with($request->getPathInfo(), '/')) {
+                return WordPressUrls::slashed($request);
+            }
+            $seo->title(\App\Support\Campaign::name().' Gifts – Personalised Photo Gifts | '.config('store.name'))
+                ->description(\App\Support\Campaign::headline().'. Order by '.\App\Support\Campaign::deadline()->format('j M').' for delivery before '.\App\Support\Campaign::name().'.')
+                ->canonical(\App\Support\Campaign::url());
+
+            return view('campaign', ['products' => \App\Support\Campaign::products()]);
+        }
         $page = Page::where('slug', $slug)->where('is_active', true)->firstOrFail();
         if (! str_ends_with($request->getPathInfo(), '/')) {
             return WordPressUrls::slashed($request);
