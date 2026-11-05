@@ -202,6 +202,66 @@ class OrderController extends Controller
         return back()->with('status', 'Order updated.');
     }
 
+    /**
+     * "Payment & charges" on the order page: switch a failed online payment to cash on delivery
+     * (the customer agreed on the phone), and change shipping, COD or an extra charge. The total
+     * follows. Not once paid, booked with Delhivery (the COD amount is on the AWB) or shipped.
+     */
+    public function charges(Request $request, Order $order)
+    {
+        if ($why = self::chargesLocked($order)) {
+            return back()->with('error', $why);
+        }
+        $data = $request->validate([
+            'payment_method' => 'required|in:cod,online',
+            'shipping' => 'required|numeric|min:0|max:100000',
+            'cod_fee' => 'nullable|numeric|min:0|max:100000',
+            'extra_charge' => 'nullable|numeric|min:0|max:100000',
+            'extra_charge_label' => 'nullable|string|max:80',
+            'notify' => 'nullable|boolean',
+        ]);
+        $toCod = $data['payment_method'] === 'cod' && $order->payment_method !== 'cod';
+        $cod = $data['payment_method'] === 'cod';
+        $update = [
+            'shipping' => round((float) $data['shipping'], 2),
+            'cod_fee' => $cod ? round((float) ($data['cod_fee'] ?? 0), 2) : 0,
+            'extra_charge' => round((float) ($data['extra_charge'] ?? 0), 2),
+            'extra_charge_label' => (float) ($data['extra_charge'] ?? 0) > 0 ? (trim((string) ($data['extra_charge_label'] ?? '')) ?: 'Extra charges') : null,
+        ];
+        if ($cod) {
+            // The "pay online & save" discount was for paying online.
+            $update['discount'] = round((float) $order->discount - (float) $order->prepaid_discount, 2);
+            $update['prepaid_discount'] = 0;
+            $update['payment_method'] = 'cod';
+            $update['payment_status'] = 'unpaid';
+        }
+        $update['total'] = round((float) $order->subtotal - ($update['discount'] ?? (float) $order->discount)
+            + $update['shipping'] + $update['cod_fee'] + $update['extra_charge'], 2);
+        $confirming = $cod && $order->status === 'pending';
+        if ($confirming) {
+            $update['status'] = 'confirmed';
+        }
+        $order->update($update);
+        if ($confirming) {
+            \App\Services\OrderConfirmation::run($order->fresh(), $request->boolean('notify'));
+        }
+
+        return back()->with('status', $confirming
+            ? 'Switched to cash on delivery and confirmed — total '.money($order->total).'.'.($request->boolean('notify') ? ' The customer has been sent the order confirmation.' : '')
+            : ($toCod ? 'Switched to cash on delivery — total '.money($order->total).'.' : 'Charges saved — total '.money($order->total).'.'));
+    }
+
+    /** Why the charges can't be changed now, or null. */
+    public static function chargesLocked(Order $order): ?string
+    {
+        return match (true) {
+            $order->payment_status === 'paid' => 'This order is already paid, so its charges can’t change. Collect anything extra separately.',
+            in_array($order->status, ['shipped', 'delivered', 'returned', 'cancelled'], true) => 'This order is '.strtolower($order->statusLabel()).', so its charges can’t change.',
+            (bool) $order->tracking_number => 'This order is booked with '.($order->courier ?: 'the courier').' (AWB '.$order->tracking_number.') for the old amount. Cancel that shipment first, then change the charges and book again.',
+            default => null,
+        };
+    }
+
     public function invoice(Order $order)
     {
         return Invoice::pdf($order)->stream(Invoice::filename($order));

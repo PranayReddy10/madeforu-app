@@ -2,22 +2,15 @@
 
 namespace App\Http\Controllers;
 
-use App\Jobs\CreateShipment;
-use App\Jobs\NotifyOrder;
-use App\Models\Coupon;
 use App\Models\CustomerUpload;
 use App\Models\Order;
-use App\Models\Product;
 use App\Services\Analytics;
 use App\Services\Cart;
-use App\Services\CartRecovery;
 use App\Services\Cashfree;
 use App\Services\Delhivery;
-use App\Services\Invoice;
-use App\Services\OrderEmails;
+use App\Services\OrderConfirmation;
 use App\Services\Razorpay;
 use App\Services\Seo;
-use App\Services\Stock;
 use App\Services\Visits;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -319,22 +312,7 @@ class CheckoutController extends Controller
     /** Once an order is confirmed (COD placed, or online payment received). */
     private function complete(Order $order): void
     {
-        if ($order->coupon_code) {
-            Coupon::where('code', $order->coupon_code)->increment('used');
-        }
-        foreach ($order->items as $i) {
-            Product::whereKey($i->product_id)->increment('sales_count', $i->qty);
-        }
-        app(Stock::class)->reduce($order);
-        app(CartRecovery::class)->markRecovered($order);
-        Invoice::assign($order);
-        // WhatsApp to the customer and the shop, after the customer's page has gone out.
-        NotifyOrder::dispatchAfterResponse($order->id, 'confirmed');
-        // Book the Delhivery shipment right away (after the customer's page has gone out).
-        if (Delhivery::enabled() && setting('delhivery.auto')) {
-            CreateShipment::dispatchAfterResponse($order->id);
-        }
-        app(OrderEmails::class)->placed($order);
+        OrderConfirmation::run($order);
     }
 
     /** The customer's own browser: empty the cart and remember the order so they can see its thank-you page. */
