@@ -604,3 +604,7 @@ tr.wa-done .wa-send { background: #fff; color: #128c47; }
 [data-cod-only][hidden] { display: none; }
 .flash.warn { background: #fff4dc; color: #6b4a00; border: 1px solid #f3c27a; }
 .site-update { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.od-copyrow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
+.od-copyrow a { overflow-wrap: anywhere; }
+.copy-mini { font-size: 12px; font-weight: 600; color: var(--muted); border: 1px solid #e6dde1; border-radius: 999px; padding: 1px 8px; }
+.copy-mini:hover { color: var(--primary-dark); border-color: currentColor; }

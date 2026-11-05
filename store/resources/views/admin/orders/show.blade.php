@@ -63,11 +63,11 @@
 <div>
     <div class="od-people">
         <section class="card">
-            <h2>Customer</h2>
-            <p class="od-name">{{ $order->name }} @if ($orderCount > 1)<span class="badge ok">{{ $orderCount }} orders</span>@else<span class="badge">First order</span>@endif</p>
+            <h2>Customer <button type="button" class="link small" data-copy="{{ collect([$order->name, $order->phone, $order->email])->filter()->implode(', ') }}">Copy</button></h2>
+            <p class="od-name">{{ $order->name }} <button type="button" class="link copy-mini" data-copy="{{ $order->name }}" title="Copy name">Copy</button> @if ($orderCount > 1)<span class="badge ok">{{ $orderCount }} orders</span>@else<span class="badge">First order</span>@endif</p>
             <p class="od-lines">
-                <a href="tel:{{ $order->phone }}">📞 {{ $order->phone }}</a>
-                @if ($order->email)<a href="mailto:{{ $order->email }}">✉ {{ $order->email }}</a>@endif
+                <span class="od-copyrow"><a href="tel:{{ $order->phone }}">📞 {{ $order->phone }}</a> <button type="button" class="link copy-mini" data-copy="{{ $order->phone }}" title="Copy phone number">Copy</button></span>
+                @if ($order->email)<span class="od-copyrow"><a href="mailto:{{ $order->email }}">✉ {{ $order->email }}</a> <button type="button" class="link copy-mini" data-copy="{{ $order->email }}" title="Copy email">Copy</button></span>@endif
                 @if ($order->user)<span class="muted small">Has an account</span>@else<span class="muted small">Guest checkout</span>@endif
             </p>
         </section>
