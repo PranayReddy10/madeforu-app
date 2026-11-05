@@ -127,6 +127,9 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'admin'])->group(fun
     Route::post('customers/{user}/reset-link', [Admin\UserController::class, 'resetLink'])->name('users.reset-link');
     Route::get('analytics', [Admin\AnalyticsController::class, 'index'])->name('analytics');
     Route::get('profit', [Admin\ProfitController::class, 'index'])->name('profit');
+    Route::get('sales', [Admin\SalesController::class, 'index'])->name('sales');
+    Route::get('sales/export.csv', [Admin\SalesController::class, 'export'])->name('sales.export');
+    Route::post('sales/cod-received', [Admin\SalesController::class, 'codReceived'])->name('sales.cod-received');
     Route::get('campaign', [Admin\CampaignController::class, 'edit'])->name('campaign.edit');
     Route::put('campaign', [Admin\CampaignController::class, 'update'])->name('campaign.update');
     Route::get('home-page', [Admin\HomePageController::class, 'edit'])->name('home.edit');
