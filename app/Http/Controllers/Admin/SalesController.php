@@ -33,8 +33,10 @@ class SalesController extends Controller
             'due' => SalesReport::codDue()->get(),
             'panel' => [
                 'configured' => \App\Services\SalePanel::configured(), 'enabled' => \App\Services\SalePanel::enabled(),
-                'sent' => Order::where('status', 'delivered')->whereNotNull('sale_synced_at')->count(),
+                'sent' => Order::where('status', 'delivered')->whereNotNull('sale_synced_at')->where(fn ($q) => $q->whereNull('sale_order_no')->orWhere('sale_order_no', '!=', \App\Services\SalePanel::MANUAL))->count(),
+                'manual' => Order::where('status', 'delivered')->where('sale_order_no', \App\Services\SalePanel::MANUAL)->count(),
                 'unsent' => Order::where('status', 'delivered')->whereNull('sale_synced_at')->count(),
+                'unsentOrders' => Order::where('status', 'delivered')->whereNull('sale_synced_at')->orderByRaw(SalesReport::SALE_DATE.' desc')->limit(300)->get(),
                 'error' => Order::where('status', 'delivered')->whereNull('sale_synced_at')->whereNotNull('sale_sync_error')->latest('updated_at')->value('sale_sync_error'),
             ],
         ]);
@@ -70,16 +72,28 @@ class SalesController extends Controller
         return back()->with($r['ok'] ? 'status' : 'error', $r['ok'] ? '✓ '.$r['message'].(setting('sale.enabled') ? '' : ' Now tick “Send delivered orders to the sale panel” in Settings.') : $r['message']);
     }
 
-    /** Delivered orders not in the sale panel yet (older ones, or ones that failed): send them now. */
-    public function panelSend()
+    /**
+     * Previous delivered orders not in the sale panel yet. Some were typed into the panel by hand, so
+     * nothing goes in bulk: the ticked ones are sent, or marked "already in the panel" and never sent.
+     */
+    public function panelSend(Request $request)
     {
+        $data = $request->validate(['ids' => 'required|array|max:300', 'ids.*' => 'integer', 'action' => 'required|in:send,skip']);
+        $orders = Order::whereIn('id', $data['ids'])->where('status', 'delivered')->whereNull('sale_synced_at')->get();
+        if ($data['action'] === 'skip') {
+            foreach ($orders as $o) {
+                $o->forceFill(['sale_order_no' => \App\Services\SalePanel::MANUAL, 'sale_synced_at' => now(), 'sale_sync_error' => null])->saveQuietly();
+            }
+
+            return back()->with('status', $orders->count().' '.($orders->count() === 1 ? 'order' : 'orders').' marked as already in the sale panel — they won’t be sent.');
+        }
         if (! \App\Services\SalePanel::configured()) {
             return back()->with('error', 'Add the sale panel address and key in Settings → Sale panel sync first.');
         }
         @set_time_limit(300);
         $ok = $fail = 0;
         $error = null;
-        foreach (Order::where('status', 'delivered')->whereNull('sale_synced_at')->orderBy('id')->limit(300)->get() as $o) {
+        foreach ($orders as $o) {
             if (\App\Services\SalePanel::push($o)) {
                 $ok++;
             } else {
@@ -90,10 +104,8 @@ class SalesController extends Controller
                 }
             }
         }
-        $left = Order::where('status', 'delivered')->whereNull('sale_synced_at')->count();
 
-        return back()->with($fail && ! $ok ? 'error' : 'status', $ok.' '.($ok === 1 ? 'order' : 'orders').' sent to the sale panel.'
-            .($fail ? ' '.$fail.' failed: '.$error : '').($left && ! $fail ? ' '.$left.' more to send — press again.' : ''));
+        return back()->with($fail && ! $ok ? 'error' : 'status', $ok.' '.($ok === 1 ? 'order' : 'orders').' sent to the sale panel.'.($fail ? ' '.$fail.' failed: '.$error : ''));
     }
 
     /** Tick the COD orders Delhivery paid for in one remittance. */

@@ -66,7 +66,7 @@
             <p class="small">
                 @if ($panel['enabled'])<span class="badge ok">On</span> Every order is added to the sale panel when it’s delivered.
                 @else<span class="badge warn">Off</span> Connected, but sending is switched off in <a href="{{ route('admin.settings') }}#sale-panel-sync">Settings</a>.@endif
-                <br><b>{{ $panel['sent'] }}</b> delivered {{ \Illuminate\Support\Str::plural('order', $panel['sent']) }} in the panel · <b>{{ $panel['unsent'] }}</b> not sent yet
+                <br><b>{{ $panel['sent'] }}</b> delivered {{ \Illuminate\Support\Str::plural('order', $panel['sent']) }} sent to the panel @if ($panel['manual']) · <b>{{ $panel['manual'] }}</b> added there by hand @endif · <b>{{ $panel['unsent'] }}</b> previous not sent
             </p>
             @if ($panel['error'])<p class="err small">Last problem: {{ $panel['error'] }}</p>@endif
         @endif
@@ -74,10 +74,37 @@
     @if ($panel['configured'])
         <div class="row-actions">
             <form method="post" action="{{ url('admin/sales/panel-test') }}">@csrf<button class="btn small ghost">Test connection</button></form>
-            @if ($panel['unsent'])<form method="post" action="{{ url('admin/sales/panel-send') }}">@csrf<button class="btn small" data-confirm="Send {{ $panel['unsent'] }} delivered {{ \Illuminate\Support\Str::plural('order', $panel['unsent']) }} to the sale panel?">Send delivered orders now ({{ $panel['unsent'] }})</button></form>@endif
+
         </div>
     @endif
 </section>
+
+@if ($panel['configured'] && $panel['unsentOrders']->isNotEmpty())
+<form method="post" action="{{ url('admin/sales/panel-send') }}" class="card">
+    @csrf
+    <h2>Previous delivered orders not in the sale panel ({{ $panel['unsent'] }})</h2>
+    <p class="muted small">Orders delivered before the sync was switched on. Some of these you may have <b>already typed into the sale panel by hand</b> — tick those and press <b>Already in panel</b> so they are never sent twice. Tick the rest and press <b>Send to sale panel</b>. New deliveries are sent automatically.</p>
+    <div class="tbl-wrap"><table class="tbl compact">
+        <tr><th><input type="checkbox" aria-label="Select all" onclick="this.closest('table').querySelectorAll('input[name=&quot;ids[]&quot;]').forEach(c => c.checked = this.checked)"></th><th>Delivered</th><th>Order</th><th>Customer</th><th>Phone</th><th>Payment</th><th class="right">Total</th><th></th></tr>
+        @foreach ($panel['unsentOrders'] as $o)
+            <tr>
+                <td><input type="checkbox" name="ids[]" value="{{ $o->id }}"></td>
+                <td>{{ ($o->delivered_at ?? $o->shipped_at ?? $o->created_at)->format('d M Y') }}</td>
+                <td><a href="{{ route('admin.orders.show', $o) }}">{{ $o->number }}</a></td>
+                <td>{{ $o->name }}</td>
+                <td class="small">{{ $o->phone }}</td>
+                <td><span class="badge {{ $o->payment_method === 'cod' ? 'warn' : 'ok' }}">{{ $o->payment_method === 'cod' ? 'COD' : 'Online' }}</span></td>
+                <td class="right">{{ money($o->total) }}</td>
+                <td class="small err">{{ $o->sale_sync_error ? 'Failed: '.\Illuminate\Support\Str::limit($o->sale_sync_error, 60) : '' }}</td>
+            </tr>
+        @endforeach
+    </table></div>
+    <div class="row-actions" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+        <button class="btn small" name="action" value="send" data-confirm="Send the ticked orders to the sale panel? Make sure none of them was already added there by hand.">Send to sale panel</button>
+        <button class="btn small ghost" name="action" value="skip">Already in panel — don’t send</button>
+    </div>
+</form>
+@endif
 
 @if ($due->isNotEmpty())
 <form method="post" action="{{ route('admin.sales.cod-received') }}" class="card" data-bulk>
