@@ -12,7 +12,7 @@ class Order extends Model
 {
     protected $guarded = ['id'];
 
-    protected $casts = ['review_requested_at' => 'datetime', 'utm' => 'array', 'shipment_scans' => 'array', 'shipped_at' => 'datetime', 'delivered_at' => 'datetime', 'tracked_at' => 'datetime', 'invoiced_at' => 'datetime', 'cod_remitted_at' => 'datetime'];
+    protected $casts = ['review_requested_at' => 'datetime', 'utm' => 'array', 'shipment_scans' => 'array', 'shipped_at' => 'datetime', 'delivered_at' => 'datetime', 'tracked_at' => 'datetime', 'invoiced_at' => 'datetime', 'cod_remitted_at' => 'datetime', 'sale_synced_at' => 'datetime'];
 
     public const STATUSES = [
         'pending' => 'Awaiting payment',
@@ -34,6 +34,14 @@ class Order extends Model
             }
             if ($order->wasChanged('payment_status') && $order->payment_status === 'refunded') {
                 $emails->refunded($order);
+            }
+            // Delivered orders go to the sale panel's accounts; out again if it comes back.
+            if ($order->wasChanged('status') && \App\Services\SalePanel::enabled()) {
+                if ($order->status === 'delivered') {
+                    \App\Jobs\SendToSalePanel::dispatchAfterResponse($order->id);
+                } elseif ($order->getOriginal('status') === 'delivered' && $order->sale_synced_at) {
+                    \App\Jobs\SendToSalePanel::dispatchAfterResponse($order->id, 'remove');
+                }
             }
         });
     }

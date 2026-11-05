@@ -27,6 +27,11 @@ class SettingController extends Controller
             'home_title' => ['Home page title', 'text', 'The <title> Google shows for the home page (aim for 50–60 characters).'],
             'home_description' => ['Home page meta description', 'textarea', '70–160 characters.'],
         ],
+        'Sale panel sync' => [
+            'sale.enabled' => ['Send delivered orders to the sale panel', 'bool', 'Each order is added to sale.madeforu.co.in (Viewing → Website orders) when it is marked Delivered, with its items, prices, charges and payment.'],
+            'sale.url' => ['Sale panel address', 'text', 'e.g. https://sale.madeforu.co.in/ — copy it from the sale panel → Website sync.'],
+            'sale.key' => ['Sale panel key', 'secret', 'From the sale panel → Website sync. Then test it on Admin → Sales.'],
+        ],
         'Product API' => [
             'api.key' => ['API key (optional)', 'text', 'Product data in JSON at /api/v1/products (name, prices, images, variants, categories…). Blank = open to anyone, like your shop pages. Type any long random text here to require it as ?key=… on every call.'],
         ],

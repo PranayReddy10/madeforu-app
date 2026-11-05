@@ -130,6 +130,8 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'admin'])->group(fun
     Route::get('sales', [Admin\SalesController::class, 'index'])->name('sales');
     Route::get('sales/export.csv', [Admin\SalesController::class, 'export'])->name('sales.export');
     Route::post('sales/cod-received', [Admin\SalesController::class, 'codReceived'])->name('sales.cod-received');
+    Route::post('sales/panel-test', [Admin\SalesController::class, 'panelTest'])->name('sales.panel-test');
+    Route::post('sales/panel-send', [Admin\SalesController::class, 'panelSend'])->name('sales.panel-send');
     Route::get('campaign', [Admin\CampaignController::class, 'edit'])->name('campaign.edit');
     Route::put('campaign', [Admin\CampaignController::class, 'update'])->name('campaign.update');
     Route::get('home-page', [Admin\HomePageController::class, 'edit'])->name('home.edit');
