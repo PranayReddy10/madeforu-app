@@ -14,6 +14,9 @@ use Illuminate\Support\Str;
  */
 class SalePanel
 {
+    /** sale_order_no for an order the shop typed into the panel by hand: never sent, never removed. */
+    public const MANUAL = 'manual';
+
     public static function configured(): bool
     {
         return filled(setting('sale.url')) && filled(setting('sale.key'));

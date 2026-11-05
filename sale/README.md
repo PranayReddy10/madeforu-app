@@ -269,7 +269,9 @@ out of "Offline only".
 
 Set up: open **Website sync**, create a key, paste the address and key into the
 website's Admin → Settings → Sale panel sync, then use **Test connection** and
-**Send delivered orders now** on the website's Admin → Sales page.
+the list of previous delivered orders on the website's Admin → Sales page:
+mark the ones already typed in here by hand as **Already in panel** (never
+sent), and send the rest.
 
 
 ## Keeping the database up to date

@@ -299,7 +299,8 @@
             <tr><td>Status</td><td><span class="badge {{ $paid ? 'ok' : '' }}">{{ $order->payment_status }}</span></td></tr>
             @if ($order->razorpay_payment_id)<tr><td>Razorpay</td><td class="small">{{ $order->razorpay_payment_id }}</td></tr>@endif
             @if ($order->cashfree_payment_id)<tr><td>Cashfree</td><td class="small">{{ $order->cashfree_payment_id }}</td></tr>@endif
-            @if ($order->sale_synced_at)<tr><td>Sale panel</td><td class="small">✓ {{ $order->sale_order_no }} · {{ $order->sale_synced_at->format('d M, H:i') }}</td></tr>
+            @if ($order->sale_order_no === \App\Services\SalePanel::MANUAL)<tr><td>Sale panel</td><td class="small">Added by hand in the panel — not sent</td></tr>
+            @elseif ($order->sale_synced_at)<tr><td>Sale panel</td><td class="small">✓ {{ $order->sale_order_no }} · {{ $order->sale_synced_at->format('d M, H:i') }}</td></tr>
             @elseif ($order->sale_sync_error)<tr><td>Sale panel</td><td class="small err">Not sent: {{ $order->sale_sync_error }}</td></tr>@endif
         </table>
     </section>

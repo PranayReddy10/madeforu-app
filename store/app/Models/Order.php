@@ -36,7 +36,7 @@ class Order extends Model
                 $emails->refunded($order);
             }
             // Delivered orders go to the sale panel's accounts; out again if it comes back.
-            if ($order->wasChanged('status') && \App\Services\SalePanel::enabled()) {
+            if ($order->wasChanged('status') && \App\Services\SalePanel::enabled() && $order->sale_order_no !== \App\Services\SalePanel::MANUAL) {
                 if ($order->status === 'delivered') {
                     \App\Jobs\SendToSalePanel::dispatchAfterResponse($order->id);
                 } elseif ($order->getOriginal('status') === 'delivered' && $order->sale_synced_at) {
