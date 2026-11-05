@@ -623,3 +623,6 @@ tr.wa-done .wa-send { background: #fff; color: #128c47; }
 .tbl td.right, .tbl th.right { text-align: right; white-space: nowrap; }
 .tbl tr.picked td { background: #fff1f4; }
 .sales-range ~ .grid2 .tbl.compact { width: 100%; }
+.panel-sync { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.panel-sync h2 { margin-bottom: 4px; }
+.panel-sync .row-actions { display: flex; gap: 8px; flex-wrap: wrap; }

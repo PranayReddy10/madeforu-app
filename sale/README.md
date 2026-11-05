@@ -253,3 +253,21 @@ orders, and look inexplicable.
 There is no HTTPS enforcement here. On a public server, passwords cross the
 wire in plaintext without it. Hostinger provides free SSL — turn it on, and
 the session cookie will set its `secure` flag automatically.
+
+## Website orders (madeforu.co.in)
+
+Delivered orders from the website are added here automatically, with their
+items at the website's prices, charges, payment and Delhivery AWB. They sit
+under **Viewing → Website orders** (an event created on first use) and stay
+out of "Offline only".
+
+| File | Purpose |
+|---|---|
+| `website_sync.php` | Create the shared key; see how many website orders arrived |
+| `api/website.php` | Receives `ping` / `upsert` / `remove` from the website, checked against the key |
+| `lib_website.php` | Shared helpers; adds `orders.web_order_no` on first use (no SQL to run) |
+
+Set up: open **Website sync**, create a key, paste the address and key into the
+website's Admin → Settings → Sale panel sync, then use **Test connection** and
+**Send delivered orders now** on the website's Admin → Sales page.
+

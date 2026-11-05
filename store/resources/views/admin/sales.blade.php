@@ -56,6 +56,29 @@
     </div>
 </div>
 
+<section class="card panel-sync">
+    <div>
+        <h2>Sale panel <small class="muted">sale.madeforu.co.in</small></h2>
+        @if (! $panel['configured'])
+            <p class="small">Not connected. In the sale panel open <b>Website sync</b>, create a key, then paste the address and key into
+                <a href="{{ route('admin.settings') }}#sale-panel-sync">Settings → Sale panel sync</a>. Delivered orders are then added there automatically.</p>
+        @else
+            <p class="small">
+                @if ($panel['enabled'])<span class="badge ok">On</span> Every order is added to the sale panel when it’s delivered.
+                @else<span class="badge warn">Off</span> Connected, but sending is switched off in <a href="{{ route('admin.settings') }}#sale-panel-sync">Settings</a>.@endif
+                <br><b>{{ $panel['sent'] }}</b> delivered {{ \Illuminate\Support\Str::plural('order', $panel['sent']) }} in the panel · <b>{{ $panel['unsent'] }}</b> not sent yet
+            </p>
+            @if ($panel['error'])<p class="err small">Last problem: {{ $panel['error'] }}</p>@endif
+        @endif
+    </div>
+    @if ($panel['configured'])
+        <div class="row-actions">
+            <form method="post" action="{{ url('admin/sales/panel-test') }}">@csrf<button class="btn small ghost">Test connection</button></form>
+            @if ($panel['unsent'])<form method="post" action="{{ url('admin/sales/panel-send') }}">@csrf<button class="btn small" data-confirm="Send {{ $panel['unsent'] }} delivered {{ \Illuminate\Support\Str::plural('order', $panel['unsent']) }} to the sale panel?">Send delivered orders now ({{ $panel['unsent'] }})</button></form>@endif
+        </div>
+    @endif
+</section>
+
 @if ($due->isNotEmpty())
 <form method="post" action="{{ route('admin.sales.cod-received') }}" class="card" data-bulk>
     @csrf
