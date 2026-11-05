@@ -547,7 +547,7 @@ document.addEventListener('click', function (e) {
     function update() {
         var n = form.querySelectorAll('[data-check]:checked').length;
         bar.hidden = n === 0; count.textContent = n + ' selected';
-        form.querySelectorAll('[data-check]').forEach(function (c) { c.closest('.ol-row').classList.toggle('picked', c.checked); });
+        form.querySelectorAll('[data-check]').forEach(function (c) { var row = c.closest('.ol-row, [data-pick-row]'); if (row) row.classList.toggle('picked', c.checked); });
         if (all) all.checked = n > 0 && n === form.querySelectorAll('[data-check]').length;
     }
     form.addEventListener('change', function (e) {
