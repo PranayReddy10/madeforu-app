@@ -37,6 +37,7 @@
         @if($order->prepaid_discount > 0)<div class="good"><dt>Online payment discount</dt><dd>−{{ money($order->prepaid_discount) }}</dd></div>@endif
         <div><dt>Shipping</dt><dd>{{ $order->shipping > 0 ? money($order->shipping) : 'Free' }}</dd></div>
         @if($order->cod_fee > 0)<div><dt>Cash on delivery charges</dt><dd>{{ money($order->cod_fee) }}</dd></div>@endif
+        @if($order->extra_charge > 0)<div><dt>{{ $order->extra_charge_label ?: 'Extra charges' }}</dt><dd>{{ money($order->extra_charge) }}</dd></div>@endif
         <div class="grand"><dt>Total</dt><dd>{{ money($order->total) }}</dd></div>
     </dl>
     <p class="small muted">Delivering to {{ $order->name }}, {{ $order->address_line1 }}@if($order->address_line2), {{ $order->address_line2 }}@endif, {{ $order->city }}, {{ $order->state }} {{ $order->pincode }}</p>

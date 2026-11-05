@@ -595,3 +595,10 @@ table th { color: var(--muted); }
 .wa-send:hover { text-decoration: none; filter: brightness(.95); }
 tr.wa-done td { opacity: .55; }
 tr.wa-done .wa-send { background: #fff; color: #128c47; }
+
+/* Order page: Payment & charges */
+.pay-fix { border: 2px solid #f3c27a; background: #fffaf0; }
+.pay-choice { display: flex; gap: 14px; flex-wrap: wrap; margin: 4px 0 10px; }
+.pay-choice label { display: flex; align-items: center; gap: 6px; font-weight: 600; }
+.charges-total { display: flex; justify-content: space-between; font-size: 15px; margin: 10px 0; padding-top: 8px; border-top: 1px dashed #e5d9de; }
+[data-cod-only][hidden] { display: none; }

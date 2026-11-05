@@ -77,7 +77,7 @@ class Invoice
             $taxes[(string) $rate] = ($taxes[(string) $rate] ?? 0) + $tax;
         }
         $charges = [];
-        foreach (['Shipping' => (float) $order->shipping, 'Cash on delivery charges' => (float) $order->cod_fee] as $label => $amount) {
+        foreach (['Shipping' => (float) $order->shipping, 'Cash on delivery charges' => (float) $order->cod_fee, ($order->extra_charge_label ?: 'Extra charges') => (float) $order->extra_charge] as $label => $amount) {
             if ($amount > 0) {
                 [$taxable, $tax] = $split($amount, $default);
                 $charges[] = ['name' => $label, 'rate' => $default, 'taxable' => $taxable, 'tax' => $tax, 'total' => $amount];

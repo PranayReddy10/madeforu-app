@@ -687,3 +687,23 @@ document.querySelectorAll('[data-campaign-form] [data-preset]').forEach(function
     });
     build();
 })();
+
+/* Order page → Payment & charges: show COD fields only for cash on delivery, and the new total as you type. */
+(function () {
+    var f = document.querySelector('[data-charges]');
+    if (!f) return;
+    var rupees = function (n) { return '₹' + (Math.round(n * 100) / 100).toLocaleString('en-IN', { maximumFractionDigits: 2 }); };
+    function update() {
+        var cod = (f.querySelector('input[name=payment_method]:checked') || {}).value === 'cod';
+        f.querySelectorAll('[data-cod-only]').forEach(function (el) { el.hidden = !cod; });
+        var total = +f.dataset.items - (cod ? 0 : +f.dataset.prepaid);
+        f.querySelectorAll('[data-charge]').forEach(function (i) {
+            if (i.name === 'cod_fee' && !cod) return;
+            total += +i.value || 0;
+        });
+        f.querySelector('[data-new-total]').textContent = rupees(total);
+    }
+    f.addEventListener('input', update);
+    f.addEventListener('change', update);
+    update();
+})();

@@ -157,11 +157,47 @@
             @if ($order->prepaid_discount > 0)<tr><td>Online payment discount</td><td class="right">−{{ money($order->prepaid_discount) }}</td></tr>@endif
             <tr><td>Shipping</td><td class="right">{{ money($order->shipping) }}</td></tr>
             @if ((float) $order->cod_fee)<tr><td>Cash on delivery charges</td><td class="right">{{ money($order->cod_fee) }}</td></tr>@endif
+            @if ((float) $order->extra_charge)<tr><td>{{ $order->extra_charge_label ?: 'Extra charges' }}</td><td class="right">{{ money($order->extra_charge) }}</td></tr>@endif
             <tr><th>Total</th><th class="right">{{ money($order->total) }}</th></tr>
         </table>
     </section>
 </div>
 <aside>
+    @php
+        $locked = \App\Http\Controllers\Admin\OrderController::chargesLocked($order);
+        $failedOnline = $order->payment_method !== 'cod' && $order->payment_status !== 'paid' && $order->status === 'pending';
+        $itemsAfterCoupon = (float) $order->subtotal - (float) $order->discount + (float) $order->prepaid_discount;
+        $suggestCod = $order->payment_method === 'cod' ? (float) $order->cod_fee : \App\Services\Cart::codCharge($itemsAfterCoupon + (float) $order->shipping);
+    @endphp
+    <section class="card {{ $failedOnline ? 'pay-fix' : '' }}" id="charges">
+        <h2>Payment &amp; charges</h2>
+        @if ($failedOnline)
+            <p class="small"><b>Payment {{ $order->payment_status === 'failed' ? 'failed' : 'not received' }}.</b> If the customer agreed on the phone to pay cash on delivery, choose <b>Cash on delivery</b>, add any charges and save. The order is then confirmed like a normal COD order.</p>
+        @endif
+        @if ($locked)
+            <p class="muted small">{{ $locked }}</p>
+        @else
+            <form method="post" action="{{ route('admin.orders.charges', $order) }}" data-charges data-items="{{ $itemsAfterCoupon }}" data-prepaid="{{ (float) $order->prepaid_discount }}">
+                @csrf
+                <div class="pay-choice">
+                    <label><input type="radio" name="payment_method" value="cod" @checked($order->payment_method === 'cod' || $failedOnline)> Cash on delivery</label>
+                    <label><input type="radio" name="payment_method" value="online" @checked($order->payment_method !== 'cod' && ! $failedOnline)> Pay online</label>
+                </div>
+                <label>Shipping (₹) <input type="number" name="shipping" step="0.01" min="0" value="{{ (float) $order->shipping }}" data-charge></label>
+                <label data-cod-only>Cash on delivery charges (₹) <input type="number" name="cod_fee" step="0.01" min="0" value="{{ $suggestCod }}" data-charge></label>
+                <div class="row2">
+                    <label>Extra charge (₹) <input type="number" name="extra_charge" step="0.01" min="0" value="{{ (float) $order->extra_charge ?: '' }}" placeholder="0" data-charge></label>
+                    <label>For <input name="extra_charge_label" value="{{ $order->extra_charge_label }}" maxlength="80" placeholder="e.g. Rush making, gift wrap"></label>
+                </div>
+                @if ((float) $order->prepaid_discount)<p class="muted small" data-cod-only>The {{ money($order->prepaid_discount) }} online-payment discount is removed for cash on delivery.</p>@endif
+                <p class="charges-total">New total <b data-new-total>{{ money($order->total) }}</b></p>
+                @if ($order->status === 'pending')
+                    <label class="check" data-cod-only><input type="checkbox" name="notify" value="1" checked> Send the customer the order confirmation (email &amp; WhatsApp)</label>
+                @endif
+                <button class="btn full" data-confirm="Save these charges? The order total will change.">{{ $failedOnline ? 'Save & confirm order' : 'Save charges' }}</button>
+            </form>
+        @endif
+    </section>
     <section class="card">
         <h2>Status &amp; notes</h2>
         <form method="post" action="{{ route('admin.orders.update', $order) }}">

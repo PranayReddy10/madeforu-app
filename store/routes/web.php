@@ -149,6 +149,7 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'admin'])->group(fun
     Route::get('orders/{order}/uploads/{upload}', [Admin\OrderController::class, 'downloadUpload'])->name('orders.upload');
     Route::get('orders/{order}/production', [Admin\OrderController::class, 'productionSheet'])->name('orders.production');
     Route::post('orders/{order}/ship', [Admin\OrderController::class, 'ship'])->name('orders.ship');
+    Route::post('orders/{order}/charges', [Admin\OrderController::class, 'charges'])->name('orders.charges');
     Route::get('orders/{order}/invoice.pdf', [Admin\OrderController::class, 'invoice'])->name('orders.invoice');
     Route::post('orders/{order}/whatsapp', [Admin\OrderController::class, 'whatsapp'])->name('orders.whatsapp');
     Route::post('orders/{order}/track', [Admin\OrderController::class, 'track'])->name('orders.track');
