@@ -1,0 +1,297 @@
+<?php
+
+namespace App\Services;
+
+use App\Models\Order;
+use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Str;
+use RuntimeException;
+
+/**
+ * Delhivery B2C API: pincode serviceability, create shipment (manifest), tracking,
+ * shipping label, cancellation and pickup requests. Auth is "Authorization: Token …".
+ */
+class Delhivery
+{
+    public static function enabled(): bool
+    {
+        return (bool) setting('delhivery.enabled') && (bool) setting('delhivery.token');
+    }
+
+    /** The pickup location (warehouse) name exactly as registered with Delhivery. */
+    public static function pickupName(): string
+    {
+        return trim((string) setting('delhivery.pickup_location'));
+    }
+
+    /** Plain text Delhivery accepts: no symbols, emojis or line breaks. */
+    public static function clean(?string $s, int $max): string
+    {
+        $s = str_replace('&', ' and ', (string) $s);
+        $s = preg_replace('/[^\p{L}\p{N} ,.\-\/()]+/u', ' ', $s);
+
+        return Str::limit(trim(preg_replace(['/\s+/', '/\s+,/', '/,{2,}/'], [' ', ',', ','], $s), ' ,.-'), $max, '');
+    }
+
+    /** Delhivery's own wording, plus what to do about the errors shop owners actually meet. */
+    public static function explain(string $why): string
+    {
+        $name = self::pickupName();
+        if (stripos($why, 'ClientWarehouse') !== false || (stripos($why, 'warehouse') !== false && stripos($why, 'does not exist') !== false)) {
+            return 'the pickup location “'.($name ?: 'not set').'” is not a warehouse in your Delhivery account. '
+                .'The name must match exactly — capital and small letters too (“madeforu” and “MADEFORU” are different names to Delhivery): copy it from Delhivery One → Settings → Pickup locations into '
+                .'Admin → Settings → Delhivery shipping, or register your address from Admin → Orders → Delhivery. (Delhivery said: '.$why.')';
+        }
+        if (stripos($why, 'suspicious') !== false) {
+            return 'Delhivery’s fraud check flagged this order. It usually means test or dummy details (a name like “test”, phone 9876543210, '
+                .'an address like “12 MG Road”) or an incomplete address. Check the name, phone and address on the order — fix them with Edit on the order page — '
+                .'and press Retry. If it is a real customer and keeps failing, ask Delhivery support to clear it. (Delhivery said: '.$why.')';
+        }
+        if (stripos($why, 'Unauthorized') !== false || stripos($why, 'token') !== false && stripos($why, 'invalid') !== false) {
+            return 'the API token was refused. Check it in Admin → Settings → Delhivery shipping, and that Mode (Live/Test) matches the token. (Delhivery said: '.$why.')';
+        }
+        if (stripos($why, 'non serviceable') !== false || stripos($why, 'pincode') !== false) {
+            return 'Delhivery does not deliver to this PIN code (or it is mistyped). (Delhivery said: '.$why.')';
+        }
+
+        return $why;
+    }
+
+    /**
+     * Register the shop's pickup address as a Delhivery warehouse ("client warehouse").
+     *
+     * @param  array{name: string, phone: string, email?: string, address: string, city: string, state: string, pin: string}  $w
+     */
+    public function createWarehouse(array $w): void
+    {
+        $res = $this->http()->asJson()->post($this->base().'/api/backend/clientwarehouse/create/', [
+            'name' => $w['name'], 'registered_name' => $w['name'], 'phone' => $w['phone'], 'email' => $w['email'] ?? config('store.email'),
+            'address' => $w['address'], 'city' => $w['city'], 'pin' => $w['pin'], 'country' => 'India',
+            'return_address' => $w['address'], 'return_city' => $w['city'], 'return_pin' => $w['pin'], 'return_state' => $w['state'], 'return_country' => 'India',
+        ]);
+        $body = (string) $res->body();
+        // Already registered under this name is fine: we just use it.
+        if (stripos($body, 'already exists') !== false) {
+            return;
+        }
+        if (! $res->successful() || $res->json('success') === false) {
+            throw new RuntimeException('Delhivery could not register the pickup address: '.Str::limit((string) ($res->json('error') ?: $res->json('message') ?: $body), 300));
+        }
+    }
+
+    private function base(): string
+    {
+        return setting('delhivery.mode') === 'staging' ? 'https://staging-express.delhivery.com' : 'https://track.delhivery.com';
+    }
+
+    private function http(): PendingRequest
+    {
+        return Http::withHeaders(['Authorization' => 'Token '.setting('delhivery.token')])->acceptJson()->timeout(25);
+    }
+
+    /**
+     * Can Delhivery deliver to this PIN, and collect cash there? Cached for a day.
+     * Returns null when the check could not be made (API down, not configured): callers then allow the order.
+     *
+     * @return array{serviceable: bool, cod: bool, prepaid: bool, city: ?string, state: ?string}|null
+     */
+    public function pincode(string $pin): ?array
+    {
+        if (! self::enabled() || ! preg_match('/^[1-9]\d{5}$/', $pin)) {
+            return null;
+        }
+
+        return Cache::remember('delhivery.pin.'.$pin, 86400, function () use ($pin) {
+            try {
+                $res = $this->http()->get($this->base().'/c/api/pin-codes/json/', ['filter_codes' => $pin]);
+            } catch (\Throwable) {
+                return null;
+            }
+            if (! $res->successful()) {
+                return null;
+            }
+            $pc = $res->json('delivery_codes.0.postal_code');
+            if (! $pc) {
+                return ['serviceable' => false, 'cod' => false, 'prepaid' => false, 'city' => null, 'state' => null];
+            }
+
+            return [
+                'serviceable' => ($pc['pre_paid'] ?? 'N') === 'Y' || ($pc['cod'] ?? 'N') === 'Y',
+                'cod' => ($pc['cod'] ?? 'N') === 'Y' || ($pc['cash'] ?? 'N') === 'Y',
+                'prepaid' => ($pc['pre_paid'] ?? 'N') === 'Y',
+                'city' => $pc['district'] ?? null,
+                'state' => $pc['state_code'] ?? null,
+            ];
+        });
+    }
+
+    /**
+     * Delhivery's own charge to send a parcel to a PIN (surface or express, prepaid or COD), in ₹.
+     * Cached for 12 hours; null when it cannot be worked out (callers then use the flat fee).
+     */
+    public function rate(string $pin, int $chargeableGrams, bool $cod = false, float $codAmount = 0): ?float
+    {
+        $q = $this->rateQuery($pin, $chargeableGrams, $cod, $codAmount);
+        if (! $q) {
+            return null;
+        }
+        $key = 'delhivery.rate.'.implode('.', [$q['md'], $q['o_pin'], $q['d_pin'], $q['cgm'], $cod ? 'cod'.(int) ceil($codAmount / 100) : 'pp']);
+
+        return Cache::remember($key, 12 * 3600, fn () => $this->rateDetails($pin, $chargeableGrams, $cod, $codAmount)['total']);
+    }
+
+    /**
+     * The rate call itself, uncached, with what was sent and what came back (for the admin tester).
+     *
+     * @return array{total: ?float, sent: ?array, status: ?int, body: mixed, error: ?string}
+     */
+    public function rateDetails(string $pin, int $chargeableGrams, bool $cod = false, float $codAmount = 0): array
+    {
+        $q = $this->rateQuery($pin, $chargeableGrams, $cod, $codAmount);
+        if (! $q) {
+            return ['total' => null, 'sent' => null, 'status' => null, 'body' => null,
+                'error' => self::enabled() ? 'Set a valid Pickup PIN code in Settings → Delhivery shipping, and enter a 6-digit PIN.' : 'Delhivery is not switched on.'];
+        }
+        try {
+            $res = $this->http()->get($this->base().'/api/kinko/v1/invoice/charges/.json', $q);
+        } catch (\Throwable $e) {
+            return ['total' => null, 'sent' => $q, 'status' => null, 'body' => null, 'error' => $e->getMessage()];
+        }
+        $total = $res->successful() ? ($res->json('0.total_amount') ?? $res->json('total_amount')) : null;
+
+        return ['total' => is_numeric($total) && $total > 0 ? round((float) $total, 2) : null, 'sent' => $q,
+            'status' => $res->status(), 'body' => $res->json() ?? $res->body(), 'error' => null];
+    }
+
+    private function rateQuery(string $pin, int $chargeableGrams, bool $cod, float $codAmount): ?array
+    {
+        $from = preg_replace('/\D/', '', (string) setting('delhivery.pickup_pincode'));
+        if (! self::enabled() || ! preg_match('/^[1-9]\d{5}$/', $pin) || ! preg_match('/^[1-9]\d{5}$/', $from)) {
+            return null;
+        }
+
+        return [
+            'md' => setting('delhivery.shipping_mode') === 'Express' ? 'E' : 'S', 'ss' => 'Delivered', 'o_pin' => $from, 'd_pin' => $pin,
+            'cgm' => max(1, $chargeableGrams),   // grams; Delhivery applies its own 500 g slabs
+            'pt' => $cod ? 'COD' : 'Pre-paid', 'cod' => $cod ? round($codAmount, 2) : 0,
+        ];
+    }
+
+    /** Create the shipment in Delhivery and return the AWB (waybill). */
+    public function createShipment(Order $order): string
+    {
+        $order->loadMissing('items.product');
+        $cod = $order->payment_method === 'cod' && $order->payment_status !== 'paid';
+        $parcel = Parcel::of($order->items->map(fn ($i) => [$i->product, $i->qty]));
+        // Delhivery's fraud check ("suspicious order/consignee") trips on symbols, emojis and long product titles.
+        $shipment = [
+            'name' => self::clean($order->name, 80),
+            'add' => self::clean(trim($order->address_line1.', '.$order->address_line2, ', '), 240),
+            'pin' => preg_replace('/\D/', '', (string) $order->pincode),
+            'city' => self::clean($order->city, 60),
+            'state' => self::clean($order->state, 60),
+            'country' => 'India',
+            'phone' => substr(preg_replace('/\D/', '', (string) $order->phone), -10),
+            'order' => $order->number,
+            'payment_mode' => $cod ? 'COD' : 'Prepaid',
+            'cod_amount' => $cod ? (string) round((float) $order->total, 2) : '0',
+            'total_amount' => (string) round((float) $order->total, 2),
+            'products_desc' => self::clean($order->items->map(fn ($i) => trim(Str::before($i->name, '|')).' x'.$i->qty)->implode(', '), 200),
+            'quantity' => (string) $order->items->sum('qty'),
+            'weight' => (string) $order->shippingWeight(),
+            'shipment_length' => $parcel->length ? (string) $parcel->length : '',
+            'shipment_width' => $parcel->width ? (string) $parcel->width : '',
+            'shipment_height' => $parcel->height ? (string) $parcel->height : '',
+            'seller_name' => self::clean((string) config('store.name'), 60),
+            'shipping_mode' => setting('delhivery.shipping_mode') === 'Express' ? 'Express' : 'Surface',
+            'waybill' => '',
+            'order_date' => $order->created_at->toDateTimeString(),
+        ];
+        // A failed attempt can leave the order number "partially saved" at Delhivery; a retry then gets
+        // "duplicate order id", so try once more with -2, -3.
+        foreach (['', '-2', '-3'] as $suffix) {
+            $shipment['order'] = $order->number.$suffix;
+            $payload = ['shipments' => [$shipment], 'pickup_location' => ['name' => self::pickupName()]];
+            // Delhivery wants form fields: format=json&data=<json>
+            $res = $this->http()->asForm()->post($this->base().'/api/cmu/create.json', [
+                'format' => 'json',
+                'data' => json_encode($payload, JSON_UNESCAPED_UNICODE),
+            ]);
+            $pkg = $res->json('packages.0');
+            if ($res->successful() && $pkg && strtolower((string) ($pkg['status'] ?? '')) === 'success' && ! empty($pkg['waybill'])) {
+                return (string) $pkg['waybill'];
+            }
+            $why = collect((array) ($pkg['remarks'] ?? []))->filter()->implode(' ') ?: ($res->json('rmk') ?: Str::limit($res->body(), 300));
+            if (stripos($why, 'duplicate') === false && stripos($why, 'already exist') === false) {
+                break;
+            }
+        }
+        throw new RuntimeException('Delhivery did not accept the shipment: '.self::explain($why));
+    }
+
+    /**
+     * Latest status and scan history for an AWB.
+     *
+     * @return array{status: ?string, type: ?string, at: ?string, location: ?string, expected: ?string, scans: array<int, array>}
+     */
+    public function track(string $awb): array
+    {
+        $res = $this->http()->get($this->base().'/api/v1/packages/json/', ['waybill' => $awb]);
+        $s = $res->json('ShipmentData.0.Shipment');
+        if (! $res->successful() || ! $s) {
+            throw new RuntimeException('Delhivery tracking failed for '.$awb.': '.Str::limit($res->body(), 200));
+        }
+
+        return [
+            'status' => $s['Status']['Status'] ?? null,
+            'type' => $s['Status']['StatusType'] ?? null,     // UD in transit, DL delivered, RT return, CN cancelled, PP pickup pending
+            'at' => $s['Status']['StatusDateTime'] ?? null,
+            'location' => $s['Status']['StatusLocation'] ?? null,
+            'expected' => $s['ExpectedDeliveryDate'] ?? ($s['PromisedDeliveryDate'] ?? null),
+            'scans' => collect($s['Scans'] ?? [])->map(fn ($x) => [
+                'status' => $x['ScanDetail']['Scan'] ?? '',
+                'at' => $x['ScanDetail']['ScanDateTime'] ?? null,
+                'location' => $x['ScanDetail']['ScannedLocation'] ?? '',
+                'note' => $x['ScanDetail']['Instructions'] ?? '',
+            ])->values()->all(),
+        ];
+    }
+
+    /** Link to the printable shipping label (PDF). */
+    public function labelUrl(string $awb): string
+    {
+        $res = $this->http()->get($this->base().'/api/p/packing_slip', ['wbns' => $awb, 'pdf' => 'true']);
+        $url = $res->json('packages.0.pdf_download_link');
+        if (! $url) {
+            throw new RuntimeException('Delhivery label not available: '.Str::limit($res->body(), 200));
+        }
+
+        return $url;
+    }
+
+    public function cancel(string $awb): void
+    {
+        $res = $this->http()->asJson()->post($this->base().'/api/p/edit', ['waybill' => $awb, 'cancellation' => 'true']);
+        if (! $res->successful() || $res->json('status') === false) {
+            throw new RuntimeException('Delhivery could not cancel '.$awb.': '.Str::limit($res->body(), 200));
+        }
+    }
+
+    /** Ask Delhivery to collect today's (or a given day's) parcels from the warehouse. */
+    public function requestPickup(string $date, string $time, int $count): array
+    {
+        $res = $this->http()->asJson()->post($this->base().'/fm/request/new/', [
+            'pickup_location' => self::pickupName(),
+            'pickup_date' => $date,
+            'pickup_time' => $time,
+            'expected_package_count' => max(1, $count),
+        ]);
+        if (! $res->successful()) {
+            throw new RuntimeException('Delhivery pickup request failed: '.self::explain(Str::limit($res->body(), 300)));
+        }
+
+        return $res->json() ?? [];
+    }
+}

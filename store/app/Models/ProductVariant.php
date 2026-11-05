@@ -1,0 +1,45 @@
+<?php
+
+namespace App\Models;
+
+use App\Services\Sku;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+
+class ProductVariant extends Model
+{
+    protected $guarded = ['id'];
+
+    protected $casts = ['options' => 'array', 'in_stock' => 'boolean', 'stock_qty' => 'integer', 'price' => 'decimal:2', 'sale_price' => 'decimal:2', 'cost_price' => 'decimal:2'];
+
+    protected static function booted(): void
+    {
+        static::saving(function (ProductVariant $v) {
+            if ($v->stock_qty !== null) {
+                $v->in_stock = $v->stock_qty > 0;
+            }
+        });
+        static::saved(function (ProductVariant $v) {
+            if (trim((string) $v->sku) === '') {
+                $v->forceFill(['sku' => Sku::forVariant($v)])->saveQuietly();
+            }
+        });
+    }
+
+    public function product(): BelongsTo
+    {
+        return $this->belongsTo(Product::class);
+    }
+
+    public function currentPrice(): float
+    {
+        $sale = (float) $this->sale_price;
+
+        return $sale > 0 && $sale < (float) $this->price ? $sale : (float) $this->price;
+    }
+
+    public function label(): string
+    {
+        return collect($this->options)->map(fn ($v, $k) => "$k: $v")->implode(', ');
+    }
+}
