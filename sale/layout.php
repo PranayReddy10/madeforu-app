@@ -157,6 +157,27 @@ function nav_item(string $page, string $current, string $href, string $label, st
       </div>
       <?= $TOPBAR_HTML ?? '' ?>
     </div>
+<?php
+    // New code uploaded but the database not caught up yet: one click adds what's missing.
+    require_once __DIR__ . '/lib_schema.php';
+    if ($who && isset($conn) && schema_needs_update($conn)):
+        $sm = schema_missing($conn);
+        $parts = [];
+        if ($sm['tables'])  $parts[] = count($sm['tables']) . ' table' . (count($sm['tables']) === 1 ? '' : 's') . ' (' . implode(', ', $sm['tables']) . ')';
+        if ($sm['columns']) $parts[] = count($sm['columns']) . ' column' . (count($sm['columns']) === 1 ? '' : 's') . ' (' . implode(', ', array_map(fn ($c) => $c[0] . '.' . $c[1], $sm['columns'])) . ')';
+?>
+    <form method="post" action="db_update.php" class="db-update">
+      <?= csrf_field() ?>
+      <input type="hidden" name="back" value="<?= e(basename(parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH) ?: 'index.php') . (($q = parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_QUERY)) ? '?' . $q : '')) ?>">
+      <span><b>Finish updating the panel.</b> The database is missing <?= e(implode(' and ', $parts)) ?> — some pages may not work until then. Nothing is deleted.</span>
+      <button type="submit">Update database</button>
+    </form>
+    <style>
+      .db-update{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;background:#fff4dc;color:#6b4a00;border:1px solid #f3c27a;border-radius:10px;padding:12px 14px;margin:0 0 16px;font-size:14px;line-height:1.45}
+      .db-update span{min-width:0;overflow-wrap:anywhere;flex:1}
+      .db-update button{padding:9px 16px;border:0;border-radius:6px;background:#1877f2;color:#fff;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit}
+    </style>
+<?php endif; ?>
 
 <script>
 function shellNav(open){

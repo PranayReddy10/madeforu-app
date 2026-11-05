@@ -271,3 +271,14 @@ Set up: open **Website sync**, create a key, paste the address and key into the
 website's Admin → Settings → Sale panel sync, then use **Test connection** and
 **Send delivered orders now** on the website's Admin → Sales page.
 
+
+## Keeping the database up to date
+
+`db_schema.sql` lists every table and column the panel needs. Every page
+compares the live database with it (`lib_schema.php`); if anything is
+missing — for example after uploading a new feature — a yellow
+**Update database** banner appears at the top. One click (`db_update.php`)
+adds exactly the missing tables and columns. Nothing is dropped or changed
+and no data is touched.
+
+When you add a table or column in the code, add it to `db_schema.sql` too.
