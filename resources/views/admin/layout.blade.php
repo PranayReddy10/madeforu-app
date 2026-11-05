@@ -56,6 +56,14 @@
         </header>
         @if (session('status'))<div class="flash ok">{{ session('status') }}</div>@endif
         @if (session('error'))<div class="flash err">{{ session('error') }}</div>@endif
+        @if (\App\Support\SiteHealth::needsUpdate())
+            <form method="post" action="{{ url('admin/speed') }}" class="flash warn site-update">@csrf<input type="hidden" name="do" value="update">
+                <span><b>Finish updating the site.</b> The new version you uploaded needs
+                    {{ \App\Support\SiteHealth::pendingMigrations() ? count(\App\Support\SiteHealth::pendingMigrations()).' database '.(count(\App\Support\SiteHealth::pendingMigrations()) === 1 ? 'change' : 'changes') : '' }}{{ \App\Support\SiteHealth::pendingMigrations() && \App\Support\SiteHealth::staleRoutes() ? ' and ' : '' }}{{ \App\Support\SiteHealth::staleRoutes() ? 'its page list refreshed' : '' }}
+                    — some pages may show “Server Error” until then.</span>
+                <button class="btn small">Update now</button>
+            </form>
+        @endif
         @if ($errors->any())
             <div class="flash err"><strong>Please fix the following:</strong>
                 <ul>@foreach ($errors->all() as $e)<li>{{ $e }}</li>@endforeach</ul>

@@ -17,6 +17,10 @@ class DashboardController extends Controller
     /** "Speed up the website": photos served directly, small WebP copies, views pre-compiled. */
     public function speed()
     {
+        // The "Update now" banner posts here too: this route exists even in an old cached route list.
+        if (request('do') === 'update') {
+            return back()->with('status', \App\Support\SiteHealth::update());
+        }
         @set_time_limit(300);
         \Illuminate\Support\Facades\Artisan::call('store:speed', ['--limit' => 300]);
 

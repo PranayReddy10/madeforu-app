@@ -177,7 +177,7 @@
         @if ($locked)
             <p class="muted small">{{ $locked }}</p>
         @else
-            <form method="post" action="{{ route('admin.orders.charges', $order) }}" data-charges data-items="{{ $itemsAfterCoupon }}" data-prepaid="{{ (float) $order->prepaid_discount }}">
+            <form method="post" action="{{ url('admin/orders/'.$order->id.'/charges') }}" data-charges data-items="{{ $itemsAfterCoupon }}" data-prepaid="{{ (float) $order->prepaid_discount }}">
                 @csrf
                 <div class="pay-choice">
                     <label><input type="radio" name="payment_method" value="cod" @checked($order->payment_method === 'cod' || $failedOnline)> Cash on delivery</label>
