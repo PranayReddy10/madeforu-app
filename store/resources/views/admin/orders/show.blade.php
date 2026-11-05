@@ -259,11 +259,21 @@
         <h2>Messages</h2>
         @php $waTo = \App\Services\WhatsApp::number($order->phone); @endphp
         <p class="muted small">Opens WhatsApp with the message written — check it and press send.</p>
+        @php $waMsgs = collect(\App\Services\OrderNotifier::waMessages($order)); @endphp
+        @if ($waMsgs->where('now', true)->isNotEmpty())<p class="small wa-now-h">For this order now</p>@endif
         <div class="wa-list">
-            @foreach (\App\Services\OrderNotifier::manualMessages($order) as $label => $text)
-                <a class="btn small ghost" href="https://wa.me/{{ $waTo }}?text={{ rawurlencode($text) }}" target="_blank" rel="noopener">{{ $label }}</a>
+            @foreach ($waMsgs->where('now', true) as $msg)
+                <a class="btn small" href="https://wa.me/{{ $waTo }}?text={{ rawurlencode($msg['text']) }}" target="_blank" rel="noopener" title="{{ \Illuminate\Support\Str::limit($msg['text'], 300) }}">{{ $msg['label'] }}</a>
             @endforeach
         </div>
+        <details class="wa-more" @if ($waMsgs->where('now', true)->isEmpty()) open @endif>
+            <summary class="small">More messages ({{ $waMsgs->where('now', false)->count() }})</summary>
+            <div class="wa-list">
+                @foreach ($waMsgs->where('now', false) as $msg)
+                    <a class="btn small ghost" href="https://wa.me/{{ $waTo }}?text={{ rawurlencode($msg['text']) }}" target="_blank" rel="noopener" title="{{ \Illuminate\Support\Str::limit($msg['text'], 300) }}">{{ $msg['label'] }}</a>
+                @endforeach
+            </div>
+        </details>
         @if (\App\Services\WhatsApp::enabled())
             <form method="post" action="{{ route('admin.orders.whatsapp', $order) }}" class="row-actions">
                 @csrf
