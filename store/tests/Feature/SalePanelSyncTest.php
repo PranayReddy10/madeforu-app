@@ -104,18 +104,34 @@ class SalePanelSyncTest extends TestCase
         Http::assertNothingSent();
     }
 
-    public function test_sales_page_test_and_send_older_orders(): void
+    public function test_previous_orders_are_chosen_one_by_one_and_manual_ones_never_sent(): void
     {
         Http::fake(['sale.example.test/*' => Http::response(['ok' => true, 'order_no' => 'ORD9', 'message' => 'Connected to the sale panel.'])]);
-        Setting::put(['sale.enabled' => '']);   // older orders delivered before sync was on
-        $this->order(['status' => 'delivered']);
-        $this->order(['number' => 'MFU8002', 'status' => 'delivered', 'payment_method' => 'razorpay', 'payment_status' => 'paid', 'razorpay_payment_id' => 'pay_X1']);
+        Setting::put(['sale.enabled' => '']);   // delivered before sync was on
+        $typed = $this->order(['status' => 'delivered']);
+        $new = $this->order(['number' => 'MFU8002', 'status' => 'delivered', 'payment_method' => 'razorpay', 'payment_status' => 'paid', 'razorpay_payment_id' => 'pay_X1']);
         Setting::put(['sale.enabled' => '1']);
 
-        $this->actingAs($this->admin)->get('/admin/sales')->assertOk()->assertSee('Send delivered orders now (2)');
+        $this->actingAs($this->admin)->get('/admin/sales')->assertOk()
+            ->assertSee('Previous delivered orders not in the sale panel (2)')->assertSee('MFU8001')->assertSee('MFU8002')
+            ->assertDontSee('Send delivered orders now');
         $this->actingAs($this->admin)->post('/admin/sales/panel-test')->assertSessionHas('status', '✓ Connected to the sale panel.');
-        $this->actingAs($this->admin)->post('/admin/sales/panel-send')->assertSessionHas('status', '2 orders sent to the sale panel.');
-        Http::assertSent(fn (Request $r) => ($r->data()['web_order_no'] ?? '') === 'MFU8002' && $r->data()['payment']['mode'] === 'other' && $r->data()['payment']['note'] === 'Razorpay pay_X1');
-        $this->actingAs($this->admin)->get('/admin/sales')->assertDontSee('Send delivered orders now');
+
+        // MFU8001 was typed into the panel by hand.
+        $this->actingAs($this->admin)->post('/admin/sales/panel-send', ['ids' => [$typed->id], 'action' => 'skip'])
+            ->assertSessionHas('status', '1 order marked as already in the sale panel — they won’t be sent.');
+        $this->actingAs($this->admin)->post('/admin/sales/panel-send', ['ids' => [$new->id], 'action' => 'send'])
+            ->assertSessionHas('status', '1 order sent to the sale panel.');
+
+        Http::assertSent(fn (Request $r) => ($r->data()['web_order_no'] ?? '') === 'MFU8002' && $r->data()['payment']['note'] === 'Razorpay pay_X1');
+        Http::assertNotSent(fn (Request $r) => ($r->data()['web_order_no'] ?? '') === 'MFU8001');
+        $this->actingAs($this->admin)->get('/admin/sales')->assertDontSee('Previous delivered orders not in the sale panel')->assertSee('added there by hand');
+        $this->actingAs($this->admin)->get(route('admin.orders.show', $typed))->assertSee('Added by hand in the panel — not sent');
+
+        // A hand-added order is never sent or removed automatically either.
+        \Illuminate\Support\Facades\Bus::fake([\App\Jobs\SendToSalePanel::class]);
+        $typed->refresh()->update(['status' => 'returned']);
+        $typed->refresh()->update(['status' => 'delivered']);
+        \Illuminate\Support\Facades\Bus::assertNotDispatched(\App\Jobs\SendToSalePanel::class);
     }
 }

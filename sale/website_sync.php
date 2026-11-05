@@ -96,8 +96,9 @@ $flash = flash();
         <li>Paste the key:
           <div class="field"><code id="k"><?= e($key) ?></code><button type="button" onclick="copyIt('k', this)">Copy</button></div></li>
         <li>Tick <b>Send delivered orders to the sale panel</b> and save.</li>
-        <li>On the website open <b>Admin → Sales</b> and press <b>Test connection</b>. To bring in orders delivered
-          before today, press <b>Send delivered orders now</b> there.</li>
+        <li>On the website open <b>Admin → Sales</b> and press <b>Test connection</b>. Orders delivered before
+          today are listed there: tick the ones you <b>already added here by hand</b> and press <b>Already in panel</b>,
+          then send the rest. New deliveries come in automatically.</li>
       </ol>
       <div class="row" style="margin-top:12px">
         <form method="post" onsubmit="return confirm('Create a new key? The website stops sending until you paste the new one there.')"><?= csrf_field() ?>
