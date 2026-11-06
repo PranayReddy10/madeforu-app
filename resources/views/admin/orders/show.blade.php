@@ -20,7 +20,7 @@
             <div class="muted small">Placed {{ $order->created_at->format('D, d M Y \a\t H:i') }} · {{ $order->created_at->diffForHumans() }}@if ($order->woo_id) · imported from WordPress @endif</div>
             <div class="od-badges">
                 <span class="badge s-{{ $order->status }}">{{ $order->statusLabel() }}</span>
-                <span class="badge {{ $paid ? 'ok' : ($order->payment_status === 'failed' ? 'err' : 'warn') }}">{{ $order->payment_method === 'cod' ? 'COD' : ucfirst($order->payment_method) }} · {{ $order->payment_status }}</span>
+                <span class="badge {{ $paid ? 'ok' : ($order->payment_status === 'failed' ? 'err' : 'warn') }}">{{ $order->paymentLabel(true) }} · {{ $order->payment_status }}</span>
                 @if ($photos)<span class="badge">📷 {{ $photos }} {{ \Illuminate\Support\Str::plural('photo', $photos) }}</span>@endif
                 @if ($order->tracking_number)<span class="badge">🚚 {{ $order->courier ?: 'Courier' }} {{ $order->tracking_number }}</span>@endif
             </div>
@@ -295,7 +295,7 @@
     <section class="card">
         <h2>Payment</h2>
         <table class="tbl compact">
-            <tr><td>Method</td><td>{{ $order->payment_method === 'cod' ? 'Cash on delivery' : ucfirst($order->payment_method) }}</td></tr>
+            <tr><td>Method</td><td>{{ $order->paymentLabel() }}</td></tr>
             <tr><td>Status</td><td><span class="badge {{ $paid ? 'ok' : '' }}">{{ $order->payment_status }}</span></td></tr>
             @if ($order->razorpay_payment_id)<tr><td>Razorpay</td><td class="small">{{ $order->razorpay_payment_id }}</td></tr>@endif
             @if ($order->cashfree_payment_id)<tr><td>Cashfree</td><td class="small">{{ $order->cashfree_payment_id }}</td></tr>@endif

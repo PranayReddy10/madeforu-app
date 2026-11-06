@@ -45,7 +45,7 @@ class ProfitReport
 
     private static function gatewayFee(Order $o): float
     {
-        return $o->payment_method === 'cod' ? 0.0 : round((float) $o->total * (float) setting('profit.gateway_percent') / 100, 2);
+        return ! $o->viaGateway() ? 0.0 : round((float) $o->total * (float) setting('profit.gateway_percent') / 100, 2);
     }
 
     /** Totals for the period. */

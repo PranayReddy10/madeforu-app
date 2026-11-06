@@ -147,6 +147,8 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'admin'])->group(fun
     Route::delete('product-images/{image}', [Admin\ProductController::class, 'deleteImage'])->name('products.images.delete');
     Route::resource('categories', Admin\CategoryController::class)->except('show');
     Route::get('orders', [Admin\OrderController::class, 'index'])->name('orders.index');
+    Route::get('orders/new', [Admin\ManualOrderController::class, 'create'])->name('orders.create');
+    Route::post('orders/new', [Admin\ManualOrderController::class, 'store'])->name('orders.store');
     Route::get('orders/{order}', [Admin\OrderController::class, 'show'])->name('orders.show');
     Route::put('orders/{order}', [Admin\OrderController::class, 'update'])->name('orders.update');
     Route::delete('orders/{order}', [Admin\OrderController::class, 'destroy'])->name('orders.destroy');

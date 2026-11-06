@@ -12,5 +12,5 @@
     @if($order->extra_charge > 0)<tr><td style="padding:4px 0">{{ $order->extra_charge_label ?: 'Extra charges' }}</td><td align="right">{{ money($order->extra_charge) }}</td></tr>@endif
     <tr><td style="padding:8px 0;border-top:2px solid #1c2844"><b>Total</b></td><td align="right" style="border-top:2px solid #1c2844"><b>{{ money($order->total) }}</b></td></tr>
 </table>
-<p style="font-size:13px;color:#4a5470;margin:6px 0 0">{{ $order->payment_method === 'cod' ? ($order->payment_status === 'paid' ? 'Cash on delivery · paid' : 'Cash on delivery · pay '.money($order->total).' when it arrives') : 'Paid online ('.ucfirst($order->payment_method).')' }}<br>
+<p style="font-size:13px;color:#4a5470;margin:6px 0 0">{{ $order->payment_method === 'cod' ? ($order->payment_status === 'paid' ? 'Cash on delivery · paid' : 'Cash on delivery · pay '.money($order->total).' when it arrives') : ($order->payment_status === 'paid' ? 'Paid ('.$order->paymentLabel().')' : 'To pay ('.$order->paymentLabel().')') }}<br>
 Delivering to {{ $order->name }}, {{ $order->address_line1 }}@if($order->address_line2), {{ $order->address_line2 }}@endif, {{ $order->city }}, {{ $order->state }} {{ $order->pincode }}</p>

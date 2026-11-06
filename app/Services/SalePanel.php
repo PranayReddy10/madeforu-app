@@ -89,9 +89,9 @@ class SalePanel
             'extra_charge_reason' => collect($charges)->map(fn ($v, $k) => $k.' ₹'.rtrim(rtrim(number_format($v, 2, '.', ''), '0'), '.'))->implode(' + ') ?: null,
             'payment' => $paid ? [
                 'amount' => round((float) $order->total, 2),
-                'mode' => $cod ? 'cash' : 'other',
+                'mode' => $cod ? 'cash' : ($order->payment_method === 'upi' ? 'upi' : 'other'),
                 'note' => $cod ? 'COD via '.($order->courier ?: 'Delhivery').($order->tracking_number ? ', AWB '.$order->tracking_number : '')
-                    : ucfirst((string) $order->payment_method).' '.($order->razorpay_payment_id ?: $order->cashfree_payment_id ?: ''),
+                    : trim($order->paymentLabel().' '.($order->razorpay_payment_id ?: $order->cashfree_payment_id ?: '')),
             ] : ['amount' => 0],
             'awb' => $order->tracking_number,
             'dispatch_date' => $order->shipped_at?->format('Y-m-d'),

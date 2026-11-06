@@ -1,5 +1,8 @@
 @extends('admin.layout')
 @section('title', 'Orders')
+@section('actions')
+    <a class="btn small" href="{{ url('admin/orders/new') }}">+ New order <small>(WhatsApp / Instagram)</small></a>
+@endsection
 @section('content')
 @php
     $cur = request('status');
@@ -93,7 +96,7 @@
                     @endforeach
                     @if ($o->items_count > 3)<small class="muted">+{{ $o->items_count - 3 }} more</small>@endif
                 </div>
-                <div class="ol-total"><b>{{ money($o->total) }}</b><span class="badge {{ $o->payment_status === 'paid' ? 'ok' : ($o->payment_status === 'failed' ? 'err' : 'warn') }}">{{ $o->payment_method === 'cod' ? 'COD' : ucfirst($o->payment_method) }} · {{ $o->payment_status }}</span></div>
+                <div class="ol-total"><b>{{ money($o->total) }}</b><span class="badge {{ $o->payment_status === 'paid' ? 'ok' : ($o->payment_status === 'failed' ? 'err' : 'warn') }}">{{ $o->paymentLabel(true) }} · {{ $o->payment_status }}</span></div>
                 <div><span class="badge s-{{ $o->status }}">{{ $o->statusLabel() }}</span></div>
                 @if ($delhivery)
                     <div class="ol-dv">
