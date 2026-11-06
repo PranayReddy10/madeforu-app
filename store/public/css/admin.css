@@ -626,3 +626,19 @@ tr.wa-done .wa-send { background: #fff; color: #128c47; }
 .panel-sync { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
 .panel-sync h2 { margin-bottom: 4px; }
 .panel-sync .row-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* Orders → New order */
+.mo .card h2 { margin-bottom: 8px; }
+.mo-pay { display: grid; gap: 6px; margin: 2px 0 10px; }
+.mo-pay label { display: flex; gap: 8px; align-items: center; font-weight: 600; }
+.mo-line { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; margin-bottom: 10px; }
+.mo-line-top { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; }
+.mo-line-top .grow { flex: 1 1 260px; }
+.mo-qty { width: 90px; } .mo-price { width: 150px; }
+.mo-line [data-rm] { font-size: 18px; padding: 6px; }
+.mo-opts { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px 12px; margin-top: 6px; }
+.mo-opts:empty { display: none; }
+.mo-photo { grid-column: 1 / -1; margin: 0; }
+.mo-totals { margin-top: 8px; }
+.mo-save { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.mo [hidden] { display: none !important; }

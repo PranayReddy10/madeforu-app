@@ -35,7 +35,7 @@
             <p style="margin:6px 0 0">Invoice no. <b>{{ $order->invoice_number }}</b><br>
                 Invoice date: {{ ($order->invoiced_at ?? $order->created_at)->format('d M Y') }}<br>
                 Order no. {{ $order->number }} · {{ $order->created_at->format('d M Y') }}<br>
-                Payment: {{ $order->payment_method === 'cod' ? 'Cash on delivery' : ucfirst($order->payment_method) }} ({{ $order->payment_status }})</p>
+                Payment: {{ $order->paymentLabel() }} ({{ $order->payment_status }})</p>
         </td>
     </tr>
 </table>

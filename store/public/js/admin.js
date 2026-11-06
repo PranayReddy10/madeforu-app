@@ -707,3 +707,104 @@ document.querySelectorAll('[data-campaign-form] [data-preset]').forEach(function
     f.addEventListener('change', update);
     update();
 })();
+
+/* Orders → New order: pick products like a POS, prices and total as you go. */
+(function () {
+    var form = document.querySelector('[data-manual-order]');
+    if (!form) return;
+    var catalog = JSON.parse(form.dataset.catalog || '[]'), byName = {}, byId = {};
+    catalog.forEach(function (p) { byName[p.name.toLowerCase()] = p; byId[p.id] = p; });
+    var box = form.querySelector('[data-mo-lines]'), n = 0;
+    var rupees = function (v) { return '₹' + (Math.round(v * 100) / 100).toLocaleString('en-IN', { maximumFractionDigits: 2 }); };
+    var esc = function (s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; };
+
+    function addLine(old) {
+        var i = n++, row = document.createElement('div');
+        row.className = 'mo-line';
+        row.innerHTML = '<div class="mo-line-top"><label class="grow">Product <input list="mo-products" data-p placeholder="Type to search…" autocomplete="off" required></label>'
+            + '<label class="mo-qty">Qty <input type="number" name="items[' + i + '][qty]" value="1" min="1" max="999" required></label>'
+            + '<label class="mo-price">Price each (₹) <input type="number" step="0.01" min="0" name="items[' + i + '][unit_price]" data-price></label>'
+            + '<button type="button" class="link danger" data-rm title="Remove">✕</button></div>'
+            + '<input type="hidden" name="items[' + i + '][product_id]" data-pid><div class="mo-opts" data-opts></div>';
+        box.appendChild(row);
+        var pInput = row.querySelector('[data-p]'), price = row.querySelector('[data-price]');
+        function build(p, keep) {
+            row.querySelector('[data-pid]').value = p ? p.id : '';
+            var opts = row.querySelector('[data-opts]'), html = '';
+            if (p && p.variants.length) {
+                html += '<label>Option <select name="items[' + i + '][variant_id]" data-v required><option value="">Choose…</option>'
+                    + p.variants.map(function (v) { return '<option value="' + v.id + '" data-price="' + v.price + '">' + esc(v.label) + ' — ' + rupees(v.price) + '</option>'; }).join('') + '</select></label>';
+            }
+            (p ? p.fields : []).forEach(function (f) {
+                var name = 'items[' + i + '][custom][' + f.id + ']';
+                if (f.type === 'select' || f.type === 'choice') {
+                    html += '<label>' + esc(f.label) + ' <select name="' + name + '" data-f data-extra="' + f.extra + '"' + (f.required ? ' required' : '') + '><option value="">' + (f.required ? 'Choose…' : '—') + '</option>'
+                        + f.options.map(function (o) { return '<option value="' + esc(o.label) + '" data-price="' + o.price + '">' + esc(o.label) + (o.price > 0 ? ' (+' + rupees(o.price) + ')' : '') + '</option>'; }).join('') + '</select></label>';
+                } else {
+                    html += '<label>' + esc(f.label) + ' <input name="' + name + '" data-f data-extra="' + f.extra + '" maxlength="500"' + (f.type === 'date' ? ' type="date"' : '') + '></label>';
+                }
+            });
+            if (p && p.photos) html += '<p class="muted small mo-photo">📷 Photos: from the chat — nothing to upload.</p>';
+            opts.innerHTML = html;
+            if (keep) {
+                if (keep.variant_id) { var v = opts.querySelector('[data-v]'); if (v) v.value = keep.variant_id; }
+                Object.keys(keep.custom || {}).forEach(function (fid) { var el = opts.querySelector('[name="items[' + i + '][custom][' + fid + ']"]'); if (el) el.value = keep.custom[fid]; });
+            }
+            price.dataset.auto = '1';
+            autoPrice();
+        }
+        function autoPrice() {
+            var p = byId[row.querySelector('[data-pid]').value];
+            if (!p || price.dataset.auto !== '1') return total();
+            var v = row.querySelector('[data-v]'), unit = v && v.value ? +v.selectedOptions[0].dataset.price : p.price;
+            unit += p.photoExtra || 0;
+            row.querySelectorAll('[data-f]').forEach(function (f) {
+                if (!f.value) return;
+                unit += +f.dataset.extra || 0;
+                if (f.tagName === 'SELECT') unit += +f.selectedOptions[0].dataset.price || 0;
+            });
+            price.value = Math.round(unit * 100) / 100;
+            total();
+        }
+        pInput.addEventListener('change', function () {
+            var p = byName[pInput.value.trim().toLowerCase()];
+            pInput.setCustomValidity(p ? '' : 'Choose a product from the list.');
+            build(p || null);
+        });
+        row.addEventListener('change', function (e) { if (e.target.matches('[data-v], [data-f]')) autoPrice(); });
+        price.addEventListener('input', function () { price.dataset.auto = price.value === '' ? '1' : '0'; if (price.value === '') autoPrice(); else total(); });
+        row.querySelector('[name$="[qty]"]').addEventListener('input', total);
+        row.querySelector('[data-rm]').addEventListener('click', function () { if (box.children.length > 1) { row.remove(); total(); } });
+        if (old && byId[old.product_id]) {
+            pInput.value = byId[old.product_id].name;
+            build(byId[old.product_id], old);
+            if (old.unit_price) { price.value = old.unit_price; price.dataset.auto = '0'; }
+            row.querySelector('[name$="[qty]"]').value = old.qty || 1;
+        }
+        total();
+    }
+
+    function val(name) { var el = form.querySelector('[name="' + name + '"]'); return el && el.value !== '' ? +el.value : null; }
+    function total() {
+        var sub = 0;
+        box.querySelectorAll('.mo-line').forEach(function (r) { sub += (+r.querySelector('[data-price]').value || 0) * (+r.querySelector('[name$="[qty]"]').value || 0); });
+        var cod = (form.querySelector('[name=payment]:checked') || {}).value === 'cod';
+        form.querySelectorAll('[data-cod-only]').forEach(function (el) { el.hidden = !cod; });
+        form.querySelectorAll('[data-paid-only]').forEach(function (el) { el.hidden = cod; });
+        var disc = Math.min(val('discount') || 0, sub), after = sub - disc;
+        var free = +form.dataset.freeOver, ship = val('shipping');
+        if (ship === null) ship = free > 0 && after >= free ? 0 : +form.dataset.shippingFee;
+        var codFee = 0;
+        if (cod) { codFee = val('cod_fee'); if (codFee === null) codFee = Math.max(+form.dataset.codFixed, (after + ship) * (+form.dataset.codPercent) / 100); }
+        var extra = val('extra_charge') || 0;
+        var set = function (k, v) { form.querySelector('[data-t=' + k + ']').textContent = v; };
+        set('sub', rupees(sub)); set('disc', '−' + rupees(disc)); set('ship', ship > 0 ? rupees(ship) : 'Free'); set('cod', rupees(codFee)); set('extra', rupees(extra));
+        set('total', rupees(after + ship + codFee + extra));
+    }
+    form.querySelector('[data-mo-add]').addEventListener('click', function () { addLine(); });
+    form.addEventListener('input', function (e) { if (e.target.matches('[data-mo-charge]')) total(); });
+    form.addEventListener('change', function (e) { if (e.target.name === 'payment') total(); });
+    var old = JSON.parse(form.dataset.oldItems || '[]');
+    (Array.isArray(old) ? old : Object.values(old)).forEach(function (o) { addLine(o); });
+    if (!box.children.length) addLine();
+})();

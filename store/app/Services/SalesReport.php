@@ -99,7 +99,7 @@ class SalesReport
             return [
                 'order' => $o,
                 'date' => Carbon::parse($o->delivered_at ?? $o->shipped_at ?? $o->created_at),
-                'method' => $o->payment_method === 'cod' ? 'COD' : 'Online'.($o->payment_method ? ' ('.ucfirst($o->payment_method).')' : ''),
+                'method' => $o->payment_method === 'cod' ? 'COD' : 'Online ('.$o->paymentLabel().')',
                 'taxable' => $b['taxable'],
                 'gst' => $b['tax'],
                 'total' => (float) $o->total,
