@@ -213,7 +213,9 @@ class OrderController extends Controller
             return back()->with('error', $why);
         }
         $data = $request->validate([
-            'payment_method' => 'required|in:cod,online',
+            // cod; upi/bank = the customer paid us directly; online = keep the payment-gateway link.
+            'payment_method' => 'required|in:cod,online,upi,bank',
+            'payment_ref' => 'nullable|string|max:100',
             'shipping' => 'required|numeric|min:0|max:100000',
             'cod_fee' => 'nullable|numeric|min:0|max:100000',
             'extra_charge' => 'nullable|numeric|min:0|max:100000',
@@ -222,6 +224,7 @@ class OrderController extends Controller
         ]);
         $toCod = $data['payment_method'] === 'cod' && $order->payment_method !== 'cod';
         $cod = $data['payment_method'] === 'cod';
+        $paidDirect = in_array($data['payment_method'], ['upi', 'bank'], true);
         $update = [
             'shipping' => round((float) $data['shipping'], 2),
             'cod_fee' => $cod ? round((float) ($data['cod_fee'] ?? 0), 2) : 0,
@@ -235,9 +238,16 @@ class OrderController extends Controller
             $update['payment_method'] = 'cod';
             $update['payment_status'] = 'unpaid';
         }
+        if ($paidDirect) {
+            // Paid straight to the shop (UPI / bank): no COD charge, nothing left to collect.
+            $update['payment_method'] = $data['payment_method'];
+            $update['payment_status'] = 'paid';
+            $update['notes'] = trim(((string) $order->notes)."\n".'Paid directly by '.($data['payment_method'] === 'upi' ? 'UPI' : 'bank transfer')
+                .($data['payment_ref'] ?? null ? ', ref '.$data['payment_ref'] : '').' (marked '.now()->format('j M Y').', was '.$order->paymentLabel().').');
+        }
         $update['total'] = round((float) $order->subtotal - ($update['discount'] ?? (float) $order->discount)
             + $update['shipping'] + $update['cod_fee'] + $update['extra_charge'], 2);
-        $confirming = $cod && $order->status === 'pending';
+        $confirming = ($cod || $paidDirect) && $order->status === 'pending';
         if ($confirming) {
             $update['status'] = 'confirmed';
         }
@@ -246,9 +256,14 @@ class OrderController extends Controller
             \App\Services\OrderConfirmation::run($order->fresh(), $request->boolean('notify'));
         }
 
-        return back()->with('status', $confirming
-            ? 'Switched to cash on delivery and confirmed — total '.money($order->total).'.'.($request->boolean('notify') ? ' The customer has been sent the order confirmation.' : '')
-            : ($toCod ? 'Switched to cash on delivery — total '.money($order->total).'.' : 'Charges saved — total '.money($order->total).'.'));
+        $sent = $request->boolean('notify') ? ' The customer has been sent the order confirmation.' : '';
+
+        return back()->with('status', match (true) {
+            $paidDirect => 'Marked as paid by '.$order->paymentLabel().' — '.money($order->total).($confirming ? ', and confirmed.'.$sent : '. No cash to collect on delivery.'),
+            $confirming => 'Switched to cash on delivery and confirmed — total '.money($order->total).'.'.$sent,
+            $toCod => 'Switched to cash on delivery — total '.money($order->total).'.',
+            default => 'Charges saved — total '.money($order->total).'.',
+        });
     }
 
     /** Why the charges can't be changed now, or null. */

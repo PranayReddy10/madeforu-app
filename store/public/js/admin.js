@@ -694,8 +694,9 @@ document.querySelectorAll('[data-campaign-form] [data-preset]').forEach(function
     if (!f) return;
     var rupees = function (n) { return '₹' + (Math.round(n * 100) / 100).toLocaleString('en-IN', { maximumFractionDigits: 2 }); };
     function update() {
-        var cod = (f.querySelector('input[name=payment_method]:checked') || {}).value === 'cod';
+        var method = (f.querySelector('input[name=payment_method]:checked') || {}).value, cod = method === 'cod';
         f.querySelectorAll('[data-cod-only]').forEach(function (el) { el.hidden = !cod; });
+        f.querySelectorAll('[data-direct-only]').forEach(function (el) { el.hidden = method !== 'upi' && method !== 'bank'; });
         var total = +f.dataset.items - (cod ? 0 : +f.dataset.prepaid);
         f.querySelectorAll('[data-charge]').forEach(function (i) {
             if (i.name === 'cod_fee' && !cod) return;

@@ -181,8 +181,12 @@
                 @csrf
                 <div class="pay-choice">
                     <label><input type="radio" name="payment_method" value="cod" @checked($order->payment_method === 'cod' || $failedOnline)> Cash on delivery</label>
-                    <label><input type="radio" name="payment_method" value="online" @checked($order->payment_method !== 'cod' && ! $failedOnline)> Pay online</label>
+                    <label><input type="radio" name="payment_method" value="upi" @checked(! $failedOnline && $order->payment_method === 'upi')> Paid to us — UPI / GPay</label>
+                    <label><input type="radio" name="payment_method" value="bank" @checked(! $failedOnline && $order->payment_method === 'bank')> Paid to us — bank transfer</label>
+                    @if ($order->viaGateway())<label><input type="radio" name="payment_method" value="online" @checked(! $failedOnline)> Pay online ({{ $order->paymentLabel() }} link)</label>@endif
                 </div>
+                <label data-direct-only>UTR / reference <small class="muted">(optional)</small><input name="payment_ref" maxlength="100" placeholder="e.g. 431298765012"></label>
+                <p class="muted small" data-direct-only>The order is marked <b>paid</b> and the cash on delivery charge is removed — nothing to collect on delivery.</p>
                 <label>Shipping (₹) <input type="number" name="shipping" step="0.01" min="0" value="{{ (float) $order->shipping }}" data-charge></label>
                 <label data-cod-only>Cash on delivery charges (₹) <input type="number" name="cod_fee" step="0.01" min="0" value="{{ $suggestCod }}" data-charge></label>
                 <div class="row2">
