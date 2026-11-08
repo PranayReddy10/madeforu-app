@@ -97,4 +97,32 @@ class OrderChargesTest extends TestCase
         $this->assertEquals(548 + 0 + 50 + 25, (float) $order->total);
         $this->assertSame('confirmed', $order->status);
     }
+
+    public function test_cod_order_paid_directly_by_upi_is_marked_paid_without_cod_charge(): void
+    {
+        $order = $this->failedOrder(['status' => 'confirmed', 'payment_method' => 'cod', 'payment_status' => 'unpaid',
+            'discount' => 0, 'prepaid_discount' => 0, 'cod_fee' => 50, 'total' => 658]);
+        $this->actingAs($this->admin)->get(route('admin.orders.show', $order))->assertSee('Paid to us — UPI / GPay')->assertDontSee('link)');
+
+        $this->actingAs($this->admin)->post(route('admin.orders.charges', $order), ['payment_method' => 'upi', 'payment_ref' => 'UTR4321', 'shipping' => 60, 'cod_fee' => 50])
+            ->assertSessionHas('status', 'Marked as paid by UPI — ₹608. No cash to collect on delivery.');
+        $order->refresh();
+        $this->assertSame(['upi', 'paid', 'confirmed'], [$order->payment_method, $order->payment_status, $order->status]);
+        $this->assertEquals(0, (float) $order->cod_fee);
+        $this->assertEquals(548 + 60, (float) $order->total);
+        $this->assertStringContainsString('Paid directly by UPI, ref UTR4321', $order->notes);
+        $this->actingAs($this->admin)->get(route('admin.orders.show', $order))->assertSee('UPI · paid')->assertSee('already paid');
+    }
+
+    public function test_failed_online_payment_then_paid_by_bank_transfer_is_confirmed(): void
+    {
+        $order = $this->failedOrder();
+        $this->actingAs($this->admin)->get(route('admin.orders.show', $order))->assertSee('Pay online (Razorpay link)');
+        $this->actingAs($this->admin)->post(route('admin.orders.charges', $order), ['payment_method' => 'bank', 'shipping' => 60, 'notify' => 1]);
+        $order->refresh();
+        $this->assertSame(['bank', 'paid', 'confirmed'], [$order->payment_method, $order->payment_status, $order->status]);
+        $this->assertEquals(578, (float) $order->total);   // pay-online discount kept: it was paid to us
+        $this->assertNotNull($order->invoice_number);
+    }
 }
+
