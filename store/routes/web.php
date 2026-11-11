@@ -59,6 +59,9 @@ Route::get('/checkout', [CheckoutController::class, 'index'])->name('checkout');
 Route::get('/checkout/quote', [CheckoutController::class, 'quote'])->name('checkout.quote')->middleware('throttle:60,1');
 Route::post('/checkout', [CheckoutController::class, 'place'])->name('checkout.place')->middleware('throttle:10,1');
 Route::post('/checkout/razorpay/verify', [CheckoutController::class, 'verify'])->name('checkout.verify');
+// Payment links sent on WhatsApp (signed; see PayLinkController).
+Route::get('/pay/{number}', [\App\Http\Controllers\PayLinkController::class, 'show'])->name('pay.link')->middleware('signed');
+Route::post('/pay/{number}', [\App\Http\Controllers\PayLinkController::class, 'pay'])->name('pay.link.start')->middleware(['signed', 'throttle:10,1']);
 Route::post('/webhooks/razorpay', [CheckoutController::class, 'webhook'])->name('webhooks.razorpay');
 Route::get('/checkout/cashfree/return', [CheckoutController::class, 'cashfreeReturn'])->name('checkout.cashfree.return');
 Route::post('/webhooks/cashfree', [CheckoutController::class, 'cashfreeWebhook'])->name('webhooks.cashfree');

@@ -23,7 +23,7 @@ class ManualOrderController extends Controller
     public const SOURCES = ['whatsapp' => 'WhatsApp', 'instagram' => 'Instagram', 'phone' => 'Phone call', 'walk_in' => 'In person', 'other' => 'Other'];
 
     /** How the customer paid: online-style (prepaid) or cash on delivery. */
-    public const PAYMENTS = ['upi' => 'Paid — UPI / GPay / PhonePe', 'bank' => 'Paid — bank transfer', 'cod' => 'Cash on delivery'];
+    public const PAYMENTS = ['upi' => 'Paid — UPI / GPay / PhonePe', 'bank' => 'Paid — bank transfer', 'cod' => 'Cash on delivery', 'link' => 'Online — send a payment link'];
 
     public function create()
     {
@@ -128,6 +128,11 @@ class ManualOrderController extends Controller
         $subtotal = round(array_sum(array_column($lines, 'total')), 2);
         $discount = min(round((float) ($data['discount'] ?? 0), 2), $subtotal);
         $cod = $data['payment'] === 'cod';
+        // Payment link: saved as awaiting payment; it is confirmed when the customer pays.
+        $link = $data['payment'] === 'link';
+        if ($link && ! CheckoutController::gateways()) {
+            throw ValidationException::withMessages(['payment' => 'Switch on Razorpay or Cashfree in Settings to send payment links.']);
+        }
         $after = $subtotal - $discount;
         $shipping = $request->filled('shipping') ? round((float) $data['shipping'], 2)
             : ($after >= (float) setting('free_shipping_over') && (float) setting('free_shipping_over') > 0 ? 0.0 : (float) setting('shipping_fee'));
@@ -137,16 +142,16 @@ class ManualOrderController extends Controller
 
         $notes = collect([
             'Order taken on '.self::SOURCES[$data['source']].'.',
-            ! $cod ? self::PAYMENTS[$data['payment']].($data['payment_ref'] ? ', ref '.$data['payment_ref'] : '').'.' : null,
+            ! $cod && ! $link ? self::PAYMENTS[$data['payment']].($data['payment_ref'] ? ', ref '.$data['payment_ref'] : '').'.' : null,
             $data['notes'] ?? null,
         ])->filter()->implode(' ');
 
-        $order = DB::transaction(function () use ($data, $lines, $subtotal, $discount, $shipping, $codFee, $extra, $total, $cod, $notes) {
+        $order = DB::transaction(function () use ($data, $lines, $subtotal, $discount, $shipping, $codFee, $extra, $total, $cod, $link, $notes) {
             $order = Order::create([
                 'number' => Order::nextNumber(),
-                'status' => 'confirmed',
-                'payment_method' => $data['payment'],
-                'payment_status' => $cod ? 'unpaid' : 'paid',
+                'status' => $link ? 'pending' : 'confirmed',
+                'payment_method' => $link ? CheckoutController::gateways()[0] : $data['payment'],
+                'payment_status' => $cod || $link ? 'unpaid' : 'paid',
                 'name' => $data['name'], 'phone' => $data['phone'], 'email' => $data['email'] ?? '',
                 'address_line1' => $data['address_line1'], 'address_line2' => $data['address_line2'] ?? null,
                 'city' => $data['city'], 'state' => $data['state'], 'pincode' => $data['pincode'],
@@ -174,6 +179,11 @@ class ManualOrderController extends Controller
 
             return $order;
         });
+
+        if ($link) {
+            return redirect()->route('admin.orders.show', $order)->with('status', 'Order '.$order->number.' saved — '.money($order->total)
+                .'. Send the payment link below on WhatsApp; the order is confirmed when they pay.');
+        }
 
         // From here on it is an ordinary confirmed order.
         OrderConfirmation::run($order->fresh('items'), $request->boolean('notify'));
