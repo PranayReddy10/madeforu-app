@@ -77,6 +77,23 @@ class Order extends Model
         return self::STATUSES[$this->status] ?? ucfirst($this->status);
     }
 
+    /** "Razorpay", "UPI", "Bank transfer", "COD" (short) / "Cash on delivery". */
+    public function paymentLabel(bool $short = false): string
+    {
+        return match ($this->payment_method) {
+            'cod' => $short ? 'COD' : 'Cash on delivery',
+            'upi' => 'UPI',
+            'bank' => 'Bank transfer',
+            default => ucfirst((string) $this->payment_method),
+        };
+    }
+
+    /** Paid through a payment gateway (and so charged its fee). */
+    public function viaGateway(): bool
+    {
+        return in_array($this->payment_method, ['razorpay', 'cashfree'], true);
+    }
+
     public static function nextNumber(): string
     {
         $prefix = 'MFU'.now()->format('ymd');

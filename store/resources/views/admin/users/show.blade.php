@@ -20,7 +20,7 @@
                     <td><a href="{{ route('admin.orders.show', $o) }}">{{ $o->number }}</a></td>
                     <td>{{ $o->created_at->format('d M Y') }}</td>
                     <td>{{ $o->items->sum('qty') }}</td>
-                    <td>{{ money($o->total) }}<br><small class="muted">{{ $o->payment_method === 'cod' ? 'COD' : ucfirst($o->payment_method) }} · {{ $o->payment_status }}</small></td>
+                    <td>{{ money($o->total) }}<br><small class="muted">{{ $o->paymentLabel(true) }} · {{ $o->payment_status }}</small></td>
                     <td><span class="badge s-{{ $o->status }}">{{ $o->statusLabel() }}</span></td>
                 </tr>
             @empty
