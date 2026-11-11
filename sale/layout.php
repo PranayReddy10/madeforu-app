@@ -133,6 +133,8 @@ function nav_item(string $page, string $current, string $href, string $label, st
       <div class="sep"></div>
       <?= nav_item('admins', $PAGE, 'admins.php', 'Admins',
           '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>') ?>
+      <?= nav_item('whatsapp', $PAGE, 'whatsapp.php', 'WhatsApp messages',
+          '<path d="M21 11.5a8.4 8.4 0 0 1-12.6 7.3L3 20l1.3-5.1A8.5 8.5 0 1 1 21 11.5z"/>') ?>
       <?= nav_item('website_sync', $PAGE, 'website_sync.php', 'Website sync',
           '<circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>') ?>
       <?= nav_item('push_settings', $PAGE, 'push_settings.php', 'Notifications',

@@ -19,17 +19,31 @@
  *
  * Who hears what
  * --------------
- * Everyone except the person whose request made the change. Devices are
- * tied to the sign-in (api_tokens row) that registered them, so signing
- * out, or "sign out all devices", stops pushes to that phone as well.
+ * Every registered device except the one the change was made on: a sale
+ * taken in the PWA rings the seller's own Android phone and every
+ * partner's, but not the PWA that took it. A change made on the website
+ * reaches every device. Devices are tied to the sign-in (api_tokens row)
+ * that registered them, so signing out, or "sign out all devices", stops
+ * pushes to that phone as well.
  */
 declare(strict_types=1);
 
 require_once __DIR__ . '/lib_activity.php';
 if (is_file(__DIR__ . '/firebase-config.php')) require_once __DIR__ . '/firebase-config.php';
 
-/** Set by whoever authenticated this request: the API, or the website session. */
-function push_set_actor(int $adminId): void { $GLOBALS['PUSH_ACTOR'] = $adminId; }
+/**
+ * Set by whoever authenticated this request: the API, with the sign-in
+ * (api_tokens row) it came from, or the website session.
+ */
+function push_set_actor(int $adminId, int $tokenId = 0): void {
+    $GLOBALS['PUSH_ACTOR'] = $adminId;
+    $GLOBALS['PUSH_ACTOR_TOKEN'] = $tokenId;
+}
+
+/** The sign-in this request came from; its own device is not told about its own change. */
+function push_actor_token(): ?int {
+    return !empty($GLOBALS['PUSH_ACTOR_TOKEN']) ? (int)$GLOBALS['PUSH_ACTOR_TOKEN'] : null;
+}
 
 function push_actor(): ?int {
     if (!empty($GLOBALS['PUSH_ACTOR'])) return (int)$GLOBALS['PUSH_ACTOR'];
@@ -180,7 +194,7 @@ function push_state_set(mysqli $conn, string $key, string $value): void {
  * being lost. A MySQL lock makes two requests finishing together take
  * turns rather than send the same change twice.
  */
-function push_flush(mysqli $conn, ?int $actor): int {
+function push_flush(mysqli $conn, ?int $actor, ?int $skipToken = null, string $source = 'save'): int {
     if (!push_configured($conn)) return 0;
     $got = $conn->query("SELECT GET_LOCK('madeforu_push', 10) l")->fetch_assoc();
     if ((int)($got['l'] ?? 0) !== 1) return 0;
@@ -190,6 +204,7 @@ function push_flush(mysqli $conn, ?int $actor): int {
         if (!is_array($state) || empty($state['at'])) {
             // First run: nothing before this moment is news.
             push_state_set($conn, 'push_cursor', json_encode(['at' => $now, 'seen' => []]));
+            push_note_run($conn, $source, 0, 0, 0, 'first check: started watching for changes from now');
             return 0;
         }
         $at = (string)$state['at'];
@@ -211,27 +226,34 @@ function push_flush(mysqli $conn, ?int $actor): int {
             $next = ['at' => $now, 'seen' => array_values(array_unique(array_merge($carry, $sentNow)))];
         }
 
-        $sent = $items ? push_send($conn, $items, $actor) : 0;
+        // Whether the device a change was made on hears about it too: the
+        // Notifications page's switch, on unless someone turns it off.
+        if (push_state_get($conn, 'push_notify_self') !== '0') $skipToken = null;
+        $devices = 0;
+        $sent = $items ? push_send($conn, $items, $skipToken, $devices) : 0;
         push_state_set($conn, 'push_cursor', json_encode($next));
+        push_note_run($conn, $source, count($items), $devices, $sent,
+            implode(' | ', array_map(fn($i) => $i['title'], array_slice($items, 0, 3))));
         return $sent;
     } finally {
         $conn->query("SELECT RELEASE_LOCK('madeforu_push')");
     }
 }
 
-/** Build the messages and send each to every device but the actor's. */
-function push_send(mysqli $conn, array $items, ?int $actor): int {
+/** Build the messages and send each to every device but the one the change was made on. */
+function push_send(mysqli $conn, array $items, ?int $skipToken, ?int &$deviceCount = null): int {
     push_ensure_table($conn);
     $s = $conn->prepare(
         'SELECT d.id, d.token, d.platform FROM push_devices d
            JOIN api_tokens t ON t.id = d.api_token_id
-          WHERE t.revoked = 0 AND t.expires_at > NOW() AND d.admin_id <> ?'
+          WHERE t.revoked = 0 AND t.expires_at > NOW() AND d.api_token_id <> ?'
     );
-    $skip = (int)$actor;   // 0 matches nobody: a cron flush tells everyone
+    $skip = (int)$skipToken;   // 0 matches nobody: the website and cron tell every device
     $s->bind_param('i', $skip);
     $s->execute();
     $devices = $s->get_result()->fetch_all(MYSQLI_ASSOC);
     $s->close();
+    $deviceCount = count($devices);
     if (!$devices) return 0;
 
     // A few changes: one message each. A burst (crediting an event
@@ -286,6 +308,19 @@ function push_note_error(mysqli $conn, string $why): void {
     try {
         push_state_set($conn, 'push_last_error', json_encode(['at' => date('Y-m-d H:i:s'), 'why' => $why]));
     } catch (Throwable $e) { /* the log line above still has it */ }
+}
+
+/**
+ * What the last automatic push did, for the Notifications page: proof
+ * that saving anything runs it, what it found, and where it went.
+ */
+function push_note_run(mysqli $conn, string $source, int $found, int $devices, int $sent, string $what): void {
+    try {
+        push_state_set($conn, 'push_last_run', json_encode([
+            'at' => date('Y-m-d H:i:s'), 'source' => $source, 'found' => $found,
+            'devices' => $devices, 'sent' => $sent, 'what' => $what,
+        ], JSON_UNESCAPED_UNICODE));
+    } catch (Throwable $e) { /* diagnostics only */ }
 }
 
 /** Firebase's own sentence out of an error body, not the whole JSON. */
@@ -477,6 +512,8 @@ function push_fcm(mysqli $conn, array $jobs): int {
 function push_after_request(): void {
     if (!defined('DB_HOST')) return;
     $actor = push_actor();
+    $skipToken = push_actor_token();
+    $source = $skipToken ? 'app' : 'website';
     // Answer the person who saved first, then talk to Google. Hostinger
     // runs LiteSpeed, which has its own name for this; without it, every
     // save would wait for the push to go out.
@@ -486,7 +523,7 @@ function push_after_request(): void {
     try {
         $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
         $conn->set_charset('utf8mb4');
-        push_flush($conn, $actor);   // does nothing until a key is saved
+        push_flush($conn, $actor, $skipToken, $source);   // does nothing until a key is saved
         $conn->close();
     } catch (Throwable $e) {
         if (isset($conn) && $conn instanceof mysqli) push_note_error($conn, $e->getMessage());

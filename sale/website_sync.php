@@ -8,6 +8,7 @@
  */
 require 'config.php';
 require_once __DIR__ . '/lib_website.php';
+require_once __DIR__ . '/lib_push.php';
 $me = require_login();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -20,6 +21,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif ($action === 'remove_key') {
         website_setting_set($conn, 'website_sync_key', '');
         flash('Website sync switched off. The website can no longer send orders here.');
+    } elseif ($action === 'credit_partner') {
+        $pid = (int)($_POST['partner_id'] ?? 0);
+        $name = '';
+        if ($pid > 0) {
+            $s = $conn->prepare('SELECT name FROM partners WHERE id = ? AND is_active = 1');
+            $s->bind_param('i', $pid);
+            $s->execute();
+            $name = (string)($s->get_result()->fetch_assoc()['name'] ?? '');
+            $s->close();
+            if ($name === '') { flash('Choose an active partner.', 'error'); header('Location: website_sync.php'); exit; }
+        }
+        website_setting_set($conn, 'website_credit_partner', $pid > 0 ? (string)$pid : '');
+        flash($pid > 0 ? 'Website orders are now credited to ' . $name . ' as they are delivered.'
+                       : 'Automatic credit switched off. Credit website orders from Events instead.');
+    } elseif ($action === 'credit_backlog') {
+        // Orders that arrived before automatic credit: one credit for what
+        // the Website orders event has not been credited yet.
+        $pid = website_credit_partner($conn);
+        $eventId = website_event_id($conn);
+        $gap = website_event_gap($conn, $eventId);
+        if ($pid < 1) {
+            flash('Choose the partner first.', 'error');
+        } elseif ($gap <= 0.001) {
+            flash('Nothing left to credit: every website order is already credited.', 'error');
+        } else {
+            $today = date('Y-m-d');
+            $src = 'Event sales: ' . WEBSITE_EVENT_NAME;
+            $note = 'Website orders delivered before automatic credit was switched on.';
+            $s = $conn->prepare("INSERT INTO account_movements (mov_date, partner_id, event_id, direction, kind, amount, source, note)
+                                 VALUES (?,?,?,'credit','normal',?,?,?)");
+            $s->bind_param('siidss', $today, $pid, $eventId, $gap, $src, $note);
+            $s->execute();
+            $s->close();
+            flash('Credited ' . money($gap) . ' of earlier website orders.');
+        }
     }
     header('Location: website_sync.php');
     exit;
@@ -28,6 +64,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $key = (string)website_setting($conn, 'website_sync_key');
 $last = (string)website_setting($conn, 'website_sync_last');
 $count = website_synced_count($conn);
+$creditPid = website_credit_partner($conn);
+$partners = $conn->query('SELECT id, name FROM partners WHERE is_active = 1 ORDER BY name')->fetch_all(MYSQLI_ASSOC);
+// What the website orders came to and what is not credited yet. Only looked
+// up once some exist, so an unused panel does not get the event created.
+$backlog = 0.0;
+if ($count > 0) $backlog = website_event_gap($conn, website_event_id($conn));
 $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
 $panelUrl = $scheme . '://' . ($_SERVER['HTTP_HOST'] ?? 'sale.madeforu.co.in') . rtrim(dirname($_SERVER['SCRIPT_NAME'] ?? '/'), '/') . '/';
 $flash = flash();
@@ -106,6 +148,33 @@ $flash = flash();
         <form method="post" onsubmit="return confirm('Switch website sync off?')"><?= csrf_field() ?>
           <input type="hidden" name="action" value="remove_key"><button class="danger">Switch off</button></form>
       </div>
+    <?php endif; ?>
+  </div>
+
+  <div class="card">
+    <h2>Credit to a partner automatically</h2>
+    <p class="hint">Choose whose account website money goes into. Each order is credited to that partner the
+      moment it arrives here as delivered — one line per order under <b>Account movements</b>, named
+      “Website order …”. If the website sends the order again its credit follows the new total, and a cancelled
+      or returned order takes its credit with it. Leave it off to credit website sales by hand from
+      <b>Events → <?= e(WEBSITE_EVENT_NAME) ?></b>.</p>
+    <form method="post" class="row" style="align-items:center"><?= csrf_field() ?>
+      <input type="hidden" name="action" value="credit_partner">
+      <select name="partner_id" style="padding:9px 10px;border:1px solid #ccd0d5;border-radius:6px;font-size:14px;font-family:inherit">
+        <option value="0">Off — credit by hand</option>
+        <?php foreach ($partners as $p): ?>
+          <option value="<?= (int)$p['id'] ?>" <?= (int)$p['id'] === $creditPid ? 'selected' : '' ?>><?= e($p['name']) ?></option>
+        <?php endforeach; ?>
+      </select>
+      <button class="primary">Save</button>
+    </form>
+    <?php if ($creditPid > 0 && $backlog > 0.001): ?>
+      <p class="hint" style="margin:14px 0 8px"><b><?= money($backlog) ?></b> of website orders that came in earlier
+        is not credited to anyone yet.</p>
+      <form method="post" onsubmit="return confirm('Credit <?= e(money($backlog)) ?> of earlier website orders to the chosen partner?')"><?= csrf_field() ?>
+        <input type="hidden" name="action" value="credit_backlog"><button>Credit <?= money($backlog) ?> now</button></form>
+    <?php elseif ($count > 0 && $backlog > 0.001): ?>
+      <p class="hint" style="margin:14px 0 0"><?= money($backlog) ?> of website orders is not credited to anyone yet.</p>
     <?php endif; ?>
   </div>
 

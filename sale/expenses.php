@@ -3,96 +3,7 @@ require 'config.php';
 require_once __DIR__ . '/lib_push.php';   // tells the other partners' phones
 $me = require_login();
 
-// ── Receipts ───────────────────────────────────────────────────────
-// Bills are stored OUTSIDE anything the browser can reach directly. The dir
-// carries a .htaccess that turns off script execution, and files are only
-// ever served back through receipt.php, which is behind require_login().
-define('RECEIPT_DIR', __DIR__ . '/uploads/receipts');
-const RECEIPT_MAX_BYTES = 5 * 1024 * 1024;   // 5 MB
-// Real content types we accept, mapped to the extension we save under. We
-// trust finfo (which reads the file's bytes), never the uploaded filename.
-const RECEIPT_ALLOWED = [
-    'image/jpeg'      => 'jpg',
-    'image/png'       => 'png',
-    'image/webp'      => 'webp',
-    'application/pdf' => 'pdf',
-];
-
-/** Make sure the upload dir exists and cannot execute scripts. */
-function ensure_receipt_dir(): void {
-    if (!is_dir(RECEIPT_DIR)) {
-        @mkdir(RECEIPT_DIR, 0755, true);
-    }
-    $ht = RECEIPT_DIR . '/.htaccess';
-    if (!file_exists($ht)) {
-        @file_put_contents($ht,
-            "php_flag engine off\n" .
-            "<FilesMatch \"\\.(php|phtml|phar|phps|cgi|pl|py|sh)$\">\n" .
-            "  Require all denied\n" .
-            "</FilesMatch>\n"
-        );
-    }
-}
-
-/**
- * Validate and store one uploaded receipt. Returns the stored basename.
- * Throws on anything suspicious. The caller records the basename in the DB;
- * the file itself never keeps the user's original name.
- */
-function store_receipt(array $file): string {
-    if (($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
-        // Translate the common upload errors into something readable.
-        $map = [
-            UPLOAD_ERR_INI_SIZE  => 'The file is larger than the server allows.',
-            UPLOAD_ERR_FORM_SIZE => 'The file is too large.',
-            UPLOAD_ERR_PARTIAL   => 'The upload was interrupted. Try again.',
-            UPLOAD_ERR_NO_FILE   => 'No file was chosen.',
-        ];
-        throw new Exception($map[$file['error']] ?? 'The upload failed. Try again.');
-    }
-    if (($file['size'] ?? 0) > RECEIPT_MAX_BYTES) {
-        throw new Exception('Receipt is larger than 5 MB. Please upload a smaller image or PDF.');
-    }
-    // is_uploaded_file guards against a path being smuggled in via the array.
-    if (!is_uploaded_file($file['tmp_name'])) {
-        throw new Exception('Invalid upload.');
-    }
-    // Determine the REAL type from the bytes, not the sent name or type.
-    $finfo = new finfo(FILEINFO_MIME_TYPE);
-    $mime  = $finfo->file($file['tmp_name']) ?: '';
-    if (!isset(RECEIPT_ALLOWED[$mime])) {
-        throw new Exception('Only JP, PNG, WebP images or PDF files are accepted.');
-    }
-    $ext = RECEIPT_ALLOWED[$mime];
-
-    ensure_receipt_dir();
-    // Random, unguessable name. Never derived from user input.
-    $name = bin2hex(random_bytes(16)) . '.' . $ext;
-    $dest = RECEIPT_DIR . '/' . $name;
-    if (!move_uploaded_file($file['tmp_name'], $dest)) {
-        throw new Exception('Could not save the receipt. Try again.');
-    }
-    @chmod($dest, 0644);
-    return $name;
-}
-
-/** Delete a stored receipt file. Safe against path tricks in the stored value. */
-function delete_receipt_file(?string $name): void {
-    if (!$name) return;
-    // basename() strips any directory component, so a tampered DB value can
-    // never point unlink() outside the receipts dir.
-    $path = RECEIPT_DIR . '/' . basename($name);
-    if (is_file($path)) @unlink($path);
-}
-
-/** Fetch the current stored receipt name for an expense, or null. */
-function receipt_of(mysqli $conn, int $expenseId): ?string {
-    $s = $conn->prepare('SELECT receipt_path FROM expenses WHERE id = ?');
-    $s->bind_param('i', $expenseId); $s->execute();
-    $row = $s->get_result()->fetch_assoc(); $s->close();
-    return $row && $row['receipt_path'] !== null && $row['receipt_path'] !== ''
-        ? $row['receipt_path'] : null;
-}
+require_once __DIR__ . '/lib_expenses.php';   // receipts, GST column, line totals
 
 function partner_map(mysqli $conn): array {
     $m = [];
@@ -107,22 +18,27 @@ function category_list(mysqli $conn): array {
     return $out ?: ['Other'];
 }
 
-/** Posted line items -> [descr, qty, unit, line]; [] if none entered. */
+try { ensure_gst_column($conn); } catch (Throwable $e) { /* no expense_items table yet */ }
+
+/** Posted line items -> [descr, qty, unit, gst, line]; [] if none entered. */
 function read_line_items(): array {
     $descr = $_POST['li_descr'] ?? [];
     $qty   = $_POST['li_qty']   ?? [];
     $unit  = $_POST['li_unit']  ?? [];
+    $gst   = $_POST['li_gst']   ?? [];
     if (!is_array($descr)) return [];
     $items = [];
     for ($i = 0, $n = count($descr); $i < $n; $i++) {
         $d = trim((string)($descr[$i] ?? ''));
         $q = round((float)($qty[$i]  ?? 0), 2);
         $u = round((float)($unit[$i] ?? 0), 2);
+        $g = round((float)($gst[$i]  ?? 0), 2);   // left blank = no GST
         if ($d === '' && $q == 0 && $u == 0) continue;
         if ($d === '') throw new Exception('Every line item needs a description.');
         if ($q <= 0)   throw new Exception('Line "' . $d . '" needs a quantity above zero.');
         if ($u < 0)    throw new Exception('Line "' . $d . '" has a negative unit cost.');
-        $items[] = ['descr'=>$d, 'qty'=>$q, 'unit'=>$u, 'line'=>round($q * $u, 2)];
+        if ($g < 0 || $g > 100) throw new Exception('Line "' . $d . '": GST is a percentage between 0 and 100.');
+        $items[] = ['descr'=>$d, 'qty'=>$q, 'unit'=>$u, 'gst'=>$g, 'line'=>expense_line_total($q, $u, $g)];
     }
     return $items;
 }
@@ -148,9 +64,9 @@ function write_line_items(mysqli $conn, int $expenseId, array $items): void {
     $d = $conn->prepare('DELETE FROM expense_items WHERE expense_id = ?');
     $d->bind_param('i', $expenseId); $d->execute(); $d->close();
     if (!$items) return;
-    $s = $conn->prepare('INSERT INTO expense_items (expense_id, descr, qty, unit_cost, line_total, sort_order) VALUES (?,?,?,?,?,?)');
+    $s = $conn->prepare('INSERT INTO expense_items (expense_id, descr, qty, unit_cost, gst_pct, line_total, sort_order) VALUES (?,?,?,?,?,?,?)');
     foreach ($items as $i => $it) {
-        $s->bind_param('isdddi', $expenseId, $it['descr'], $it['qty'], $it['unit'], $it['line'], $i);
+        $s->bind_param('isddddi', $expenseId, $it['descr'], $it['qty'], $it['unit'], $it['gst'], $it['line'], $i);
         $s->execute();
     }
     $s->close();
@@ -249,6 +165,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $s->execute(); $s->close();
                 $conn->commit();
                 delete_receipt_file($oldReceipt);   // after commit, so a rollback keeps the old file
+            } elseif ($action === 'edit' && !empty($_POST['remove_receipt'])) {
+                // The edit form's "remove the receipt" box, with no new file chosen.
+                $oldReceipt = receipt_of($conn, $id);
+                $s = $conn->prepare('UPDATE expenses SET receipt_path = NULL WHERE id = ?');
+                $s->bind_param('i', $id);
+                $s->execute(); $s->close();
+                $conn->commit();
+                delete_receipt_file($oldReceipt);
             } else {
                 $conn->commit();
             }
@@ -468,7 +392,7 @@ function expense_pay_status(float $netOwed, float $paid): array {
         <h3>Breakdown (optional)</h3>
         <div class="scroll">
           <table class="li-tbl" data-li>
-            <thead><tr><th style="width:44%">Description</th><th class="r" style="width:16%">Qty</th><th class="r" style="width:18%">Unit cost ₹</th><th class="r" style="width:16%">Line total</th><th style="width:6%"></th></tr></thead>
+            <thead><tr><th style="width:38%">Description</th><th class="r" style="width:12%">Qty</th><th class="r" style="width:16%">Unit cost ₹</th><th class="r" style="width:12%">GST %</th><th class="r" style="width:16%">Line total</th><th style="width:6%"></th></tr></thead>
             <tbody></tbody>
           </table>
         </div>
@@ -572,9 +496,12 @@ function expense_pay_status(float $netOwed, float $paid): array {
                 <div class="li-break"><?php
                   $bits = [];
                   foreach ($myLines as $k => $li) {
+                      $g = (float)($li['gst_pct'] ?? 0);
                       $bits[] = ($k+1) . '. ' . $li['descr'] . ' — '
                               . rtrim(rtrim(number_format((float)$li['qty'],2,'.',''), '0'),'.') . ' × '
-                              . money($li['unit_cost']) . ' = ' . money($li['line_total']);
+                              . money($li['unit_cost'])
+                              . ($g > 0 ? ' + ' . rtrim(rtrim(number_format($g,2,'.',''), '0'),'.') . '% GST' : '')
+                              . ' = ' . money($li['line_total']);
                   }
                   echo e(implode("\n", $bits));
                 ?></div>
@@ -653,7 +580,7 @@ function expense_pay_status(float $netOwed, float $paid): array {
 
               <details>
                 <summary>Edit</summary>
-                <form method="post" style="margin-top:10px" onsubmit="return syncBeforeSubmit(this)">
+                <form method="post" enctype="multipart/form-data" style="margin-top:10px" onsubmit="return syncBeforeSubmit(this)">
                   <?= csrf_field() ?>
                   <input type="hidden" name="action" value="edit">
                   <input type="hidden" name="id" value="<?= (int)$r['id'] ?>">
@@ -672,7 +599,7 @@ function expense_pay_status(float $netOwed, float $paid): array {
                   <div class="sect"><h3>Breakdown (optional)</h3>
                     <div class="scroll">
                       <table class="li-tbl" data-li>
-                        <thead><tr><th style="width:44%">Description</th><th class="r" style="width:16%">Qty</th><th class="r" style="width:18%">Unit cost ₹</th><th class="r" style="width:16%">Line total</th><th style="width:6%"></th></tr></thead>
+                        <thead><tr><th style="width:38%">Description</th><th class="r" style="width:12%">Qty</th><th class="r" style="width:16%">Unit cost ₹</th><th class="r" style="width:12%">GST %</th><th class="r" style="width:16%">Line total</th><th style="width:6%"></th></tr></thead>
                         <tbody></tbody>
                       </table>
                     </div>
@@ -680,7 +607,7 @@ function expense_pay_status(float $netOwed, float $paid): array {
                       <button type="button" class="btn" onclick="addLine(this)">+ Add line</button>
                       <div class="li-sum">Gross from lines: <span class="liGrand">₹0.00</span></div>
                     </div>
-                    <script type="application/json" class="li-seed"><?= json_encode(array_map(fn($li)=>['descr'=>$li['descr'],'qty'=>(float)$li['qty'],'unit'=>(float)$li['unit_cost']], $myLines), JSON_UNESCAPED_UNICODE|JSON_HEX_TAG|JSON_HEX_APOS|JSON_HEX_QUOT|JSON_HEX_AMP) ?></script>
+                    <script type="application/json" class="li-seed"><?= json_encode(array_map(fn($li)=>['descr'=>$li['descr'],'qty'=>(float)$li['qty'],'unit'=>(float)$li['unit_cost'],'gst'=>(float)($li['gst_pct'] ?? 0)], $myLines), JSON_UNESCAPED_UNICODE|JSON_HEX_TAG|JSON_HEX_APOS|JSON_HEX_QUOT|JSON_HEX_AMP) ?></script>
                   </div>
 
                   <div class="grid" style="margin-top:14px">
@@ -709,6 +636,21 @@ function expense_pay_status(float $netOwed, float $paid): array {
 
                   <label>Details</label>
                   <textarea name="details" maxlength="500"><?= e($r['details']) ?></textarea>
+
+                  <div class="sect"><h3>Receipt</h3>
+                    <?php if ($rcpt): ?>
+                      <p style="margin-bottom:6px"><a href="receipt.php?id=<?= (int)$r['id'] ?>" target="_blank" rel="noopener">View the current receipt</a></p>
+                      <label>Replace with another photo or PDF <small>(optional)</small></label>
+                    <?php else: ?>
+                      <label>Attach a photo or PDF <small>(optional, up to 5 MB)</small></label>
+                    <?php endif; ?>
+                    <input type="file" name="receipt" accept="image/jpeg,image/png,image/webp,application/pdf">
+                    <?php if ($rcpt): ?>
+                      <label style="display:flex;align-items:center;gap:6px;margin-top:8px;color:#1c1e21">
+                        <input type="checkbox" name="remove_receipt" value="1" style="width:auto"> Remove the current receipt
+                        <small style="color:#65676b">(ignored if a new file is chosen)</small></label>
+                    <?php endif; ?>
+                  </div>
                   <button class="primary" style="margin-top:10px">Save changes</button>
                 </form>
               </details>
@@ -735,30 +677,38 @@ function expense_pay_status(float $netOwed, float $paid): array {
   foreach ($partners as $id=>$p) if ($p['is_active']) $partnerJs[] = ['id'=>(int)$id,'name'=>$p['name']];
 ?>
 <script>
+document.body.insertAdjacentHTML('beforeend',
+  '<datalist id="gstRates"><option value="0"><option value="5"><option value="12"><option value="18"><option value="28"></datalist>');
 const PARTNERS = <?= json_encode($partnerJs, JSON_HEX_TAG|JSON_HEX_APOS|JSON_HEX_QUOT|JSON_HEX_AMP) ?>;
 function moneyFmt(n){ return '₹' + (isFinite(n)?n:0).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2}); }
 
 // ── Line items ──────────────────────────────────────────────────────
-function lineRowHtml(d,q,u){
-  d=d||''; q=(q===0||q)?q:''; u=(u===0||u)?u:'';
+function lineRowHtml(d,q,u,g){
+  d=d||''; q=(q===0||q)?q:''; u=(u===0||u)?u:''; g=g?g:'';   // GST blank = 0
   return '<tr>'
     +'<td><input name="li_descr[]" maxlength="200" placeholder="e.g. Fridge Magnet 2x2" value="'+String(d).replace(/"/g,'&quot;')+'"></td>'
     +'<td><input name="li_qty[]" type="number" step="0.01" min="0" class="r" value="'+q+'" oninput="recalcLine(this)"></td>'
     +'<td><input name="li_unit[]" type="number" step="0.01" min="0" class="r" value="'+u+'" oninput="recalcLine(this)"></td>'
+    +'<td><input name="li_gst[]" type="number" step="0.01" min="0" max="100" class="r" list="gstRates" placeholder="0" value="'+g+'" oninput="recalcLine(this)"></td>'
     +'<td class="r liTotal">₹0.00</td>'
     +'<td class="r"><button type="button" class="btn li-x" onclick="delLine(this)">✕</button></td></tr>';
 }
-function addLine(btn,d,q,u){
+/** qty × unit cost, plus GST % on top when entered. */
+function lineTotal(tr){
+  const q=parseFloat(tr.querySelector('[name="li_qty[]"]').value)||0;
+  const u=parseFloat(tr.querySelector('[name="li_unit[]"]').value)||0;
+  const g=parseFloat(tr.querySelector('[name="li_gst[]"]').value)||0;
+  return Math.round(q*u*(1+g/100)*100)/100;
+}
+function addLine(btn,d,q,u,g){
   const tb=btn.closest('form').querySelector('table[data-li] tbody');
-  tb.insertAdjacentHTML('beforeend', lineRowHtml(d,q,u));
+  tb.insertAdjacentHTML('beforeend', lineRowHtml(d,q,u,g));
   recalcLine(tb.lastElementChild.querySelector('input'));
 }
 function delLine(btn){ const f=btn.closest('form'); btn.closest('tr').remove(); recalcMoney(f); }
 function recalcLine(input){
   const tr=input.closest('tr');
-  const q=parseFloat(tr.querySelector('[name="li_qty[]"]').value)||0;
-  const u=parseFloat(tr.querySelector('[name="li_unit[]"]').value)||0;
-  tr.querySelector('.liTotal').textContent=moneyFmt(q*u);
+  tr.querySelector('.liTotal').textContent=moneyFmt(lineTotal(tr));
   recalcMoney(input.closest('form'));
 }
 
@@ -788,7 +738,7 @@ function recalcMoney(form){
     const u=parseFloat(tr.querySelector('[name="li_unit[]"]').value)||0;
     const d=tr.querySelector('[name="li_descr[]"]').value.trim();
     if(d!==''||q||u) anyLine=true;
-    lineSum+=q*u;
+    lineSum+=lineTotal(tr);
   });
   const grand=form.querySelector('.liGrand'); if(grand) grand.textContent=moneyFmt(lineSum);
   const amt=form.querySelector('.amtField'), hint=form.querySelector('.amtHint');
@@ -835,7 +785,7 @@ function syncBeforeSubmit(form){
 document.querySelectorAll('script.li-seed').forEach(seed=>{
   let data=[]; try{data=JSON.parse(seed.textContent||'[]');}catch(e){}
   const form=seed.closest('form'); const btn=form.querySelector('button[onclick^="addLine"]');
-  data.forEach(it=>addLine(btn,it.descr,it.qty,it.unit));
+  data.forEach(it=>addLine(btn,it.descr,it.qty,it.unit,it.gst));
   recalcMoney(form);
 });
 document.querySelectorAll('script.pay-seed').forEach(seed=>{

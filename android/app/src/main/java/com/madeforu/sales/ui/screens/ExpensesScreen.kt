@@ -31,6 +31,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -51,6 +52,7 @@ import com.madeforu.sales.data.Category
 import com.madeforu.sales.data.Expense
 import com.madeforu.sales.data.ExpenseSummary
 import com.madeforu.sales.data.Partner
+import com.madeforu.sales.data.ReceiptFiles
 import com.madeforu.sales.data.Repository
 import com.madeforu.sales.ui.components.ListSegment
 import com.madeforu.sales.ui.components.BackButton
@@ -80,6 +82,7 @@ fun ExpensesScreen(
     onSessionExpired: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
 
     var range by remember { mutableStateOf(RangePreset.MONTH) }
     var expenses by remember { mutableStateOf<List<Expense>>(emptyList()) }
@@ -270,18 +273,8 @@ fun ExpensesScreen(
             onSubmit = { form ->
                 showAdd = false
                 scope.launch {
-                    val result = repository.saveExpense(
-                        id = null,
-                        date = form.date,
-                        item = form.item,
-                        amount = form.amount,
-                        discount = form.discount,
-                        paidBy = form.paidBy,
-                        category = form.category,
-                        paidTo = form.paidTo,
-                        details = form.details,
-                        split = form.split,
-                    )
+                    // Saves the expense, then attaches or removes its receipt.
+                    val result = ReceiptFiles.saveWithReceipt(context, repository, null, form)
                     when (result) {
                         is ApiResult.Success -> { message = result.value; refresh() }
                         is ApiResult.Failure -> error = result.message

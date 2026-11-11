@@ -195,6 +195,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($sent === 0) throw new Exception('Firebase did not accept the message for any device. See the PHP error log for its answer.');
             flash("Test sent to $sent of your " . count($devices) . ' device(s). It should arrive within seconds.');
 
+        } elseif ($action === 'notify_self') {
+            $on = !empty($_POST['on']);
+            push_state_set($conn, 'push_notify_self', $on ? '1' : '0');
+            flash($on ? 'The device a change is made on is notified too.'
+                      : 'The device a change is made on is no longer notified; everyone else still is.');
+
         } elseif ($action === 'check') {
             $problem = push_check($conn);
             if ($problem !== null) throw new Exception('Not working: ' . $problem);
@@ -256,6 +262,8 @@ $devices = $conn->query(
 
 $webReady = ($web['apiKey'] ?? '') !== '' && ($web['vapidKey'] ?? '') !== '';
 $lastError = json_decode((string)push_state_get($conn, 'push_last_error'), true);
+$lastRun = json_decode((string)push_state_get($conn, 'push_last_run'), true);
+$notifySelf = push_state_get($conn, 'push_notify_self') !== '0';
 $androidReady = ($android['appId'] ?? '') !== '';
 $flash = flash();
 ?>
@@ -333,6 +341,27 @@ $flash = flash();
         <form method="post"><?= csrf_field() ?><input type="hidden" name="action" value="test">
           <button class="primary">Send a test notification to my devices</button></form>
       </div>
+    <?php endif; ?>
+    <form method="post" style="margin-top:14px">
+      <?= csrf_field() ?><input type="hidden" name="action" value="notify_self">
+      <input type="hidden" name="on" value="<?= $notifySelf ? '' : '1' ?>">
+      <label style="display:inline;color:#1c1e21;font-size:14px">
+        <b><?= $notifySelf ? 'On' : 'Off' ?></b>: also notify the phone or browser a change was made on.</label>
+      <button style="margin-left:8px;padding:5px 12px;font-size:13px"><?= $notifySelf ? 'Turn off' : 'Turn on' ?></button>
+    </form>
+    <?php if (is_array($lastRun)): ?>
+      <p class="hint" style="margin:14px 0 0">Last automatic check (after a save <?= $lastRun['source'] === 'app' ? 'in an app'
+        : ($lastRun['source'] === 'cron' ? 'by cron' : 'on the website') ?>,
+        <?= e(date('j M, g:i:s a', strtotime((string)$lastRun['at']))) ?>):
+        <b><?= (int)$lastRun['found'] ?> change(s) found</b><?php if ((int)$lastRun['found'] > 0): ?>,
+        sent to <b><?= (int)$lastRun['sent'] ?></b> of <?= (int)$lastRun['devices'] ?> device(s)<?php endif; ?>.
+        <?php if ($lastRun['what'] !== ''): ?><br><small><?= e($lastRun['what']) ?></small><?php endif; ?>
+        <?php if ((int)$lastRun['found'] > 0 && (int)$lastRun['devices'] === 0): ?>
+          <br><small class="no">No device to send to: the only registered device is the one the change was made on.
+            Turn on "also notify the phone or browser a change was made on" above.</small>
+        <?php endif; ?></p>
+    <?php else: ?>
+      <p class="hint" style="margin:14px 0 0">No automatic check has run yet. It runs after anything is saved.</p>
     <?php endif; ?>
     <?php if (is_array($lastError) && !empty($lastError['why'])): ?>
       <div class="flash f-error" style="margin:14px 0 0">Last problem sending

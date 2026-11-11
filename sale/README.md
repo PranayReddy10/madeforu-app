@@ -273,6 +273,19 @@ the list of previous delivered orders on the website's Admin → Sales page:
 mark the ones already typed in here by hand as **Already in panel** (never
 sent), and send the rest.
 
+**Whose account the money goes into.** On **Website sync → Credit to a
+partner automatically**, choose a partner. From then on each delivered
+website order is credited to that partner as it arrives: one line per order
+in Account movements ("Website order …"), linked to the order. If the website
+sends the order again its credit follows the new total; a cancelled or
+returned order takes its credit with it. Orders that arrived before you chose
+the partner are credited with the **Credit ₹… now** button on the same page
+(or from Events → Website orders). An order is never credited twice: each
+credit is capped at what the Website orders event has not been credited yet.
+Left **Off**, website money is credited by hand from Events, as before.
+Website orders are never part of **Credit offline sales**, which only takes
+orders with no event.
+
 
 ## Keeping the database up to date
 

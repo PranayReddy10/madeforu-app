@@ -471,7 +471,8 @@ class Repository(private val api: ApiClient, private val prefs: Prefs) {
         paidTo: String,
         details: String,
         split: List<Pair<Int, Double>> = emptyList(),
-    ): ApiResult<String> =
+        lines: List<ExpenseLineInput>? = null,
+    ): ApiResult<SavedExpense> =
         api.post(
             "expenses.php", if (id == null) "create" else "update",
             ApiClient.body {
@@ -484,6 +485,26 @@ class Repository(private val api: ApiClient, private val prefs: Prefs) {
                 put("category", JsonPrimitive(category))
                 put("paid_to", JsonPrimitive(paidTo))
                 put("details", JsonPrimitive(details))
+                // The breakdown: the server works out each line's total
+                // (qty × unit cost + GST %) and the amount from them.
+                // Null leaves an edited expense's lines as they are.
+                if (lines != null) {
+                    put(
+                        "items",
+                        kotlinx.serialization.json.JsonArray(
+                            lines.map { l ->
+                                kotlinx.serialization.json.JsonObject(
+                                    mapOf(
+                                        "descr" to JsonPrimitive(l.descr),
+                                        "qty" to JsonPrimitive(l.qty),
+                                        "unit_cost" to JsonPrimitive(l.unitCost),
+                                        "gst_pct" to JsonPrimitive(l.gstPct),
+                                    ),
+                                )
+                            },
+                        ),
+                    )
+                }
                 if (split.isNotEmpty()) {
                     put(
                         "payments",
@@ -500,7 +521,27 @@ class Repository(private val api: ApiClient, private val prefs: Prefs) {
                     )
                 }
             },
-        ).map { api.decode<SimpleMessage>(it).message }
+        ).map { obj ->
+            SavedExpense(
+                message = (obj["message"] as? JsonPrimitive)?.content ?: "Saved.",
+                id = id ?: (obj["expense_id"] as? JsonPrimitive)?.content?.toIntOrNull() ?: 0,
+            )
+        }
+
+    /** Attach or replace an expense's receipt: a photo or a PDF. */
+    suspend fun uploadReceipt(id: Int, bytes: ByteArray, mimeType: String, fileName: String): ApiResult<String> =
+        api.upload(
+            "expenses.php", "upload_receipt", mapOf("id" to id.toString()),
+            "receipt", fileName, mimeType, bytes,
+        ).map { (it["message"] as? JsonPrimitive)?.content ?: "Receipt attached." }
+
+    suspend fun removeReceipt(id: Int): ApiResult<String> =
+        api.post("expenses.php", "remove_receipt", ApiClient.body { put("id", JsonPrimitive(id)) })
+            .map { (it["message"] as? JsonPrimitive)?.content ?: "Receipt removed." }
+
+    /** The receipt file and its content type. */
+    suspend fun receipt(id: Int): ApiResult<Pair<ByteArray, String>> =
+        api.download("expenses.php", "receipt", mapOf("id" to id.toString()))
 
     suspend fun release(): ApiResult<Release> =
         api.get("auth.php", "app_version").map { api.decode<ReleaseResponse>(it).release }

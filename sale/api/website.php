@@ -14,6 +14,10 @@
  *
  * Prices are taken exactly as the website sold them, not from this panel's
  * price list: the website has its own products and prices.
+ *
+ * When a partner is chosen on the Website sync page, each order is also
+ * credited to that partner's account (lib_website.php website_sync_credit);
+ * removing the order removes its credit.
  */
 declare(strict_types=1);
 
@@ -152,6 +156,7 @@ api_dispatch([
                 $s->close();
             }
             recalc_paid($conn, $id);
+            $credit = website_sync_credit($conn, $id, $eventId, $webNo);
             $conn->commit();
         } catch (Exception $ex) {
             $conn->rollback();
@@ -163,7 +168,9 @@ api_dispatch([
         api_ok([
             'order_no' => $o['order_no'], 'id' => $id, 'created' => $created,
             'total' => (float)$o['total'], 'paid' => (float)$o['paid_amount'],
-            'message' => ($created ? 'Added ' : 'Updated ') . $o['order_no'] . ' for website order ' . $webNo . ' — ' . money($o['total']),
+            'credited' => $credit,
+            'message' => ($created ? 'Added ' : 'Updated ') . $o['order_no'] . ' for website order ' . $webNo . ' — ' . money($o['total'])
+                         . ($credit ? ', credited ' . money($credit['amount']) . ' to ' . $credit['partner'] : ''),
         ]);
     },
 
@@ -171,12 +178,21 @@ api_dispatch([
         $webNo = website_web_no();
         $id = website_find($conn, $webNo);
         if ($id > 0) {
-            // Children first: not every copy of the database has the cascade rules.
-            foreach (['DELETE FROM payments WHERE order_id = ?', 'DELETE FROM order_items WHERE order_id = ?', 'DELETE FROM orders WHERE id = ?'] as $sql) {
-                $s = $conn->prepare($sql);
-                $s->bind_param('i', $id);
-                $s->execute();
-                $s->close();
+            $conn->begin_transaction();
+            try {
+                // Its automatic credit goes with it: the partner never got that money.
+                website_drop_credit($conn, $id);
+                // Children first: not every copy of the database has the cascade rules.
+                foreach (['DELETE FROM payments WHERE order_id = ?', 'DELETE FROM order_items WHERE order_id = ?', 'DELETE FROM orders WHERE id = ?'] as $sql) {
+                    $s = $conn->prepare($sql);
+                    $s->bind_param('i', $id);
+                    $s->execute();
+                    $s->close();
+                }
+                $conn->commit();
+            } catch (Exception $ex) {
+                $conn->rollback();
+                throw $ex;
             }
         }
         api_ok(['removed' => $id > 0, 'message' => $id > 0 ? 'Removed website order ' . $webNo . '.' : 'Website order ' . $webNo . ' was not in the panel.']);

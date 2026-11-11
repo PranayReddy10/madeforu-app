@@ -539,7 +539,7 @@ data class ServerInfo(
 ) {
     companion object {
         /** What this build of the app needs the server to be able to do. */
-        val NEEDED = listOf("revenue_breakdown", "expense_create", "activity_feed", "push")
+        val NEEDED = listOf("revenue_breakdown", "expense_create", "activity_feed", "push", "expense_receipts")
     }
 
     val missing: List<String> get() = NEEDED.filter { it !in features }
@@ -707,6 +707,8 @@ data class ExpenseLine(
     val descr: String = "",
     val qty: Double = 0.0,
     @SerialName("unit_cost") val unitCost: Double = 0.0,
+    /** GST on top of qty × unit cost, as a percentage; 0 when none was entered. */
+    @SerialName("gst_pct") val gstPct: Double = 0.0,
     @SerialName("line_total") val lineTotal: Double = 0.0,
 )
 
@@ -882,3 +884,14 @@ data class AndroidPushConfig(
     /** App ID per package: the release build and, if added, the debug build. */
     val apps: Map<String, String> = emptyMap(),
 )
+
+/** One breakdown line as the expense sheet sends it; the server totals it. */
+data class ExpenseLineInput(
+    val descr: String,
+    val qty: Double,
+    val unitCost: Double,
+    val gstPct: Double,
+)
+
+/** What saving an expense returns: the message, and its id (new or edited). */
+data class SavedExpense(val message: String, val id: Int)

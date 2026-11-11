@@ -144,6 +144,7 @@ CREATE TABLE IF NOT EXISTS `expense_items` (
   `descr` varchar(200) NOT NULL,
   `qty` decimal(12,2) NOT NULL DEFAULT 0.00,
   `unit_cost` decimal(12,2) NOT NULL DEFAULT 0.00,
+  `gst_pct` decimal(5,2) NOT NULL DEFAULT 0.00,
   `line_total` decimal(14,2) NOT NULL DEFAULT 0.00,
   `sort_order` int(11) NOT NULL DEFAULT 0,
   PRIMARY KEY (`id`),
@@ -481,4 +482,33 @@ CREATE TABLE IF NOT EXISTS `wholesale_visits` (
   PRIMARY KEY (`id`),
   KEY `idx_ws_visit_cust` (`customer_id`,`visit_date`),
   CONSTRAINT `fk_ws_visit_customer` FOREIGN KEY (`customer_id`) REFERENCES `wholesale_customers` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+CREATE TABLE IF NOT EXISTS `wa_campaigns` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `name` varchar(120) NOT NULL,
+  `mode` varchar(10) NOT NULL,
+  `message` text NOT NULL,
+  `template_name` varchar(120) NOT NULL DEFAULT '',
+  `template_lang` varchar(20) NOT NULL DEFAULT '',
+  `template_params` varchar(500) NOT NULL DEFAULT '',
+  `columns_json` text NOT NULL,
+  `created_by` int(11) DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+CREATE TABLE IF NOT EXISTS `wa_recipients` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `campaign_id` int(10) unsigned NOT NULL,
+  `phone` varchar(20) NOT NULL,
+  `name` varchar(120) NOT NULL DEFAULT '',
+  `vars_json` text NOT NULL,
+  `status` varchar(10) NOT NULL DEFAULT 'pending',
+  `error` varchar(255) NOT NULL DEFAULT '',
+  `sent_at` datetime DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `ix_wa_campaign` (`campaign_id`,`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
