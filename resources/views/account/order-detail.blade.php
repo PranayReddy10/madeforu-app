@@ -4,23 +4,7 @@
         <span>{{ $order->created_at->format('j M Y') }}</span>
         <span class="status s-{{ $order->status }}">{{ $order->statusLabel() }}</span>
     </div>
-    @php $steps = ['confirmed', 'in_production', 'shipped', 'delivered']; $at = array_search($order->status, $steps); @endphp
-    @if($order->status !== 'cancelled')
-        <ol class="progress">
-            @foreach($steps as $i => $s)<li class="{{ $at !== false && $i <= $at ? 'done' : '' }}">{{ \App\Models\Order::STATUSES[$s] }}</li>@endforeach
-        </ol>
-    @endif
-    @if($order->tracking_number && in_array($order->status, ['shipped', 'delivered', 'returned'], true))
-        <p>Shipped with {{ $order->courier ?: 'our courier' }} · tracking <b>{{ $order->tracking_number }}</b>
-            @if(($order->courier ?: 'Delhivery') === 'Delhivery') · <a href="{{ $order->trackingUrl() }}" target="_blank" rel="noopener">Track on Delhivery ↗</a>@endif</p>
-        @if($order->shipment_scans)
-            <ol class="scans">
-                @foreach(array_slice(array_reverse($order->shipment_scans), 0, 8) as $sc)
-                    <li><b>{{ $sc['status'] }}</b> <span class="muted">· {{ $sc['location'] }}@if($sc['at']) · {{ \Illuminate\Support\Carbon::parse($sc['at'])->format('j M, g:i a') }}@endif</span></li>
-                @endforeach
-            </ol>
-        @endif
-    @endif
+    @include('partials.tracking', ['order' => $order])
     @foreach($order->items as $item)
         <div class="mini-line">
             <span>{{ $item->name }} <small class="muted">× {{ $item->qty }}@if($item->options) · {{ implode(' / ', $item->options) }}@endif @if($sku = $item->skuCode()) · SKU {{ $sku }}@endif</small>

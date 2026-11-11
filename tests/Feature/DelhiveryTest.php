@@ -134,7 +134,7 @@ class DelhiveryTest extends TestCase
         $order->refresh();
         $this->assertSame(['delivered', 'paid'], [$order->status, $order->payment_status]);   // COD collected
         Mail::assertSent(OrderShipped::class, 1);                                              // no second "shipped" email
-        $this->get(route('track', ['number' => 'MFU7', 'phone' => '9876543210']))->assertSee('Hyderabad_Hub')->assertSee('delhivery.com/track/package/AWB7', false);
+        $this->get(route('track', ['number' => 'MFU7', 'phone' => '9876543210']))->assertSee('Hyderabad, Hub')->assertSee('delhivery.com/track/package/AWB7', false);
     }
 
     public function test_cod_charges_fixed_or_percent_whichever_is_higher(): void

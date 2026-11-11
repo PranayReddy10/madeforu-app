@@ -1211,3 +1211,21 @@ input, select, textarea, img, video, iframe, table { max-width: 100%; }
 .paylink-items li { display: flex; justify-content: space-between; gap: 12px; }
 .paylink-done { background: var(--mint-l); color: #1d6b45; padding: 12px; border-radius: 10px; margin: 0; }
 .paylink-note { background: #fff6e0; color: #6b4a00; padding: 12px; border-radius: 10px; margin: 0; }
+
+/* Live parcel tracking */
+.trk { border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; margin: 12px 0 16px; background: #fff; }
+.trk-now { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; }
+.trk-label { font-family: var(--display); font-size: 22px; font-weight: 700; }
+.trk-go .trk-label { color: var(--rose-d); } .trk-ok .trk-label { color: var(--mint); } .trk-warn .trk-label { color: #b4690e; }
+.trk-eta { font-size: 14px; color: var(--ink-2); }
+.trk-where { margin: 6px 0 0; font-size: 14px; }
+.trk-steps { list-style: none; padding: 0; margin: 14px 0 10px; display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; font-size: 11.5px; text-align: center; color: var(--muted); }
+.trk-steps li { position: relative; padding-top: 20px; line-height: 1.25; }
+.trk-steps li span { position: absolute; top: 0; left: 50%; width: 14px; height: 14px; margin-left: -7px; border-radius: 50%; background: var(--line); z-index: 1; }
+.trk-steps li::before { content: ''; position: absolute; top: 6px; left: -50%; right: 50%; height: 2px; background: var(--line); }
+.trk-steps li:first-child::before { display: none; }
+.trk-steps li.done, .trk-steps li.now { color: var(--ink); font-weight: 600; }
+.trk-steps li.done span, .trk-steps li.done::before, .trk-steps li.now::before { background: var(--mint); }
+.trk-steps li.now span { background: var(--rose); box-shadow: 0 0 0 4px var(--rose-l); }
+.trk-awb { font-size: 13.5px; margin: 6px 0 8px; overflow-wrap: anywhere; }
+.trk-more summary { cursor: pointer; font-size: 13px; color: var(--rose-d); font-weight: 600; margin-bottom: 6px; }
