@@ -259,6 +259,27 @@
             <p class="muted small">The invoice number is given when the order is confirmed (COD placed or payment received).</p>
         @endif
     </section>
+@if ($order->payment_status !== 'paid' && ! in_array($order->status, ['cancelled', 'returned', 'delivered'], true))
+    @php $plProblem = $order->payLinkProblem(); @endphp
+    <section class="card paylink-box">
+        <h2>Payment link</h2>
+        @if ($plProblem)
+            <p class="muted small">{{ $plProblem }}</p>
+        @else
+            @php
+                $plUrl = \App\Http\Controllers\PayLinkController::link($order);
+                $plWa = \App\Services\WhatsApp::number($order->phone) ?: '91'.preg_replace('/\D/', '', $order->phone);
+                $plText = 'Hi '.(\Illuminate\Support\Str::before(trim($order->name), ' ') ?: $order->name).'! You can pay *'.money($order->payableOnline()).'* for your order *'.$order->number.'* securely here (UPI, cards, netbanking): '.$plUrl;
+            @endphp
+            <p class="small">Customer pays <b>{{ money($order->payableOnline()) }}</b>@if ($order->payment_method === 'cod' && (float) $order->cod_fee > 0) (no {{ money($order->cod_fee) }} COD charge)@endif. The order marks itself <b>paid</b> when they pay{{ $order->status === 'pending' ? ' and the order is confirmed' : '' }}.</p>
+            <div class="pl-url"><code>{{ $plUrl }}</code></div>
+            <div class="row-actions">
+                <a class="btn small" href="https://wa.me/{{ $plWa }}?text={{ rawurlencode($plText) }}" target="_blank" rel="noopener">Send on WhatsApp</a>
+                <button type="button" class="btn small ghost" data-copy="{{ $plUrl }}">Copy link</button>
+            </div>
+        @endif
+    </section>
+@endif
     <section class="card">
         <h2>Messages</h2>
         @php $waTo = \App\Services\WhatsApp::number($order->phone); @endphp

@@ -1202,3 +1202,12 @@ input, select, textarea, img, video, iframe, table { max-width: 100%; }
 }
 @media (max-width: 400px) { .share-label { display: none; } }
 @media (max-width: 355px) { .share-box { flex-wrap: wrap; } }
+
+/* Payment link page */
+.paylink { padding: 28px 16px 48px; }
+.paylink-card { max-width: 480px; margin: 0 auto; background: #fff; border-radius: var(--r); box-shadow: var(--shadow); padding: 22px 20px; display: grid; gap: 12px; }
+.paylink-card h1 { margin: 0; font-size: 26px; }
+.paylink-items { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; font-size: 14px; }
+.paylink-items li { display: flex; justify-content: space-between; gap: 12px; }
+.paylink-done { background: var(--mint-l); color: #1d6b45; padding: 12px; border-radius: 10px; margin: 0; }
+.paylink-note { background: #fff6e0; color: #6b4a00; padding: 12px; border-radius: 10px; margin: 0; }

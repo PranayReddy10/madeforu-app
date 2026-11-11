@@ -88,6 +88,25 @@ class Order extends Model
         };
     }
 
+    /** What paying online costs: the total, less the cash-on-delivery charge on an unpaid COD order. */
+    public function payableOnline(): float
+    {
+        return round((float) $this->total - ($this->payment_method === 'cod' ? (float) $this->cod_fee : 0), 2);
+    }
+
+    /** Why a payment link can't be offered for this order right now, or null when it can. */
+    public function payLinkProblem(): ?string
+    {
+        return match (true) {
+            $this->payment_status === 'paid' => 'Already paid.',
+            in_array($this->status, ['cancelled', 'returned', 'shipped', 'delivered'], true) => 'The order is '.strtolower($this->statusLabel()).'.',
+            ! \App\Http\Controllers\CheckoutController::gateways() => 'Switch on Razorpay or Cashfree in Settings to send payment links.',
+            $this->payment_method === 'cod' && (bool) $this->tracking_number => 'Booked with '.($this->courier ?: 'the courier').' as cash on delivery (AWB '.$this->tracking_number.'). Cancel that shipment first, then send a payment link.',
+            $this->payableOnline() <= 0 => 'Nothing to pay.',
+            default => null,
+        };
+    }
+
     /** Paid through a payment gateway (and so charged its fee). */
     public function viaGateway(): bool
     {

@@ -97,6 +97,8 @@ class OrderNotifier
         $itemsAfterCoupon = (float) $order->subtotal - (float) $order->discount + (float) $order->prepaid_discount;
         $codTotal = $itemsAfterCoupon + (float) $order->shipping + Cart::codCharge($itemsAfterCoupon + (float) $order->shipping);
 
+        $payLink = $order->payLinkProblem() ? null : \App\Http\Controllers\PayLinkController::link($order);
+
         $m = [];
         $add = function (string $label, string $text, bool $now) use (&$m) {
             $m[] = ['label' => $label, 'text' => $text, 'now' => $now];
@@ -104,7 +106,10 @@ class OrderNotifier
 
         // Payment
         $failed = ! $cod && ! $paid && $s === 'pending';
-        $add('Payment failed — pay again or COD', $hi."This is {$shop} 🎁 We saw your order {$no} but the online payment didn’t go through, so it isn’t confirmed yet.\n\n{$items}\n\nWould you like to:\n1️⃣ Pay online again ({$total}) — we’ll send you a payment link\n2️⃣ Pay *cash on delivery* instead — total *".money($codTotal).'* (includes COD charges)'."\n\nJust reply 1 or 2 and we’ll take care of the rest 😊", $failed);
+        $add('Payment failed — pay again or COD', $hi."This is {$shop} 🎁 We saw your order {$no} but the online payment didn’t go through, so it isn’t confirmed yet.\n\n{$items}\n\nWould you like to:\n1️⃣ Pay online again ({$total})".($payLink ? ': '.$payLink : ' — we’ll send you a payment link')."\n2️⃣ Pay *cash on delivery* instead — total *".money($codTotal).'* (includes COD charges)'."\n\nJust reply 1 or 2 and we’ll take care of the rest 😊", $failed);
+        if ($payLink) {
+            $add('Payment link', $hi.'You can pay *'.money($order->payableOnline())."* for your order {$no} securely here — UPI, GPay, PhonePe, cards or netbanking:\n{$payLink}\n\nYour order is confirmed as soon as the payment goes through ✅", ! $paid && ! $cod && $s === 'pending');
+        }
         $add('Payment reminder', $hi."Your order {$no} ({$total}) is waiting for payment. Reply here if you need help completing it, or if you’d prefer cash on delivery.", $failed);
         if ($cod && ! $paid && in_array($s, ['confirmed', 'pending'], true)) {
             $add('Confirm COD order', $hi."Thank you for ordering from {$shop} 🎁\n\nOrder {$no}\n{$items}\n\nTotal to pay on delivery: {$total}\nDelivery to: {$order->address_line1}, {$order->city} {$order->pincode}\n\nPlease reply *YES* to confirm your cash on delivery order — we start making your personalised gift as soon as you confirm. ✅", ! $order->tracking_number);

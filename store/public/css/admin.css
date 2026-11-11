@@ -644,3 +644,5 @@ tr.wa-done .wa-send { background: #fff; color: #128c47; }
 .mo [hidden] { display: none !important; }
 [data-direct-only][hidden] { display: none; }
 #charges .pay-choice { display: grid; gap: 6px; }
+.paylink-box .pl-url code { display: block; overflow-wrap: anywhere; background: #f6f1f3; padding: 8px 10px; border-radius: 8px; font-size: 12px; margin: 6px 0 10px; }
+.paylink-box .row-actions { display: flex; gap: 8px; flex-wrap: wrap; }

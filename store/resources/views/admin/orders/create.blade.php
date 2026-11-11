@@ -36,9 +36,11 @@
             <h2>Payment</h2>
             <div class="mo-pay">
                 @foreach (\App\Http\Controllers\Admin\ManualOrderController::PAYMENTS as $k => $l)
+                    @continue($k === 'link' && ! \App\Http\Controllers\CheckoutController::gateways())
                     <label><input type="radio" name="payment" value="{{ $k }}" @checked(old('payment', 'upi') === $k)> {{ $l }}</label>
                 @endforeach
             </div>
+            <p class="muted small" data-link-only>The order is saved as <b>awaiting payment</b>. On the next page you get the link to send on WhatsApp — the order confirms itself when they pay.</p>
             <label data-paid-only>Payment reference <small class="muted">(UTR / transaction ID, optional)</small><input name="payment_ref" value="{{ old('payment_ref') }}" maxlength="100"></label>
             <div class="row2">
                 <label>Shipping (₹) <input type="number" name="shipping" step="0.01" min="0" value="{{ old('shipping') }}" placeholder="auto" data-mo-charge></label>

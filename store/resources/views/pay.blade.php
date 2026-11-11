@@ -2,8 +2,8 @@
 @section('content')
 <div class="wrap narrow center pay-wait">
     <h1>Opening secure payment…</h1>
-    <p>Order <b>{{ $order->number }}</b> · {{ money($order->total) }}</p>
-    <button class="btn primary" id="rzp-open">Pay {{ money($order->total) }}</button>
+    <p>Order <b>{{ $order->number }}</b> · {{ money($rp['amount'] / 100) }}</p>
+    <button class="btn primary" id="rzp-open">Pay {{ money($rp['amount'] / 100) }}</button>
     <p class="small muted">If the payment window did not open, tap the button above.</p>
     <form id="rzp-done" method="post" action="{{ route('checkout.verify') }}" hidden>
         @csrf
