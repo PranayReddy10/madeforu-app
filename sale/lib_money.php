@@ -84,10 +84,12 @@ function revenue_sources(mysqli $conn): array {
     $orders = (float)($conn->query('SELECT COALESCE(SUM(total),0) v FROM orders')
                            ->fetch_assoc()['v'] ?? 0);
 
-    // Credits that are order money in a different place.
+    // Credits that are order money in a different place. A website order's
+    // automatic credit is stamped on its order AND carries the Website
+    // orders event; it is counted once, with the event credits below.
     $offline = (float)($conn->query(
         "SELECT COALESCE(SUM(amount),0) v FROM account_movements
-          WHERE direction = 'credit'
+          WHERE direction = 'credit' AND event_id IS NULL
             AND id IN (SELECT credited_mov_id FROM orders WHERE credited_mov_id IS NOT NULL)"
     )->fetch_assoc()['v'] ?? 0);
 
