@@ -135,6 +135,8 @@ function nav_item(string $page, string $current, string $href, string $label, st
           '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>') ?>
       <?= nav_item('whatsapp', $PAGE, 'whatsapp.php', 'WhatsApp messages',
           '<path d="M21 11.5a8.4 8.4 0 0 1-12.6 7.3L3 20l1.3-5.1A8.5 8.5 0 1 1 21 11.5z"/>') ?>
+      <?= nav_item('website_sync', $PAGE, 'website_sync.php', 'Website sync',
+          '<circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>') ?>
       <?= nav_item('push_settings', $PAGE, 'push_settings.php', 'Notifications',
           '<path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>') ?>
       <a class="signout" href="logout.php">
@@ -157,6 +159,27 @@ function nav_item(string $page, string $current, string $href, string $label, st
       </div>
       <?= $TOPBAR_HTML ?? '' ?>
     </div>
+<?php
+    // New code uploaded but the database not caught up yet: one click adds what's missing.
+    require_once __DIR__ . '/lib_schema.php';
+    if ($who && isset($conn) && schema_needs_update($conn)):
+        $sm = schema_missing($conn);
+        $parts = [];
+        if ($sm['tables'])  $parts[] = count($sm['tables']) . ' table' . (count($sm['tables']) === 1 ? '' : 's') . ' (' . implode(', ', $sm['tables']) . ')';
+        if ($sm['columns']) $parts[] = count($sm['columns']) . ' column' . (count($sm['columns']) === 1 ? '' : 's') . ' (' . implode(', ', array_map(fn ($c) => $c[0] . '.' . $c[1], $sm['columns'])) . ')';
+?>
+    <form method="post" action="db_update.php" class="db-update">
+      <?= csrf_field() ?>
+      <input type="hidden" name="back" value="<?= e(basename(parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH) ?: 'index.php') . (($q = parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_QUERY)) ? '?' . $q : '')) ?>">
+      <span><b>Finish updating the panel.</b> The database is missing <?= e(implode(' and ', $parts)) ?> — some pages may not work until then. Nothing is deleted.</span>
+      <button type="submit">Update database</button>
+    </form>
+    <style>
+      .db-update{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;background:#fff4dc;color:#6b4a00;border:1px solid #f3c27a;border-radius:10px;padding:12px 14px;margin:0 0 16px;font-size:14px;line-height:1.45}
+      .db-update span{min-width:0;overflow-wrap:anywhere;flex:1}
+      .db-update button{padding:9px 16px;border:0;border-radius:6px;background:#1877f2;color:#fff;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit}
+    </style>
+<?php endif; ?>
 
 <script>
 function shellNav(open){

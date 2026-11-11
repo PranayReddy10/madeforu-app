@@ -1,0 +1,281 @@
+<?php
+
+namespace App\Models;
+
+use App\Services\ImageTools;
+use App\Services\Sku;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Storage;
+
+class Product extends Model
+{
+    protected $guarded = ['id'];
+
+    protected $casts = [
+        'stock_qty' => 'integer',
+        'price' => 'decimal:2',
+        'sale_price' => 'decimal:2',
+        'cost_price' => 'decimal:2',
+        'preview' => 'array',
+        'is_active' => 'boolean',
+        'is_featured' => 'boolean',
+        'in_stock' => 'boolean',
+        'noindex' => 'boolean',
+        'faqs' => 'array',
+    ];
+
+    protected static function booted(): void
+    {
+        // Publishing or hiding a product can add or empty a category in the menu.
+        $forget = fn () => self::flushMenuCache();
+        static::saved($forget);
+        // No SKU typed? Make one (MFU-MAG-007). Categories may be attached right after, so this runs once saved.
+        static::saved(function (Product $p) {
+            if (trim((string) $p->sku) === '') {
+                $p->forceFill(['sku' => Sku::forProduct($p)])->saveQuietly();
+            }
+        });
+        static::deleted($forget);
+        // A counted stock decides "in stock" by itself.
+        static::saving(function (Product $p) {
+            if ($p->type !== 'variable' && $p->stock_qty !== null) {
+                $p->in_stock = $p->stock_qty > 0;
+            }
+        });
+    }
+
+    public static function flushMenuCache(): void
+    {
+        Cache::forget('menu.categories');
+    }
+
+    public function primaryCategory(): BelongsTo
+    {
+        return $this->belongsTo(Category::class, 'primary_category_id');
+    }
+
+    public function categories(): BelongsToMany
+    {
+        return $this->belongsToMany(Category::class);
+    }
+
+    public function images(): HasMany
+    {
+        return $this->hasMany(ProductImage::class)->orderBy('position');
+    }
+
+    public function productAttributes(): HasMany
+    {
+        return $this->hasMany(ProductAttribute::class)->orderBy('position');
+    }
+
+    public function variants(): HasMany
+    {
+        return $this->hasMany(ProductVariant::class)->orderBy('position');
+    }
+
+    public function customizationFields(): HasMany
+    {
+        return $this->hasMany(CustomizationField::class)->orderBy('position');
+    }
+
+    public function reviews(): HasMany
+    {
+        return $this->hasMany(Review::class)->where('is_approved', true)->latest();
+    }
+
+    public function scopeActive(Builder $q): Builder
+    {
+        return $q->where('is_active', true);
+    }
+
+    public function scopeSearch(Builder $q, string $term): Builder
+    {
+        $words = array_filter(preg_split('/\s+/', trim($term)));
+
+        return $q->where(function (Builder $q) use ($words) {
+            foreach ($words as $w) {
+                $like = '%'.str_replace(['%', '_'], ['\%', '\_'], $w).'%';
+                $q->where(fn (Builder $q) => $q->where('name', 'like', $like)
+                    ->orWhere('sku', 'like', $like)
+                    ->orWhere('meta_keywords', 'like', $like)
+                    ->orWhere('short_description', 'like', $like)
+                    ->orWhereHas('categories', fn ($c) => $c->where('name', 'like', $like)));
+            }
+        });
+    }
+
+    public function url(): string
+    {
+        return url('product/'.$this->slug).'/';
+    }
+
+    public function isOnSale(): bool
+    {
+        return $this->sale_price !== null && (float) $this->sale_price > 0 && (float) $this->sale_price < (float) $this->price;
+    }
+
+    /** What the customer pays for the base product (variable products: the cheapest variant). */
+    public function currentPrice(): float
+    {
+        if ($this->type === 'variable' && $this->relationLoaded('variants') && $this->variants->isNotEmpty()) {
+            return (float) $this->variants->min(fn ($v) => $v->currentPrice());
+        }
+
+        return (float) ($this->isOnSale() ? $this->sale_price : $this->price);
+    }
+
+    public function maxPrice(): float
+    {
+        if ($this->type === 'variable' && $this->relationLoaded('variants') && $this->variants->isNotEmpty()) {
+            return (float) $this->variants->max(fn ($v) => $v->currentPrice());
+        }
+
+        return $this->currentPrice();
+    }
+
+    public function regularPrice(): float
+    {
+        if ($this->type === 'variable' && $this->relationLoaded('variants') && $this->variants->isNotEmpty()) {
+            $cheapest = $this->variants->sortBy(fn ($v) => $v->currentPrice())->first();
+
+            return (float) $cheapest->price;
+        }
+
+        return (float) $this->price;
+    }
+
+    public function discountPercent(): int
+    {
+        $regular = $this->regularPrice();
+        $now = $this->currentPrice();
+
+        return $regular > 0 && $now < $regular ? (int) round(100 * ($regular - $now) / $regular) : 0;
+    }
+
+    public function mainImageUrl(): string
+    {
+        $img = $this->relationLoaded('images') ? $this->images->first() : $this->images()->first();
+
+        return $img ? $img->url() : asset('images/placeholder.svg');
+    }
+
+    /** The small (480 px WebP) copy of the main photo when it exists, for tiles and thumbnails. */
+    public function thumbUrl(): string
+    {
+        $img = $this->relationLoaded('images') ? $this->images->first() : $this->images()->first();
+        if ($img && ! preg_match('#^https?://#', $img->path) && config('store.media_disk') === 'public'
+            && Storage::disk('public')->exists($thumb = ImageTools::thumbPath($img->path))) {
+            return media_url($thumb);
+        }
+
+        return $this->mainImageUrl();
+    }
+
+    /**
+     * Live preview on the product page: the customer's photo laid over the product picture.
+     * Null when it's switched off (for this product, or for the whole shop in Settings).
+     *
+     * @return array{image: string, x: float, y: float, w: float, h: float, shape: string, blend: string}|null
+     */
+    public function livePreview(): ?array
+    {
+        $p = $this->preview ?? [];
+        if (empty($p['on']) || ! setting('preview.enabled', true) || ! $this->needsUpload()) {
+            return null;
+        }
+        $clamp = fn ($v, $d) => max(0, min(100, is_numeric($v ?? null) ? (float) $v : $d));
+
+        return [
+            'image' => ! empty($p['image']) ? media_url($p['image']) : $this->mainImageUrl(),
+            'x' => $clamp($p['x'] ?? null, 25), 'y' => $clamp($p['y'] ?? null, 25),
+            'w' => max(5, $clamp($p['w'] ?? null, 50)), 'h' => max(5, $clamp($p['h'] ?? null, 50)),
+            'shape' => in_array($p['shape'] ?? '', ['rect', 'rounded', 'circle'], true) ? $p['shape'] : 'rounded',
+            'blend' => ($p['blend'] ?? '') === 'multiply' ? 'multiply' : 'normal',
+        ];
+    }
+
+    /** What one costs to make: the variation's own cost, else the product's. */
+    public function costFor(?ProductVariant $variant = null): ?float
+    {
+        $c = $variant?->cost_price ?? $this->cost_price;
+
+        return $c !== null ? (float) $c : null;
+    }
+
+    public function needsUpload(): bool
+    {
+        return $this->customizationFields->contains(fn ($f) => $f->type === 'images');
+    }
+
+    /**
+     * The photo field whose count follows a chosen option (e.g. Print side: One side → 1 photo,
+     * Two sides → 2): the product's first photo field, when any option sets a photo count.
+     */
+    public function photoFieldId(): ?int
+    {
+        return $this->photoDriver() ? $this->customizationFields->firstWhere('type', 'images')?->id : null;
+    }
+
+    /** The option field (e.g. "Print side") whose choices set the photo count. */
+    public function photoDriver(): ?CustomizationField
+    {
+        return $this->customizationFields->first(fn ($f) => in_array($f->type, ['select', 'choice'], true)
+            && collect($f->options ?? [])->contains(fn ($o) => ! empty($o['photos'])));
+    }
+
+    /** The most photo boxes the field can need: its own max, or the largest option count. */
+    public function photoSlots(CustomizationField $field): int
+    {
+        $most = $field->id === $this->photoFieldId()
+            ? (int) $this->customizationFields->flatMap(fn ($f) => in_array($f->type, ['select', 'choice'], true) ? collect($f->options ?? [])->pluck('photos') : [])->filter()->max()
+            : 0;
+
+        return max($field->max_files, $most);
+    }
+
+    /** Photos needed for the options picked in $custom (field id → value); null = no option sets it. */
+    public function photosFor(array $custom): ?int
+    {
+        $n = null;
+        foreach ($this->customizationFields as $f) {
+            if (in_array($f->type, ['select', 'choice'], true) && isset($custom[$f->id]) && is_string($custom[$f->id])) {
+                $photos = collect($f->options ?? [])->firstWhere('label', trim($custom[$f->id]))['photos'] ?? null;
+                $n = $photos ? (int) $photos : $n;
+            }
+        }
+
+        return $n;
+    }
+
+    public function uploadCount(): int
+    {
+        return (int) $this->customizationFields->where('type', 'images')->sum('max_files');
+    }
+
+    public function seoTitle(): string
+    {
+        if ($this->meta_title) {
+            return $this->meta_title;
+        }
+        $cat = $this->primaryCategory?->name;
+
+        return str($this->name.($cat && ! str_contains(strtolower($this->name), strtolower($cat)) ? ' - '.$cat : '').' | Buy Online at ₹'.number_format($this->currentPrice()))->limit(68, '')->toString();
+    }
+
+    public function seoDescription(): string
+    {
+        if ($this->meta_description) {
+            return $this->meta_description;
+        }
+        $base = strip_tags((string) ($this->short_description ?: $this->description));
+        $base = $base ?: 'Personalised '.$this->name.' made with your photos.';
+
+        return str($base)->squish()->limit(120)->append(' ₹'.number_format($this->currentPrice()).'. Free customisation, fast delivery across India.')->limit(160)->toString();
+    }
+}

@@ -1,0 +1,1 @@
+<p style="text-align:{{ $align ?? 'left' }};margin:22px 0"><a href="{{ $url }}" style="background:#f04577;color:#ffffff;padding:13px 24px;border-radius:999px;text-decoration:none;font-weight:bold;display:inline-block">{{ $label }}</a></p>

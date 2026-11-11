@@ -253,3 +253,34 @@ orders, and look inexplicable.
 There is no HTTPS enforcement here. On a public server, passwords cross the
 wire in plaintext without it. Hostinger provides free SSL — turn it on, and
 the session cookie will set its `secure` flag automatically.
+
+## Website orders (madeforu.co.in)
+
+Delivered orders from the website are added here automatically, with their
+items at the website's prices, charges, payment and Delhivery AWB. They sit
+under **Viewing → Website orders** (an event created on first use) and stay
+out of "Offline only".
+
+| File | Purpose |
+|---|---|
+| `website_sync.php` | Create the shared key; see how many website orders arrived |
+| `api/website.php` | Receives `ping` / `upsert` / `remove` from the website, checked against the key |
+| `lib_website.php` | Shared helpers; adds `orders.web_order_no` on first use (no SQL to run) |
+
+Set up: open **Website sync**, create a key, paste the address and key into the
+website's Admin → Settings → Sale panel sync, then use **Test connection** and
+the list of previous delivered orders on the website's Admin → Sales page:
+mark the ones already typed in here by hand as **Already in panel** (never
+sent), and send the rest.
+
+
+## Keeping the database up to date
+
+`db_schema.sql` lists every table and column the panel needs. Every page
+compares the live database with it (`lib_schema.php`); if anything is
+missing — for example after uploading a new feature — a yellow
+**Update database** banner appears at the top. One click (`db_update.php`)
+adds exactly the missing tables and columns. Nothing is dropped or changed
+and no data is touched.
+
+When you add a table or column in the code, add it to `db_schema.sql` too.
