@@ -46,18 +46,18 @@ class Cashfree
     }
 
     /** @return array{payment_session_id: string, order_id: string} */
-    public function createOrder(Order $order, string $cfOrderId): array
+    public function createOrder(Order $order, string $cfOrderId, ?float $amount = null): array
     {
         $res = $this->http()->post($this->base().'/orders', [
             'order_id' => $cfOrderId,
-            'order_amount' => round((float) $order->total, 2),
+            'order_amount' => round($amount ?? (float) $order->total, 2),
             'order_currency' => 'INR',
-            'customer_details' => [
+            'customer_details' => array_filter([
                 'customer_id' => 'c'.$order->phone,
                 'customer_name' => Str::limit($order->name, 100, ''),
-                'customer_email' => $order->email,
+                'customer_email' => $order->email ?: null,   // orders taken on WhatsApp may have none
                 'customer_phone' => $order->phone,
-            ],
+            ]),
             'order_meta' => [
                 'return_url' => route('checkout.cashfree.return').'?order_id={order_id}',
                 'notify_url' => route('webhooks.cashfree'),

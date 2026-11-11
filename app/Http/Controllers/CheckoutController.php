@@ -212,9 +212,20 @@ class CheckoutController extends Controller
             return redirect()->route('checkout')->with('error', 'Payment could not be verified. If money was deducted it will be refunded automatically, or contact us.');
         }
         $this->markPaid($order, 'razorpay', $data['razorpay_payment_id']);
-        $this->forgetCart($order);
+        $this->forgetCartUnlessLink($order);
 
         return redirect()->route('checkout.thanks', $order->number);
+    }
+
+    /** A payment-link payer has their own cart (or none): leave it alone, just open the thanks page. */
+    private function forgetCartUnlessLink(Order $order): void
+    {
+        if (session()->pull('paylink.'.$order->number)) {
+            session()->push('placed_orders', $order->number);
+
+            return;
+        }
+        $this->forgetCart($order);
     }
 
     /** Razorpay calls this even when the customer closed the tab before returning, so no paid order is lost. */
@@ -227,7 +238,7 @@ class CheckoutController extends Controller
         $payment = $request->input('payload.payment.entity');
         if (in_array($event, ['payment.captured', 'order.paid'], true) && $payment) {
             $order = Order::where('razorpay_order_id', $payment['order_id'] ?? '')->first();
-            if ($order && (int) ($payment['amount'] ?? 0) === (int) round($order->total * 100)) {
+            if ($order && (int) ($payment['amount'] ?? 0) === (int) round($order->payableOnline() * 100)) {
                 $this->markPaid($order, 'razorpay', $payment['id']);
             }
         }
@@ -246,9 +257,9 @@ class CheckoutController extends Controller
 
             return redirect()->route('checkout')->with('error', 'We could not confirm your payment yet. If money was deducted, it will be confirmed shortly — or contact us with order '.$order->number.'.');
         }
-        if ($st['paid'] && abs((float) $st['amount'] - (float) $order->total) < 0.01) {
+        if ($st['paid'] && abs((float) $st['amount'] - $order->payableOnline()) < 0.01) {
             $this->markPaid($order, 'cashfree', $st['payment_id'] ?: $order->cashfree_order_id);
-            $this->forgetCart($order);
+            $this->forgetCartUnlessLink($order);
 
             return redirect()->route('checkout.thanks', $order->number);
         }
@@ -269,7 +280,7 @@ class CheckoutController extends Controller
         $payment = (array) $request->input('data.payment');
         if (($payment['payment_status'] ?? null) === 'SUCCESS' && $cfOrderId !== '') {
             $order = Order::where('cashfree_order_id', $cfOrderId)->first();
-            if ($order && abs((float) ($payment['payment_amount'] ?? 0) - (float) $order->total) < 0.01) {
+            if ($order && abs((float) ($payment['payment_amount'] ?? 0) - $order->payableOnline()) < 0.01) {
                 $this->markPaid($order, 'cashfree', (string) ($payment['cf_payment_id'] ?? $cfOrderId));
             }
         }
@@ -293,17 +304,24 @@ class CheckoutController extends Controller
         return view('thanks', compact('order'));
     }
 
-    private function markPaid(Order $order, string $gateway, string $paymentId): void
+    public function markPaid(Order $order, string $gateway, string $paymentId): void
     {
         $fresh = DB::transaction(function () use ($order, $gateway, $paymentId) {
             $o = Order::whereKey($order->id)->lockForUpdate()->first();
             if ($o->payment_status === 'paid') {
                 return false;
             }
-            $o->update(['payment_status' => 'paid', $gateway.'_payment_id' => $paymentId, 'status' => $o->status === 'pending' ? 'confirmed' : $o->status]);
+            $wasPending = $o->status === 'pending';
+            $update = ['payment_status' => 'paid', $gateway.'_payment_id' => $paymentId, 'status' => $wasPending ? 'confirmed' : $o->status];
+            if ($o->payment_method === 'cod') {
+                // A COD customer paid through a payment link: no cash to collect, no COD charge.
+                $update += ['payment_method' => $gateway, 'cod_fee' => 0, 'total' => $o->payableOnline()];
+            }
+            $o->update($update);
 
-            return true;
+            return $wasPending;
         });
+        // Confirm once: an order that was already confirmed (COD) only becomes paid.
         if ($fresh) {
             $this->complete($order->fresh());
         }

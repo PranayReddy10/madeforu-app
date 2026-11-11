@@ -791,7 +791,9 @@ document.querySelectorAll('[data-campaign-form] [data-preset]').forEach(function
         box.querySelectorAll('.mo-line').forEach(function (r) { sub += (+r.querySelector('[data-price]').value || 0) * (+r.querySelector('[name$="[qty]"]').value || 0); });
         var cod = (form.querySelector('[name=payment]:checked') || {}).value === 'cod';
         form.querySelectorAll('[data-cod-only]').forEach(function (el) { el.hidden = !cod; });
-        form.querySelectorAll('[data-paid-only]').forEach(function (el) { el.hidden = cod; });
+        var pay = (form.querySelector('[name=payment]:checked') || {}).value;
+        form.querySelectorAll('[data-paid-only]').forEach(function (el) { el.hidden = cod || pay === 'link'; });
+        form.querySelectorAll('[data-link-only]').forEach(function (el) { el.hidden = pay !== 'link'; });
         var disc = Math.min(val('discount') || 0, sub), after = sub - disc;
         var free = +form.dataset.freeOver, ship = val('shipping');
         if (ship === null) ship = free > 0 && after >= free ? 0 : +form.dataset.shippingFee;
