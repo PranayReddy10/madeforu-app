@@ -34,7 +34,7 @@
             <button type="button" class="link-btn small" data-copy="{{ $order->tracking_number }}">Copy</button>
             @if ($delhivery) · <a href="{{ $order->trackingUrl() }}" target="_blank" rel="noopener">Open on Delhivery ↗</a>@endif
         </p>
-    @else
+    @elseif ($d['step'] < 3)
         <p class="trk-awb muted">We’ll share the tracking number as soon as your gift is packed and handed to the courier.</p>
     @endif
     @if ($scans)

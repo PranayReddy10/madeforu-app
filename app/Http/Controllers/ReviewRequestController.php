@@ -11,12 +11,14 @@ use Illuminate\Support\Facades\URL;
 /** "How was your gift?" — one page to review everything in a delivered order, linked from email/WhatsApp. */
 class ReviewRequestController extends Controller
 {
-    public static function link(Order $order): string
+    /** Signed review link; $rate pre-picks the stars (from the Track order page). */
+    public static function link(Order $order, ?int $rate = null): string
     {
-        return URL::temporarySignedRoute('review.order', now()->addDays(60), ['number' => $order->number]);
+        return URL::temporarySignedRoute('review.order', now()->addDays(60), array_filter(['number' => $order->number, 'rate' => $rate]));
     }
 
-    private function products(Order $order)
+    /** Products in the order not reviewed yet. */
+    public static function products(Order $order)
     {
         $done = Review::where('order_id', $order->id)->pluck('product_id')->all();
 
@@ -29,7 +31,9 @@ class ReviewRequestController extends Controller
         $order = Order::where('number', $number)->with('items.product.images')->firstOrFail();
         $seo->title('Review your order')->noindex();
 
-        return view('review-order', ['order' => $order, 'products' => $this->products($order)]);
+        $rate = (int) $request->query('rate');
+
+        return view('review-order', ['order' => $order, 'products' => self::products($order), 'rate' => $rate >= 1 && $rate <= 5 ? $rate : null]);
     }
 
     public function store(Request $request, string $number)
@@ -46,7 +50,7 @@ class ReviewRequestController extends Controller
             'photos.*.*' => 'image|max:10240',
         ]);
         $saved = [];
-        foreach ($this->products($order) as $product) {
+        foreach (self::products($order) as $product) {
             $r = $request->input('reviews.'.$product->id, []);
             if (empty($r['rating'])) {
                 continue;   // skipped this one

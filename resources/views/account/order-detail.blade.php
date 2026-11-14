@@ -5,6 +5,22 @@
         <span class="status s-{{ $order->status }}">{{ $order->statusLabel() }}</span>
     </div>
     @include('partials.tracking', ['order' => $order])
+    @if ($order->status === 'delivered')
+        @php $toReview = \App\Http\Controllers\ReviewRequestController::products($order->loadMissing('items.product')); $gUrl = (string) setting('reviews.google_url'); @endphp
+        @if ($toReview->isNotEmpty())
+            <div class="trk-review">
+                <p><b>Your gift arrived 🎁 How was it?</b><br><small class="muted">Tap a star — it takes a minute, and photos are extra special.</small></p>
+                <div class="trk-review-stars">
+                    @for ($i = 5; $i >= 1; $i--)<a href="{{ \App\Http\Controllers\ReviewRequestController::link($order, $i) }}" title="{{ $i }} {{ $i === 1 ? 'star' : 'stars' }}" aria-label="Rate {{ $i }} {{ $i === 1 ? 'star' : 'stars' }}">★</a>@endfor
+                </div>
+            </div>
+        @else
+            <div class="trk-review done">
+                <p><b>Thank you for your review 💝</b>@if (preg_match('#^https://#i', $gUrl))<br><small class="muted">Would you share it on Google too? It helps other people find us.</small>@endif</p>
+                @if (preg_match('#^https://#i', $gUrl))<a class="btn small" href="{{ $gUrl }}" target="_blank" rel="noopener">Review us on Google ↗</a>@endif
+            </div>
+        @endif
+    @endif
     @foreach($order->items as $item)
         <div class="mini-line">
             <span>{{ $item->name }} <small class="muted">× {{ $item->qty }}@if($item->options) · {{ implode(' / ', $item->options) }}@endif @if($sku = $item->skuCode()) · SKU {{ $sku }}@endif</small>

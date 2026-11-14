@@ -85,4 +85,20 @@ class GoogleReviewPromptTest extends TestCase
         $admin->forceFill(['is_admin' => true])->save();
         $this->actingAs($admin)->get(route('admin.reviews.index'))->assertSee('Ask for Google review')->assertSee('https://wa.me/919876543210?text=', false);
     }
+
+    public function test_track_page_asks_delivered_customers_to_review(): void
+    {
+        $order = $this->deliveredOrder();
+        $html = $this->get('/track-order?number=MFU7101&phone=9876543210')->assertOk()->assertSee('Your gift arrived')->getContent();
+        preg_match('#href="([^"]*/review/MFU7101[^"]*rate=4[^"]*)"#', $html, $m);
+        $this->assertNotEmpty($m, 'a 4-star link to the review page');
+        $link = html_entity_decode($m[1]);
+        $this->get($link)->assertOk()->assertSee('value="4" checked', false);   // stars already picked
+
+        $mug = Product::where('slug', 'magic-photo-mug')->first();
+        $this->post($link, ['name' => 'Asha', 'reviews' => [$mug->id => ['rating' => 4, 'body' => 'Nice']]])->assertRedirect(route('review.thanks'));
+        $this->get('/track-order?number=MFU7101&phone=9876543210')->assertDontSee('Your gift arrived')
+            ->assertSee('Thank you for your review')->assertSee('Review us on Google');
+    }
 }
+
