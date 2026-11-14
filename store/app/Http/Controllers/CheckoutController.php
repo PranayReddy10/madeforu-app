@@ -128,8 +128,7 @@ class CheckoutController extends Controller
         }
 
         $order = DB::transaction(function () use ($data, $lines, $totals, $method) {
-            $order = Order::create([
-                'number' => Order::nextNumber(),
+            $order = Order::createNumbered([
                 'user_id' => auth()->id(),
                 'status' => $method === 'cod' ? 'confirmed' : 'pending',
                 'payment_method' => $method,

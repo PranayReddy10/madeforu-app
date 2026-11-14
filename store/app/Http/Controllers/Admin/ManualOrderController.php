@@ -147,8 +147,7 @@ class ManualOrderController extends Controller
         ])->filter()->implode(' ');
 
         $order = DB::transaction(function () use ($data, $lines, $subtotal, $discount, $shipping, $codFee, $extra, $total, $cod, $link, $notes) {
-            $order = Order::create([
-                'number' => Order::nextNumber(),
+            $order = Order::createNumbered([
                 'status' => $link ? 'pending' : 'confirmed',
                 'payment_method' => $link ? CheckoutController::gateways()[0] : $data['payment'],
                 'payment_status' => $cod || $link ? 'unpaid' : 'paid',
