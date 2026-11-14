@@ -18,6 +18,11 @@
                     <input type="hidden" name="is_approved" value="{{ $r->is_approved ? 0 : 1 }}">
                     <button class="btn small {{ $r->is_approved ? 'ghost' : '' }}">{{ $r->is_approved ? 'Hide' : 'Approve' }}</button>
                 </form>
+                @php $gUrl = (string) setting('reviews.google_url'); $rvWa = $r->order ? \App\Services\WhatsApp::number((string) $r->order->phone) : null; @endphp
+                @if ($rvWa && preg_match('#^https://#i', $gUrl))
+                    <a class="btn small ghost" target="_blank" rel="noopener" title="Ask on WhatsApp to post this review on Google"
+                       href="https://wa.me/{{ $rvWa }}?text={{ rawurlencode('Hi '.\Illuminate\Support\Str::before(trim($r->name), ' ').'! Thank you so much for your review 💝'.($r->body ? "\n\n“".\Illuminate\Support\Str::limit($r->body, 400)."”" : '')."\n\nWould you post it on Google too? It really helps a small shop like ours: ".$gUrl) }}">Ask for Google review</a>
+                @endif
                 <form method="post" action="{{ route('admin.reviews.destroy', $r) }}" class="inline">@csrf @method('DELETE')<button class="link danger" data-confirm="Delete this review?">Delete</button></form>
             </td>
         </tr>

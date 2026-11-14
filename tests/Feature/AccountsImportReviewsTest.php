@@ -128,7 +128,7 @@ class AccountsImportReviewsTest extends TestCase
         $order->items()->create(['product_id' => $mug->id, 'name' => $mug->name, 'qty' => 1, 'unit_price' => 449, 'line_total' => 449]);
 
         $this->actingAs($user)->post(route('product.review', $mug), ['name' => 'Asha', 'rating' => 5, 'body' => 'Lovely!',
-            'photos' => [UploadedFile::fake()->image('gift.jpg', 2000, 1500)]])->assertSessionHas('status');
+            'photos' => [UploadedFile::fake()->image('gift.jpg', 2000, 1500)]])->assertRedirect(route('review.thanks'))->assertSessionHas('review_thanks');
         $r = Review::latest('id')->first();
         $this->assertTrue($r->is_verified);
         $this->assertFalse($r->is_approved);
@@ -161,7 +161,7 @@ class AccountsImportReviewsTest extends TestCase
         $this->get(route('review.order', 'MFU6'))->assertForbidden();
         $this->get($link)->assertOk()->assertSee('How was your gift?')->assertSee($mug->name);
         $this->post($link, ['name' => 'Ravi', 'reviews' => [$mug->id => ['rating' => 5, 'body' => 'Perfect']],
-            'photos' => [$mug->id => [UploadedFile::fake()->image('a.jpg')]]])->assertRedirect(route('home'));
+            'photos' => [$mug->id => [UploadedFile::fake()->image('a.jpg')]]])->assertRedirect(route('review.thanks'));
         $r = Review::where('order_id', $order->id)->first();
         $this->assertTrue($r->is_verified && $r->is_approved);
         $this->assertCount(1, $r->photos);

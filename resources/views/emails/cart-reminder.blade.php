@@ -1,5 +1,5 @@
 @extends('emails.layout')
-@section('preheader')Your cart is saved — finish your order in a minute@endsection
+@section('preheader', 'Your cart is saved — finish your order in a minute')
 @section('body')
     <h1 style="font-size:22px;margin:0 0 8px">Hi{{ $cart->name ? ' '.\Illuminate\Support\Str::before($cart->name, ' ') : '' }}, your gift is waiting 💝</h1>
     <p style="margin:0 0 16px">You left {{ count($items) > 1 ? 'these' : 'this' }} in your cart{{ collect($cart->lines)->pluck('custom')->flatten()->filter()->isNotEmpty() ? ' — your photos are still saved, so it only takes a minute to finish' : '' }}.</p>

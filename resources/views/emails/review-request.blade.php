@@ -1,5 +1,5 @@
 @extends('emails.layout')
-@section('preheader')Tell us how your gift was — it takes a minute@endsection
+@section('preheader', 'Tell us how your gift was — it takes a minute')
 @section('body')
     <h1 style="font-size:22px;margin:0 0 8px">Hi {{ \Illuminate\Support\Str::before($order->name, ' ') }}, how was your gift?</h1>
     <p>We hope {{ $order->items->count() > 1 ? 'everything' : 'it' }} from order <b>{{ $order->number }}</b> made someone smile. Would you share a quick review? A photo of the gift means the world to a small shop like ours.</p>
@@ -9,5 +9,8 @@
     @endforeach
     </table>
     <p style="text-align:center;margin:24px 0"><a href="{{ $link }}" style="background:#f04577;color:#fff;padding:14px 26px;border-radius:999px;text-decoration:none;font-weight:bold">Write a review</a></p>
+    @if(preg_match('#^https://#i', (string) setting('reviews.google_url')))
+        <p style="text-align:center;margin:0 0 20px;font-size:14px">Happy with it? <a href="{{ setting('reviews.google_url') }}" style="color:#d42c5e;font-weight:bold">Review us on Google too ↗</a></p>
+    @endif
     <p style="font-size:13px;color:#858ca3;text-align:center">Takes less than a minute. Thank you for shopping with {{ config('store.name') }}!</p>
 @endsection

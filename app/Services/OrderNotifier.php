@@ -137,7 +137,8 @@ class OrderNotifier
         }
 
         // After delivery
-        $add('Delivered — ask for a review', $hi."💝 We hope you love your gift from order {$no}! If you have a moment, a quick review (a photo too, if you like) would mean a lot to us: ".ReviewRequestController::link($order), $s === 'delivered');
+        $add('Delivered — ask for a review', $hi."💝 We hope you love your gift from order {$no}! If you have a moment, a quick review (a photo too, if you like) would mean a lot to us: ".ReviewRequestController::link($order)
+            .(preg_match('#^https://#i', (string) setting('reviews.google_url')) ? "\n\nAnd if you have a moment more, a Google review helps others find us: ".setting('reviews.google_url') : ''), $s === 'delivered');
         $add('Thank you — order again', $hi."Thank you for choosing {$shop} 💝 Whenever you need another personalised gift — birthdays, anniversaries, festivals — we’re just a message away: ".url('/').'/', false);
 
         // Problems

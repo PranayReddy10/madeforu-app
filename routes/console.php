@@ -12,7 +12,7 @@ Schedule::command('store:instagram-refresh')->weekly();
 // Visitor analytics older than 13 months are deleted.
 Schedule::call(fn () => DB::table('analytics_events')->where('day', '<', now()->subMonths(13)->toDateString())->delete())->monthly();
 Schedule::command('store:indexnow')->dailyAt('03:15');
-Schedule::command('store:delhivery-sync')->hourly();
+Schedule::command('store:delhivery-sync')->everyThirtyMinutes();   // admin and Track order pages also check live
 Schedule::command('store:cart-reminders')->everyFifteenMinutes();
 Schedule::command('store:review-requests')->hourly();
 // Evening summary for the shop, at the time set in Admin → Settings.

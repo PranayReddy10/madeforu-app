@@ -102,7 +102,11 @@
                     <div class="ol-dv">
                         @if ($o->tracking_number)
                             <a href="{{ $o->trackingUrl() }}" target="_blank" rel="noopener" class="awb">{{ $o->tracking_number }}</a>
-                            <small>{{ $o->shipment_status ?: 'Booked' }}</small>
+                            @if ($o->status === 'delivered')
+                                <small class="ok-txt">✓ Delivered{{ $o->delivered_at ? ' '.$o->delivered_at->format('d M') : '' }}</small>
+                            @else
+                                <small>{{ \App\Services\Shipping::describe($o, null)['label'] }}@if ($o->tracked_at) · {{ $o->tracked_at->diffForHumans(null, true, true) }} ago @endif</small>
+                            @endif
                         @elseif ($o->shipment_error)
                             <span class="badge err" title="{{ $o->shipment_error }}">Not booked</span>
                             <small class="err-txt">{{ \Illuminate\Support\Str::limit($o->shipment_error, 60) }}</small>
