@@ -140,7 +140,7 @@ class ProductController extends Controller
             'website' => 'prohibited',   // honeypot: people never see this field, bots fill it
         ]);
         $order = Review::boughtBy($product->id, $request->user());
-        Review::create([
+        $review = Review::create([
             'product_id' => $product->id, 'user_id' => $request->user()?->id, 'order_id' => $order?->id,
             'name' => $data['name'], 'rating' => $data['rating'], 'body' => $data['body'] ?? null,
             'photos' => Review::storePhotos($request->file('photos', [])) ?: null,
@@ -148,6 +148,6 @@ class ProductController extends Controller
             'is_approved' => $order && setting('reviews.auto_approve') && $data['rating'] >= 4,
         ]);
 
-        return back()->with('status', 'Thank you! Your review will appear once it is approved.');
+        return ReviewRequestController::thanks([$review], $review->is_approved);
     }
 }

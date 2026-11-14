@@ -24,6 +24,21 @@ class OrderController extends Controller
 {
     public function index(Request $request)
     {
+        // Parcels on the way that haven't been checked for half an hour: ask Delhivery after this page has gone out,
+        // so the next look at the list shows them delivered without waiting for the background sync.
+        if (Delhivery::enabled()) {
+            $stale = Order::whereNotNull('tracking_number')->where(fn ($q) => $q->whereNull('courier')->orWhere('courier', 'Delhivery'))
+                ->whereIn('status', ['confirmed', 'in_production', 'shipped'])
+                ->where(fn ($q) => $q->whereNull('tracked_at')->orWhere('tracked_at', '<', now()->subMinutes(30)))
+                ->orderBy('tracked_at')->limit(10)->pluck('id');
+            if ($stale->isNotEmpty()) {
+                app()->terminating(function () use ($stale) {
+                    foreach (Order::whereIn('id', $stale)->get() as $o) {
+                        app(Shipping::class)->live($o);
+                    }
+                });
+            }
+        }
         $q = Order::withCount('items')->with('items.uploads', 'items.product')->latest();
         if ($request->query('status') === 'attention') {
             $q->where(fn ($w) => $this->needsAttention($w));
@@ -143,11 +158,13 @@ class OrderController extends Controller
         return back()->with('status', 'Pickup address “'.$data['name'].'” registered with Delhivery and saved in Settings. Tick the failed orders and press “Book with Delhivery”.');
     }
 
-    public function show(Order $order)
+    public function show(Order $order, Shipping $shipping)
     {
-        $order->load('items.uploads', 'items.product', 'user');
+        // Ask Delhivery where the parcel is (at most every 10 minutes); a delivery moves the order on before it's shown.
+        $live = $shipping->live($order);
+        $order->refresh()->load('items.uploads', 'items.product', 'user');
 
-        return view('admin.orders.show', ['order' => $order, 'sheet' => self::production($order)]);
+        return view('admin.orders.show', ['order' => $order, 'sheet' => self::production($order), 'live' => $live]);
     }
 
     public function update(Request $request, Order $order)

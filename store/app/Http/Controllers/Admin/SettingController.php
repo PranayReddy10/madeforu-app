@@ -105,6 +105,7 @@ class SettingController extends Controller
             'reviews.request_days' => ['Days after delivery', 'number', ''],
             'reviews.auto_approve' => ['Publish verified 4★ and 5★ reviews straight away', 'bool', 'Otherwise every review waits for you in Admin → Reviews.'],
             'reviews.whatsapp_template' => ['WhatsApp template for review requests', 'text', 'Optional. {{1}} name, {{2}} order no., {{3}} review link.'],
+            'reviews.google_url' => ['Google review link', 'text', 'Your Google Business Profile → “Ask for reviews” (or “Get more reviews”) → copy the link, e.g. https://g.page/r/…/review. After a customer reviews on the website they are asked to post it on Google too — everyone, whatever the stars, as Google requires.'],
         ],
         'Abandoned cart reminders' => [
             'abandoned.enabled' => ['Save carts and send reminders', 'bool', 'A cart is saved once the shopper types an email or phone at checkout.'],

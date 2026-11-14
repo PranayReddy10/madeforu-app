@@ -45,25 +45,56 @@ class ReviewRequestController extends Controller
             'photos.*' => 'nullable|array|max:3',
             'photos.*.*' => 'image|max:10240',
         ]);
-        $saved = 0;
+        $saved = [];
         foreach ($this->products($order) as $product) {
             $r = $request->input('reviews.'.$product->id, []);
             if (empty($r['rating'])) {
                 continue;   // skipped this one
             }
-            Review::create([
+            $saved[] = Review::create([
                 'product_id' => $product->id, 'order_id' => $order->id, 'user_id' => $order->user_id,
                 'name' => $request->input('name'), 'rating' => (int) $r['rating'], 'body' => $r['body'] ?? null,
                 'photos' => Review::storePhotos($request->file('photos.'.$product->id, [])) ?: null,
                 'is_verified' => true,
                 'is_approved' => setting('reviews.auto_approve') && (int) $r['rating'] >= 4,
             ]);
-            $saved++;
         }
         if (! $saved) {
             return back()->withErrors(['reviews' => 'Please give at least one star rating.']);
         }
 
-        return redirect()->route('home')->with('status', 'Thank you for your review'.($saved > 1 ? 's' : '').'! 💝');
+        return self::thanks($saved, collect($saved)->every('is_approved'));
+    }
+
+    /**
+     * After a review: say thanks, and ask to post it on Google too (Admin → Settings → Reviews → Google review link).
+     * Shown to every reviewer whatever the stars — Google's rules forbid asking only the happy ones.
+     *
+     * @param  array<int, Review>  $reviews
+     */
+    public static function thanks(array $reviews, bool $published)
+    {
+        $reviews = collect($reviews)->each->loadMissing('product');
+        $text = $reviews->count() === 1
+            ? (string) $reviews->first()->body
+            : $reviews->filter(fn ($r) => filled($r->body))->map(fn ($r) => $r->product?->name.': '.$r->body)->implode("\n");
+
+        return redirect()->route('review.thanks')->with('review_thanks', [
+            'count' => $reviews->count(),
+            'published' => $published,
+            'text' => trim($text),
+            'stars' => (int) round($reviews->avg('rating')),
+        ]);
+    }
+
+    public function done(Seo $seo)
+    {
+        $seo->title('Thank you for your review')->noindex();
+        $google = (string) setting('reviews.google_url');
+
+        return view('review-thanks', [
+            'r' => session('review_thanks'),
+            'google' => preg_match('#^https://#i', $google) ? $google : null,
+        ]);
     }
 }

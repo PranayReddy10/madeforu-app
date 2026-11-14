@@ -221,8 +221,26 @@
     <section class="card">
         <h2>Delhivery</h2>
         @if ($order->tracking_number)
-            <p>AWB <strong>{{ $order->tracking_number }}</strong> · <a href="{{ $order->trackingUrl() }}" target="_blank" rel="noopener">track ↗</a></p>
-            @if ($order->shipment_status)<p><span class="badge">{{ $order->shipment_status }}</span>@if ($order->tracked_at) <span class="muted small">checked {{ $order->tracked_at->diffForHumans() }}</span>@endif</p>@endif
+            <p>AWB <strong>{{ $order->tracking_number }}</strong> <button type="button" class="link small" data-copy="{{ $order->tracking_number }}" title="Copy">⧉</button> · <a href="{{ $order->trackingUrl() }}" target="_blank" rel="noopener">track ↗</a></p>
+            @php
+                $dvD = \App\Services\Shipping::describe($order, $live['status'] ?? null);
+                $dvScans = array_reverse($live['scans'] ?? $order->shipment_scans ?? []);
+                $dvLast = $dvScans[0] ?? null;
+                $dvPlace = fn ($l) => str_replace('_', ', ', (string) $l);
+                $dvExp = null;
+                try { $dvExp = ! empty($live['expected']) ? \Illuminate\Support\Carbon::parse($live['expected']) : null; } catch (\Throwable) {}
+            @endphp
+            <div class="dv-live dv-{{ $dvD['tone'] }}">
+                <b class="dv-state">{{ $dvD['label'] }}</b>@if ($order->shipment_status) <span class="badge">{{ $order->shipment_status }}</span>@endif
+                @if ($order->status === 'delivered')
+                    <p>✓ Delivered {{ ($order->delivered_at ?? ($dvLast['at'] ?? null) ? \Illuminate\Support\Carbon::parse($order->delivered_at ?? $dvLast['at'])->format('D, d M Y, g:i a') : '') }}@if ($dvLast) · {{ $dvPlace($dvLast['location']) }}@endif
+                        @if ($order->payment_method === 'cod')<br><span class="small">Cash collected by Delhivery: <b>{{ money($order->total) }}</b>@if ($order->cod_remitted_at) · in your bank since {{ $order->cod_remitted_at->format('d M') }}@else · to come in their next remittance (Sales page)@endif</span>@endif</p>
+                @else
+                    @if ($dvExp && $dvExp->isFuture())<p class="small">Expected delivery <b>{{ $dvExp->format('D, d M') }}</b></p>@endif
+                    @if ($dvLast)<p class="small">📍 {{ $dvPlace($dvLast['location']) }}@if (! empty($dvLast['at'])) · {{ \Illuminate\Support\Carbon::parse($dvLast['at'])->format('d M, g:i a') }}@endif @if (! empty($dvLast['note']))<br><span class="muted">{{ $dvLast['note'] }}</span>@endif</p>@endif
+                @endif
+                @if ($order->tracked_at)<p class="muted small">Checked with Delhivery {{ $order->tracked_at->diffForHumans() }}@if ($live === null && \App\Services\Delhivery::enabled() && ! in_array($order->status, ['delivered', 'returned'], true)) · couldn’t reach Delhivery just now, showing the last update @endif</p>@endif
+            </div>
             <div class="row-actions">
                 <a class="btn small" href="{{ route('admin.orders.label', $order) }}" target="_blank" rel="noopener">Print label</a>
                 <form method="post" action="{{ route('admin.orders.track', $order) }}">@csrf<button class="btn small ghost">Refresh tracking</button></form>
@@ -232,7 +250,7 @@
             </div>
             @if ($order->shipment_scans)
                 <details class="scans"><summary>Scan history ({{ count($order->shipment_scans) }})</summary>
-                    <ol>@foreach (array_reverse($order->shipment_scans) as $sc)<li><strong>{{ $sc['status'] }}</strong> · {{ $sc['location'] }}<br><span class="muted small">{{ $sc['at'] ? \Illuminate\Support\Carbon::parse($sc['at'])->format('d M, H:i') : '' }} {{ $sc['note'] }}</span></li>@endforeach</ol>
+                    <ol>@foreach (array_reverse($order->shipment_scans) as $sc)<li><strong>{{ $sc['status'] }}</strong> · {{ str_replace('_', ', ', (string) $sc['location']) }}<br><span class="muted small">{{ $sc['at'] ? \Illuminate\Support\Carbon::parse($sc['at'])->format('d M, H:i') : '' }} {{ $sc['note'] }}</span></li>@endforeach</ol>
                 </details>
             @endif
         @elseif (\App\Services\Delhivery::enabled())

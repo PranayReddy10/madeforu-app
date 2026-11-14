@@ -646,3 +646,11 @@ tr.wa-done .wa-send { background: #fff; color: #128c47; }
 #charges .pay-choice { display: grid; gap: 6px; }
 .paylink-box .pl-url code { display: block; overflow-wrap: anywhere; background: #f6f1f3; padding: 8px 10px; border-radius: 8px; font-size: 12px; margin: 6px 0 10px; }
 .paylink-box .row-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* Order page: live Delhivery state */
+.dv-live { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; margin: 6px 0 10px; display: grid; gap: 4px; }
+.dv-live p { margin: 0; }
+.dv-state { font-size: 16px; }
+.dv-go .dv-state { color: #c2185b; } .dv-ok .dv-state { color: #1d7a4b; } .dv-warn .dv-state { color: #9a6300; }
+.dv-ok { background: #f0faf4; border-color: #cdeedb; }
+.ol-dv .ok-txt { color: #1d7a4b; font-weight: 600; }

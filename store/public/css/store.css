@@ -1229,3 +1229,13 @@ input, select, textarea, img, video, iframe, table { max-width: 100%; }
 .trk-steps li.now span { background: var(--rose); box-shadow: 0 0 0 4px var(--rose-l); }
 .trk-awb { font-size: 13.5px; margin: 6px 0 8px; overflow-wrap: anywhere; }
 .trk-more summary { cursor: pointer; font-size: 13px; color: var(--rose-d); font-weight: 600; margin-bottom: 6px; }
+
+/* Thanks after a review, with "post it on Google" */
+.rv-thanks { max-width: 480px; margin: 30px auto 50px; background: #fff; border-radius: var(--r); box-shadow: var(--shadow); padding: 24px 20px; display: grid; gap: 12px; text-align: center; }
+.rv-thanks h1 { margin: 0; font-size: 26px; }
+.rv-thanks p { margin: 0; }
+.rv-hearts { font-size: 40px; }
+.rv-google { text-align: left; border: 1px solid var(--line); border-radius: 14px; padding: 14px; display: grid; gap: 8px; }
+.rv-google h2 { margin: 0; font-size: 18px; }
+.rv-google ol { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
+.rv-text { white-space: pre-wrap; background: #faf5f7; border-radius: 10px; padding: 10px 12px; margin: 6px 0; font-size: 14px; }

@@ -69,6 +69,7 @@ Route::get('/checkout/order-received/{number}', [CheckoutController::class, 'tha
 Route::post('/contact-message', [ContactController::class, 'store'])->name('contact.send')->middleware('throttle:5,10');
 Route::get('/track-order', [AccountController::class, 'track'])->name('track');
 Route::get('/invoice/{number}', [AccountController::class, 'invoice'])->name('invoice.download');
+Route::get('/review/thanks', [ReviewRequestController::class, 'done'])->name('review.thanks');
 Route::get('/review/{number}', [ReviewRequestController::class, 'show'])->name('review.order');
 Route::post('/review/{number}', [ReviewRequestController::class, 'store'])->name('review.order.store')->middleware('throttle:10,1');
 
