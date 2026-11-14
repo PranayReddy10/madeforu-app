@@ -10,13 +10,23 @@
         @csrf
         @error('reviews')<p class="err">{{ $message }}</p>@enderror
         @foreach($products as $p)
-            <section class="panel">
-                <div class="mini-line"><img src="{{ $p->thumbUrl() }}" alt="" width="56" height="56"><span><b>{{ $p->name }}</b></span></div>
-                <div class="rate-input" role="radiogroup" aria-label="Rating for {{ $p->name }}">
-                    @for($i = 5; $i >= 1; $i--)<input type="radio" id="r{{ $p->id }}-{{ $i }}" name="reviews[{{ $p->id }}][rating]" value="{{ $i }}"><label for="r{{ $p->id }}-{{ $i }}" title="{{ $i }} stars">★</label>@endfor
+            <section class="panel ro-item">
+                <div class="ro-head"><img src="{{ $p->thumbUrl() }}" alt="" width="64" height="64"><b>{{ $p->name }}</b></div>
+                <div class="ro-stars">
+                    <div class="rate-input" role="radiogroup" aria-label="Rating for {{ $p->name }}">
+                        @for($i = 5; $i >= 1; $i--)<input type="radio" id="r{{ $p->id }}-{{ $i }}" name="reviews[{{ $p->id }}][rating]" value="{{ $i }}" @checked((int) old('reviews.'.$p->id.'.rating') === $i)><label for="r{{ $p->id }}-{{ $i }}" title="{{ $i }} {{ $i === 1 ? 'star' : 'stars' }}">★</label>@endfor
+                    </div>
+                    <span class="rate-word" data-rate-word>Tap to rate</span>
                 </div>
-                <textarea name="reviews[{{ $p->id }}][body]" rows="3" maxlength="2000" placeholder="What did you (or they) love about it?">{{ old('reviews.'.$p->id.'.body') }}</textarea>
-                <label class="small">Photos of your gift (up to 3)<input type="file" name="photos[{{ $p->id }}][]" accept="image/*" multiple></label>
+                <label class="ro-label"><span>Tell us more <small class="muted">(optional)</small></span>
+                    <textarea name="reviews[{{ $p->id }}][body]" rows="3" maxlength="2000" placeholder="What did you (or they) love about it?">{{ old('reviews.'.$p->id.'.body') }}</textarea>
+                </label>
+                <label class="photo-drop">
+                    <input type="file" name="photos[{{ $p->id }}][]" accept="image/*" multiple data-photo-pick>
+                    <span class="pd-ico">📷</span>
+                    <span><b>Add photos of your gift</b><small>Up to 3 · they make your review extra special</small></span>
+                </label>
+                <div class="photo-thumbs" data-photo-thumbs></div>
             </section>
         @endforeach
         <div class="panel form-grid">
