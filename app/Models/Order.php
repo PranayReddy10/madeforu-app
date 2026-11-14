@@ -5,6 +5,8 @@ namespace App\Models;
 use App\Services\OrderEmails;
 use App\Services\Parcel;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\UniqueConstraintViolationException;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
@@ -113,12 +115,33 @@ class Order extends Model
         return in_array($this->payment_method, ['razorpay', 'cashfree'], true);
     }
 
+    /**
+     * Next order number: MFU + year + a counter from 1001, e.g. MFU20261001, MFU20261002 … (MFU20271001 next year).
+     * Older orders keep their numbers (MFU261114001, WC-22511); they never start with MFU + a 4-digit year.
+     */
     public static function nextNumber(): string
     {
-        $prefix = 'MFU'.now()->format('ymd');
-        $last = static::where('number', 'like', $prefix.'%')->orderByDesc('number')->value('number');
-        $n = $last ? ((int) substr($last, -3)) + 1 : 1;
+        $prefix = 'MFU'.now()->format('Y');
+        $n = static::where('number', 'like', $prefix.'%')->pluck('number')
+            ->map(fn ($no) => substr($no, strlen($prefix)))
+            ->filter(fn ($rest) => $rest !== '' && ctype_digit($rest))
+            ->map(fn ($rest) => (int) $rest)
+            ->max();
 
-        return $prefix.str_pad((string) $n, 3, '0', STR_PAD_LEFT);
+        return $prefix.max(1001, ($n ?? 1000) + 1);
+    }
+
+    /** Create an order with the next number; if two orders take the same number at once, the second tries again. */
+    public static function createNumbered(array $attributes): self
+    {
+        for ($attempt = 1; ; $attempt++) {
+            try {
+                return DB::transaction(fn () => static::create(['number' => static::nextNumber()] + $attributes));
+            } catch (UniqueConstraintViolationException $e) {
+                if ($attempt >= 5) {
+                    throw $e;
+                }
+            }
+        }
     }
 }

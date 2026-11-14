@@ -39,7 +39,7 @@ class Cashfree
         ])->acceptJson()->timeout(20);
     }
 
-    /** Cashfree refuses a reused order_id, so each payment attempt gets its own: MFU261018001-k3x9. */
+    /** Cashfree refuses a reused order_id, so each payment attempt gets its own: MFU20261001-k3x9. */
     public static function newOrderId(Order $order): string
     {
         return $order->number.'-'.Str::lower(Str::random(4));

@@ -413,7 +413,7 @@ class OrderController extends Controller
         return $out;
     }
 
-    /** MFU261018001-item1-his-photo.jpg */
+    /** MFU20261001-item1-his-photo.jpg */
     private static function photoName(Order $order, int $item, string $slot, int $k, CustomerUpload $u): string
     {
         $ext = strtolower(pathinfo($u->path, PATHINFO_EXTENSION) ?: 'jpg');
