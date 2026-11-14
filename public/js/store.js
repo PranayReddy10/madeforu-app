@@ -319,6 +319,29 @@
         });
     });
 
+    /* Order review page: say what the stars mean, preview the chosen photos (max 3) */
+    $$('.review-order .ro-item').forEach(function (item) {
+        var word = $('[data-rate-word]', item), words = { 5: 'Loved it! 😍', 4: 'Good 🙂', 3: 'Okay', 2: 'Not great', 1: 'Poor' };
+        var show = function (v) { if (word) { word.textContent = words[v]; word.classList.add('on'); } };
+        item.addEventListener('change', function (e) { if (e.target.type === 'radio') show(e.target.value); });
+        var checked = $('input[type=radio]:checked', item);
+        if (checked) show(checked.value);
+        var pick = $('[data-photo-pick]', item), thumbs = $('[data-photo-thumbs]', item);
+        if (!pick || !thumbs) return;
+        pick.addEventListener('change', function () {
+            var files = Array.prototype.slice.call(pick.files || []);
+            if (files.length > 3 && window.DataTransfer) {
+                var dt = new DataTransfer();
+                files.slice(0, 3).forEach(function (f) { dt.items.add(f); });
+                pick.files = dt.files;
+                files = files.slice(0, 3);
+                toast('Up to 3 photos — we kept the first 3.');
+            }
+            thumbs.innerHTML = '';
+            files.forEach(function (f) { var i = document.createElement('img'); i.src = URL.createObjectURL(f); i.alt = ''; thumbs.appendChild(i); });
+        });
+    });
+
     /* Character counters */
     $$('[data-count-chars]').forEach(function (el) {
         if (!el.maxLength || el.maxLength < 0) return;
