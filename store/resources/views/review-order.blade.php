@@ -14,7 +14,7 @@
                 <div class="ro-head"><img src="{{ $p->thumbUrl() }}" alt="" width="64" height="64"><b>{{ $p->name }}</b></div>
                 <div class="ro-stars">
                     <div class="rate-input" role="radiogroup" aria-label="Rating for {{ $p->name }}">
-                        @for($i = 5; $i >= 1; $i--)<input type="radio" id="r{{ $p->id }}-{{ $i }}" name="reviews[{{ $p->id }}][rating]" value="{{ $i }}" @checked((int) old('reviews.'.$p->id.'.rating') === $i)><label for="r{{ $p->id }}-{{ $i }}" title="{{ $i }} {{ $i === 1 ? 'star' : 'stars' }}">★</label>@endfor
+                        @for($i = 5; $i >= 1; $i--)<input type="radio" id="r{{ $p->id }}-{{ $i }}" name="reviews[{{ $p->id }}][rating]" value="{{ $i }}" @checked((int) old('reviews.'.$p->id.'.rating', $rate ?? 0) === $i)><label for="r{{ $p->id }}-{{ $i }}" title="{{ $i }} {{ $i === 1 ? 'star' : 'stars' }}">★</label>@endfor
                     </div>
                     <span class="rate-word" data-rate-word>Tap to rate</span>
                 </div>
