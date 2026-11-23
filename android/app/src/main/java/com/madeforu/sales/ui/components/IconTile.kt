@@ -17,6 +17,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 
 /**
@@ -35,17 +36,18 @@ fun IconTile(
     modifier: Modifier = Modifier,
     icon: ImageVector? = null,
     imageUrl: String = "",
-    size: Dp = 44.dp,
+    size: Dp = 42.dp,
     tint: Color? = null,
 ) {
-    val shape = RoundedCornerShape(percent = 30)
+    // The web's .tile: 42 square, 13 corners, the colour at 13% behind it.
+    val shape = RoundedCornerShape(percent = 31)
     val colour = tint ?: tileColour(label)
 
     Box(
         modifier
             .size(size)
             .clip(shape)
-            .background(colour.copy(alpha = 0.18f)),
+            .background(colour.copy(alpha = 0.13f)),
         contentAlignment = Alignment.Center,
     ) {
         when {
@@ -65,7 +67,7 @@ fun IconTile(
 
             else -> Text(
                 initials(label),
-                style = MaterialTheme.typography.labelLarge,
+                style = MaterialTheme.typography.labelLarge.copy(fontSize = 14.sp),
                 fontWeight = FontWeight.Bold,
                 color = colour,
             )

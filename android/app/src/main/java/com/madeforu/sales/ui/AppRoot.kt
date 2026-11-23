@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddCircle
 import androidx.compose.material.icons.filled.BarChart
@@ -19,14 +20,9 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Savings
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -51,6 +47,8 @@ import androidx.navigation.navArgument
 import com.madeforu.sales.core.ServiceLocator
 import com.madeforu.sales.notify.ActivitySync
 import com.madeforu.sales.notify.PushSetup
+import com.madeforu.sales.ui.components.TabBar
+import com.madeforu.sales.ui.components.TabBarItem
 import com.madeforu.sales.ui.screens.BillScreen
 import com.madeforu.sales.ui.screens.BillsScreen
 import com.madeforu.sales.ui.screens.CatalogScreen
@@ -142,14 +140,16 @@ fun AppRoot(
             // this slot, not the whole app.
             val keyboardOpen = WindowInsets.ime.getBottom(LocalDensity.current) > 0
             AnimatedVisibility(visible = showBottomBar && !keyboardOpen) {
-                NavigationBar(tonalElevation = 3.dp) {
+                // The web app's tab bar: white, a hairline on top, the
+                // current tab in rose. No Material pill behind the icon.
+                TabBar {
                     bottomDestinations.forEach { destination ->
                         val selected = currentRoute == destination.route
                         // New sale is an action, not a place: it always
                         // starts empty, and tapping it while already there
                         // is how you clear the form for the next customer.
                         val isNewSale = destination.route == Routes.NEW_ORDER
-                        NavigationBarItem(
+                        TabBarItem(
                             selected = selected,
                             onClick = {
                                 navController.navigate(destination.route) {
@@ -174,13 +174,8 @@ fun AppRoot(
                                     launchSingleTop = !isNewSale
                                 }
                             },
-                            icon = { Icon(destination.icon, contentDescription = destination.label) },
-                            label = { Text(destination.label) },
-                            colors = NavigationBarItemDefaults.colors(
-                                selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                                selectedTextColor = MaterialTheme.colorScheme.onSurface,
-                                indicatorColor = MaterialTheme.colorScheme.secondaryContainer,
-                            ),
+                            icon = { Icon(destination.icon, contentDescription = null, modifier = Modifier.size(22.dp)) },
+                            label = destination.label,
                         )
                     }
                 }
